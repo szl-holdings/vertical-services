@@ -1,12 +1,16 @@
-# Deployed: SZLHOLDINGS/vertical-services Space
+# Deployment contract — SZLHOLDINGS/vertical-services
 
-The combined six-engine deployment (sentra, lyte, vessels, finance, terra, counsel as prefixed APIRouters behind one FastAPI app) is live at:
+The combined runtime is published only by `.github/workflows/hf-space.yml` from the exact current `main` commit.
 
-https://szlholdings-vertical-services.hf.space/healthz
+The governed publisher:
 
-HF repo: https://huggingface.co/spaces/SZLHOLDINGS/vertical-services
+1. runs network-free contract tests;
+2. ensures `SENTRA_SIGNING_KEY` exists without rotating an existing value;
+3. derives the Space artifact set from `deploy/Dockerfile`;
+4. commits that set atomically to `SZLHOLDINGS/vertical-services`;
+5. binds `SZL_SOURCE_REVISION` to the exact GitHub SHA;
+6. restarts the Space;
+7. attests the exact HF commit and all declared smoke routes;
+8. retains immutable deployment evidence as a GitHub Actions artifact.
 
-- Deployed app commit: b845ca63fbc79512fc1ea9f7f2049e57d2739586 (app.py), 3c290a5bc15df26ba1602959f26b7a007653fd4e (Dockerfile)
-- Deployed: 2026-09-03 by betterwithage via connector
-- This directory is the exact source of that deployment (GitHub canonical, Hub mirror)
-- The six standalone services in services/ remain the per-Space implementations for direct slug deployment
+The historical `SZLHOLDINGS/vessels` Space is retained. Vessels is consolidated into Killinchu as the public maritime surface, while the executable risk engine remains available at `/vessels` in this combined service.

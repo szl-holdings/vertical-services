@@ -1,0 +1,153 @@
+name: Vertical Services — test, publish, and attest
+
+"on":
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/hf-space.yml
+      - deploy/**
+      - requirements.txt
+      - README.md
+      - tests/**
+      - tools/szl_frontier_payload.py
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/hf-space.yml
+      - deploy/**
+      - requirements.txt
+      - README.md
+      - tests/**
+      - tools/szl_frontier_payload.py
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vertical-services-hf-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-workflow:
+    name: Validate workflow contract
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      security-events: write
+    uses: szl-holdings/.github/.github/workflows/reusable-workflow-lint.yml@c889276e51e7d954c4bba8b216f86fc7577721fa
+    with:
+      fail-on-zizmor-warning: false
+
+  test:
+    name: Test six-engine runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+      - name: Install pinned runtime
+        run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt
+      - name: Compile and run contract tests
+        env:
+          SENTRA_SIGNING_KEY: ci-test-key-not-used-in-production
+          SZL_SOURCE_REVISION: ${{ github.sha }}
+        run: |
+          python -m pip check
+          python -m compileall -q deploy tools tests
+          python -m unittest discover -s tests -v
+      - name: Build container and close live smoke routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$GITHUB_SHA" > deploy/source_revision.txt
+          docker build --file deploy/Dockerfile --tag szl-vertical-services:test .
+          cid="$(docker run --detach --publish 127.0.0.1:7860:7860 \
+            --env SENTRA_SIGNING_KEY=container-test-key-not-used-in-production \
+            szl-vertical-services:test)"
+          trap 'docker logs "$cid" || true; docker rm --force "$cid" >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:7860/readyz >/dev/null; then break; fi
+            if [ "$attempt" -eq 30 ]; then echo '::error::container readiness did not converge'; exit 1; fi
+            sleep 1
+          done
+          for path in / /healthz /readyz /api/build-info /sentra/healthz /lyte/healthz /vessels/healthz /finance/healthz /terra/healthz /counsel/healthz; do
+            curl --fail --silent --show-error "http://127.0.0.1:7860${path}" >/dev/null
+          done
+
+  ensure-sentra-secret:
+    name: Ensure persistent Sentra signing secret
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HF_TOKEN: ${{ secrets.HF_ORG_TOKEN || secrets.HF_ORG_TOKEN1 || secrets.HF_TOKEN || secrets.HF_WRITE_TOKEN }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+      - name: Install pinned Hugging Face client
+        run: python -m pip install --disable-pip-version-check --no-cache-dir 'huggingface_hub==1.10.1'
+      - name: Create secret only when absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${HF_TOKEN:-}" || { echo '::error::No Hugging Face write secret is configured.'; exit 2; }
+          python - <<'PY'
+          import os
+          import secrets
+          from huggingface_hub import HfApi
+
+          repo_id = "SZLHOLDINGS/vertical-services"
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          api.auth_check(repo_id=repo_id, repo_type="space", write=True)
+          existing = api.get_space_secrets(repo_id)
+          if "SENTRA_SIGNING_KEY" in existing:
+              print("SENTRA_SIGNING_KEY already exists; preserving its current write-only value.")
+          else:
+              api.add_space_secret(
+                  repo_id=repo_id,
+                  key="SENTRA_SIGNING_KEY",
+                  value=secrets.token_hex(32),
+                  description="Persistent HMAC key for Sentra verdict receipts; generated once by governed CI.",
+              )
+              print("SENTRA_SIGNING_KEY created; value was never printed or written to disk.")
+          PY
+
+  publish:
+    name: Publish exact source and attest live state
+    if: github.event_name != 'pull_request'
+    needs: [test, ensure-sentra-secret]
+    uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@c889276e51e7d954c4bba8b216f86fc7577721fa
+    with:
+      hf-repo: SZLHOLDINGS/vertical-services
+      ref: ${{ github.sha }}
+      dockerfile-path: deploy/Dockerfile
+      source-revision-file: deploy/source_revision.txt
+      source-revision-variable: SZL_SOURCE_REVISION
+      source-revision-probe-path: /api/build-info
+      include-readme: true
+      prune: false
+      require-default-branch-tip: true
+      restart-space: true
+      wait-running: 1200
+      smoke-paths: '["/","/healthz","/readyz","/api/build-info","/sentra/healthz","/lyte/healthz","/vessels/healthz","/finance/healthz","/terra/healthz","/counsel/healthz"]'
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_ORG_TOKEN || secrets.HF_ORG_TOKEN1 || secrets.HF_TOKEN || secrets.HF_WRITE_TOKEN }}

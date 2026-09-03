@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+.venv/
+deploy/source_revision.txt
+szl-frontier-verification.json
