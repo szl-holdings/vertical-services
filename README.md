@@ -1,37 +1,44 @@
+---
+title: SZL Vertical Services
+emoji: ⚙️
+colorFrom: gray
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: true
+license: apache-2.0
+---
+
 # SZL Vertical Services
 
-Deployable FastAPI products for the public Hugging Face vertical Spaces.
-Each service has its own visual language. Backends stay Python. Frontends are
-first-party HTML served from the same origin. No CDN fonts. No fabricated live feeds.
+A source-bound FastAPI runtime for six governed SZL engines:
 
-| Space | Service | Visual language | Engine |
-|---|---|---|---|
-| SZLHOLDINGS/sentra | Sentra | SOC carbon + crimson verdicts | 8-gate deny-by-default + HMAC receipts |
-| SZLHOLDINGS/terra | Terra | Listing desk, warm paper | ppsf, cap-rate, comps |
-| SZLHOLDINGS/finance | PURIQ Finance | Dense terminal tape | vol, drawdown, momentum |
-| SZLHOLDINGS/vessels | Vessels | Night chart + AIS table | dark, speed, corridor, loiter |
-| SZLHOLDINGS/lyte | Lyte | Observability slate | ingest, baseline, drift-z |
-| SZLHOLDINGS/counsel | PRISM Counsel | Docket navy + parchment | fail-closed matter triage |
+| Route | Engine | Operational contract |
+|---|---|---|
+| `/sentra` | Sentra | Nine policy gates and HMAC-SHA256 decision receipts |
+| `/lyte` | Lyte | Metric ingestion, summaries, percentiles, and drift scoring |
+| `/vessels` | Vessels engine | Maritime track-risk calculations; public product surface consolidated into Killinchu |
+| `/finance` | PURIQ Finance | Volatility, drawdown, momentum, and signal calculations |
+| `/terra` | Terra | Price-per-square-foot, cap-rate, and comp calculations |
+| `/counsel` | PRISM Counsel | Matters, obligations, docket ranking, and hash-chained receipts |
 
-a11oy, killinchu, and david-leads stay in their own GitHub repos. This repo does not replace them.
+## Live contract
 
-## Run
+- `/` — responsive operator/developer front door
+- `/healthz` — liveness and engine catalog
+- `/readyz` — fail-closed readiness: exact source binding plus persistent Sentra signing key
+- `/api/build-info` — exact GitHub revision exposed as `build.state=OBSERVED`
+- `/.well-known/szl-source.json` — machine-readable source identity
+- `/docs` — OpenAPI explorer
 
-```bash
-docker build --build-arg SERVICE=sentra -t szl-sentra .
-docker run --rm -p 7860:7860 -e SENTRA_SIGNING_KEY='set-in-secret-store' szl-sentra
-```
+## Honest operating boundary
 
-`SERVICE` is one of: `sentra`, `terra`, `finance`, `vessels`, `lyte`, `counsel`.
+The APIs perform real calculations over caller-supplied inputs. Runtime state is bounded process memory and is not represented as durable storage. No live AIS, exchange, MLS, PACER, or cybersecurity feed is claimed here. Derived analytics are labeled `MODELED`; caller inputs are `MEASURED` or `REPORTED` according to the endpoint contract.
 
-## Truth posture
+Stateful routes require a caller-generated `X-SZL-Session` value so in-memory records are isolated by session scope. Generate a new high-entropy value with `python -c "import secrets; print(secrets.token_urlsafe(32))"` and send it on each related request. This header scopes transient state; it is not identity authentication or durable authorization.
 
-- Inputs are MEASURED or REPORTED.
-- Derived analytics are MODELED.
-- Sample books are labeled SAMPLE. They are not live MLS, AIS, PACER, or exchange feeds.
-- Sentra uses an ephemeral key unless `SENTRA_SIGNING_KEY` is set.
+## Source and deployment
 
-## Hugging Face
+GitHub is the source of truth. `.github/workflows/hf-space.yml` tests the runtime, ensures the Space has a persistent `SENTRA_SIGNING_KEY` without rotating an existing secret, deploys the Dockerfile-derived file set atomically, binds the exact protected-main SHA, restarts the Space, and attests the running Hugging Face commit and smoke routes.
 
-This GitHub repo is the source. A Space rebuild needs an HF write token in the
-existing GitHub-to-HF workflow. This change does not mutate Space runtime by itself.
+Public runtime: `SZLHOLDINGS/vertical-services`.
