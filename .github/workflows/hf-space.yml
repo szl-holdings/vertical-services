@@ -127,12 +127,14 @@ jobs:
           SZL_STATE_PATH: /tmp/szl-${{ matrix.vertical }}.sqlite3
         run: python tools/verify_vertical_backend.py --vertical "${{ matrix.vertical }}"
 
-  ensure-sentra-secret:
-    name: Ensure persistent Sentra signing secret
+  resolve-publisher:
+    name: Resolve canonical Hugging Face writer
     if: github.event_name != 'pull_request'
     needs: [test, backend-contract]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      mode: ${{ steps.route.outputs.mode }}
     env:
       HF_TOKEN: ${{ secrets.HF_ORG_TOKEN || secrets.HF_ORG_TOKEN1 || secrets.HF_TOKEN || secrets.HF_WRITE_TOKEN }}
     steps:
@@ -140,17 +142,53 @@ jobs:
         uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
         with:
           egress-policy: audit
-      - name: Set up Python
+      - name: Resolve writer without exposing token material
+        id: route
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          if test -n "${HF_TOKEN:-}"; then
+            mode=local
+            token_available=true
+          else
+            mode=delegated
+            token_available=false
+          fi
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+          cat > artifacts/publication-routing.json <<JSON
+          {
+            "schema": "szl.hf-publication-routing/v1",
+            "state": "${mode^^}",
+            "source_repository": "szl-holdings/vertical-services",
+            "source_revision": "${GITHUB_SHA}",
+            "hf_repository": "SZLHOLDINGS/vertical-services",
+            "local_hf_token_available": ${token_available},
+            "canonical_writer_repository": "szl-holdings/a11oy",
+            "canonical_writer_workflow": ".github/workflows/hf-publish-vertical-flagships.yml",
+            "credential_value_recorded": false,
+            "mutation_performed_by_router": false,
+            "truth_label": "MEASURED"
+          }
+          JSON
+          if test "$mode" = delegated; then
+            echo "No repository-scoped Hugging Face token is available; publication is delegated to the established a11oy single writer."
+          else
+            echo "A repository-scoped Hugging Face token is available; the local exact-source writer is authorized."
+          fi
+      - name: Set up Python for local writer
+        if: steps.route.outputs.mode == 'local'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12.10'
       - name: Install pinned Hugging Face client
+        if: steps.route.outputs.mode == 'local'
         run: python -m pip install --disable-pip-version-check --no-cache-dir 'huggingface_hub==1.10.1'
-      - name: Create secret only when absent
+      - name: Preserve or create the write-only signing secret
+        if: steps.route.outputs.mode == 'local'
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${HF_TOKEN:-}" || { echo '::error::No Hugging Face write secret is configured.'; exit 2; }
           python - <<'PY'
           import os
           import secrets
@@ -159,9 +197,9 @@ jobs:
           repo_id = "SZLHOLDINGS/vertical-services"
           api = HfApi(token=os.environ["HF_TOKEN"])
           api.auth_check(repo_id=repo_id, repo_type="space", write=True)
-          existing = api.get_space_secrets(repo_id)
+          existing = set(api.get_space_secrets(repo_id))
           if "SENTRA_SIGNING_KEY" in existing:
-              print("SENTRA_SIGNING_KEY already exists; preserving its current write-only value.")
+              print("SENTRA_SIGNING_KEY already exists; preserving its write-only value.")
           else:
               api.add_space_secret(
                   repo_id=repo_id,
@@ -169,13 +207,21 @@ jobs:
                   value=secrets.token_hex(32),
                   description="Persistent HMAC key for Sentra and Killinchu defense verdict receipts; generated once by governed CI.",
               )
-              print("SENTRA_SIGNING_KEY created; value was never printed or written to disk.")
+              print("SENTRA_SIGNING_KEY created; its value was never printed or written to disk.")
           PY
+      - name: Upload publication routing receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: vertical-services-publication-routing-${{ github.run_id }}
+          path: artifacts/publication-routing.json
+          if-no-files-found: error
+          retention-days: 90
 
   publish:
     name: Publish exact source and attest live state
-    if: github.event_name != 'pull_request'
-    needs: [test, backend-contract, ensure-sentra-secret]
+    if: github.event_name != 'pull_request' && needs.resolve-publisher.outputs.mode == 'local'
+    needs: [test, backend-contract, resolve-publisher]
     uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@c889276e51e7d954c4bba8b216f86fc7577721fa
     with:
       hf-repo: SZLHOLDINGS/vertical-services
@@ -193,10 +239,50 @@ jobs:
     secrets:
       HF_TOKEN: ${{ secrets.HF_ORG_TOKEN || secrets.HF_ORG_TOKEN1 || secrets.HF_TOKEN || secrets.HF_WRITE_TOKEN }}
 
+  delegated-publication:
+    name: Delegate publication to the established a11oy single writer
+    if: github.event_name != 'pull_request' && needs.resolve-publisher.outputs.mode == 'delegated'
+    needs: [test, backend-contract, resolve-publisher]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+      - name: Record the delegated deployment authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          cat > artifacts/delegated-publication.json <<JSON
+          {
+            "schema": "szl.hf-delegated-publication/v1",
+            "state": "DELEGATED",
+            "source_repository": "szl-holdings/vertical-services",
+            "source_revision": "${GITHUB_SHA}",
+            "hf_repository": "SZLHOLDINGS/vertical-services",
+            "writer_repository": "szl-holdings/a11oy",
+            "writer_workflow": ".github/workflows/hf-publish-vertical-flagships.yml",
+            "writer_reason": "Hugging Face credentials are intentionally scoped to the established single writer",
+            "deployment_claimed": false,
+            "credential_value_recorded": false,
+            "truth_label": "MEASURED"
+          }
+          JSON
+          echo "Publication authority is delegated; this job does not claim that deployment has occurred."
+      - name: Upload delegated authority receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: vertical-services-delegated-publication-${{ github.run_id }}
+          path: artifacts/delegated-publication.json
+          if-no-files-found: error
+          retention-days: 90
+
   probe-live-official-sources:
     name: Probe required official sources through deployed runtime
-    if: github.event_name != 'pull_request'
-    needs: publish
+    if: github.event_name != 'pull_request' && needs.resolve-publisher.outputs.mode == 'local'
+    needs: [resolve-publisher, publish]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
