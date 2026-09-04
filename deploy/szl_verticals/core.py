@@ -11,7 +11,7 @@ from typing import Annotated, Any
 from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 SOURCE_REPOSITORY = "szl-holdings/vertical-services"
 HF_REPOSITORY = "SZLHOLDINGS/vertical-services"
 ENGINES = ("sentra", "lyte", "killinchu", "finance", "terra", "counsel")
@@ -27,7 +27,10 @@ def _revision_observation() -> dict[str, Any]:
         candidates.append(("env", env_revision))
 
     for label, path in (
-        ("adjacent-file", Path(__file__).resolve().parents[1] / "source_revision.txt"),
+        (
+            "adjacent-file",
+            Path(__file__).resolve().parents[1] / "source_revision.txt",
+        ),
         ("container-file", Path("/app/source_revision.txt")),
     ):
         try:
@@ -80,13 +83,16 @@ class StrictModel(BaseModel):
 SESSION_TOKEN = re.compile(r"^[A-Za-z0-9._~-]{32,128}$")
 
 
-def session_scope(x_szl_session: str = Header(..., alias="X-SZL-Session")) -> str:
+def session_scope(
+    x_szl_session: str = Header(..., alias="X-SZL-Session"),
+) -> str:
     """Map a caller-held high-entropy token to a non-reversible state scope."""
     token = x_szl_session.strip()
     if SESSION_TOKEN.fullmatch(token) is None:
         raise HTTPException(
             400,
-            "X-SZL-Session must be a 32-128 character high-entropy token using A-Z, a-z, 0-9, . _ ~ or -",
+            "X-SZL-Session must be a 32-128 character high-entropy token "
+            "using A-Z, a-z, 0-9, . _ ~ or -",
         )
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 

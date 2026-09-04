@@ -8,11 +8,40 @@ from fastapi import HTTPException
 
 from .connector_parameters import _bounded_int, _reject_unknown, _safe_text
 from .connector_specs import (
-    BBL, BOROUGHS, CIK, CVE, DEFAULT_USER_AGENT, GITHUB_REPOSITORIES,
-    SAFE_REPO, SEC_USER_AGENT, ConnectorSpec,
+    BBL,
+    BOROUGHS,
+    CIK,
+    CURRENCY,
+    CVE,
+    DEFAULT_USER_AGENT,
+    GITHUB_REPOSITORIES,
+    SAFE_REPO,
+    SEC_USER_AGENT,
+    ConnectorSpec,
 )
 
-def _request_definition(spec: ConnectorSpec, parameters: Mapping[str, Any]) -> tuple[str, dict[str, str], dict[str, str]]:
+COINBASE_BASES = {"BTC", "ETH", "SOL", "ADA", "AVAX", "LINK", "LTC"}
+COINBASE_QUOTES = {"USD", "EUR", "GBP"}
+POLYMARKET_ORDERS = {"volume24hr", "liquidity", "endDate", "startDate"}
+HPD_CLASSES = {"A", "B", "C"}
+
+
+def _boolean(parameters: Mapping[str, Any], key: str, default: bool) -> bool:
+    value = parameters.get(key, default)
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().casefold()
+    if normalized in {"true", "1", "yes"}:
+        return True
+    if normalized in {"false", "0", "no"}:
+        return False
+    raise HTTPException(422, f"{key} must be boolean")
+
+
+def _request_definition(
+    spec: ConnectorSpec,
+    parameters: Mapping[str, Any],
+) -> tuple[str, dict[str, str], dict[str, str]]:
     """Return URL, query parameters, and headers for an allowlisted connector."""
     headers = {
         "Accept": "application/json, application/xml;q=0.9, text/xml;q=0.8",
@@ -24,7 +53,8 @@ def _request_definition(spec: ConnectorSpec, parameters: Mapping[str, Any]) -> t
         allowed = {"cve", "vendor", "limit"}
         _reject_unknown(parameters, allowed)
         return (
-            "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+            "https://www.cisa.gov/sites/default/files/feeds/"
+            "known_exploited_vulnerabilities.json",
             query,
             headers,
         )
@@ -60,7 +90,14 @@ def _request_definition(spec: ConnectorSpec, parameters: Mapping[str, Any]) -> t
         if branch:
             query["branch"] = branch
         if status:
-            if status not in {"completed", "in_progress", "queued", "requested", "waiting", "pending"}:
+            if status not in {
+                "completed",
+                "in_progress",
+                "queued",
+                "requested",
+                "waiting",
+                "pending",
+            }:
                 raise HTTPException(422, "unsupported workflow-run status")
             query["status"] = status
         token = os.environ.get("GITHUB_READ_TOKEN", "").strip()
@@ -73,7 +110,8 @@ def _request_definition(spec: ConnectorSpec, parameters: Mapping[str, Any]) -> t
         _reject_unknown(parameters, set())
         headers["Accept"] = "application/xml, text/xml;q=0.9"
         return (
-            "https://www.fisheries.noaa.gov/inportserve/waf/noaa/nos/ocm/inport-xml/xml/77594.xml",
+            "https://www.fisheries.noaa.gov/inportserve/waf/noaa/nos/ocm/"
+            "inport-xml/xml/77594.xml",
             query,
             headers,
         )
@@ -90,6 +128,56 @@ def _request_definition(spec: ConnectorSpec, parameters: Mapping[str, Any]) -> t
         if spec.builder == "sec-submissions":
             return f"https://data.sec.gov/submissions/CIK{cik}.json", query, headers
         return f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json", query, headers
+
+    if spec.builder == "polymarket":
+        allowed = {"limit", "active", "closed", "order", "ascending"}
+        _reject_unknown(parameters, allowed)
+        order = _safe_text(parameters, "order", "volume24hr", max_length=32)
+        if order not in POLYMARKET_ORDERS:
+            raise HTTPException(422, "unsupported Polymarket order")
+        query.update(
+            {
+                "limit": str(_bounded_int(parameters, "limit", 20, 1, 100)),
+                "active": str(_boolean(parameters, "active", True)).lower(),
+                "closed": str(_boolean(parameters, "closed", False)).lower(),
+                "order": order,
+                "ascending": str(_boolean(parameters, "ascending", False)).lower(),
+            }
+        )
+        return "https://gamma-api.polymarket.com/markets", query, headers
+
+    if spec.builder == "coinbase":
+        allowed = {"base", "currency"}
+        _reject_unknown(parameters, allowed)
+        base = _safe_text(parameters, "base", "BTC", 10).upper()
+        currency = _safe_text(parameters, "currency", "USD", 10).upper()
+        if (
+            CURRENCY.fullmatch(base) is None
+            or base not in COINBASE_BASES
+            or currency not in COINBASE_QUOTES
+        ):
+            raise HTTPException(422, "base or currency is not in the public spot allowlist")
+        return f"https://api.coinbase.com/v2/prices/{base}-{currency}/spot", query, headers
+
+    if spec.builder == "treasury":
+        allowed = {"limit"}
+        _reject_unknown(parameters, allowed)
+        query.update(
+            {
+                "sort": "-record_date",
+                "page[size]": str(_bounded_int(parameters, "limit", 20, 1, 100)),
+                "fields": (
+                    "record_date,security_type_desc,security_desc,"
+                    "avg_interest_rate_amt,src_line_nbr"
+                ),
+            }
+        )
+        return (
+            "https://api.fiscaldata.treasury.gov/services/api/"
+            "fiscal_service/v2/accounting/od/avg_interest_rates",
+            query,
+            headers,
+        )
 
     if spec.builder == "pluto":
         allowed = {"bbl", "borough", "zipcode", "limit"}
@@ -126,7 +214,7 @@ def _request_definition(spec: ConnectorSpec, parameters: Mapping[str, Any]) -> t
         if borough:
             if borough not in BOROUGHS:
                 raise HTTPException(422, "borough is not recognized")
-            clauses.append(f"upper(borough)='{borough.replace(chr(39), chr(39)*2)}'")
+            clauses.append(f"upper(borough)='{borough.replace(chr(39), chr(39) * 2)}'")
         zipcode = _safe_text(parameters, "zipcode", max_length=10)
         if zipcode:
             if not zipcode.isdigit():
@@ -136,6 +224,32 @@ def _request_definition(spec: ConnectorSpec, parameters: Mapping[str, Any]) -> t
             raise HTTPException(422, "nyc-pluto requires bbl, borough, or zipcode")
         query["$where"] = " AND ".join(clauses)
         return "https://data.cityofnewyork.us/resource/64uk-42ks.json", query, headers
+
+    if spec.builder == "hpd":
+        allowed = {"limit", "bbl", "class"}
+        _reject_unknown(parameters, allowed)
+        query["$limit"] = str(_bounded_int(parameters, "limit", 100, 1, 200))
+        query["$order"] = "inspectiondate DESC"
+        clauses: list[str] = []
+        bbl = _safe_text(parameters, "bbl")
+        if bbl:
+            if BBL.fullmatch(bbl) is None:
+                raise HTTPException(422, "bbl must contain exactly 10 digits")
+            clauses.append(f"bbl='{bbl}'")
+        violation_class = _safe_text(parameters, "class", max_length=1).upper()
+        if violation_class:
+            if violation_class not in HPD_CLASSES:
+                raise HTTPException(422, "class must be A, B, or C")
+            clauses.append(f"class='{violation_class}'")
+        if clauses:
+            query["$where"] = " AND ".join(clauses)
+        return "https://data.cityofnewyork.us/resource/wvxf-dwi5.json", query, headers
+
+    if spec.builder == "dob":
+        allowed = {"limit"}
+        _reject_unknown(parameters, allowed)
+        query["$limit"] = str(_bounded_int(parameters, "limit", 60, 1, 200))
+        return "https://data.cityofnewyork.us/resource/3h2n-5cm9.json", query, headers
 
     if spec.builder == "federal-register":
         allowed = {"term", "agency", "limit"}
@@ -167,7 +281,16 @@ def _request_definition(spec: ConnectorSpec, parameters: Mapping[str, Any]) -> t
                 raise HTTPException(422, "congress must be numeric")
             path += f"/{congress}"
             if bill_type:
-                if bill_type not in {"hr", "s", "hjres", "sjres", "hconres", "sconres", "hres", "sres"}:
+                if bill_type not in {
+                    "hr",
+                    "s",
+                    "hjres",
+                    "sjres",
+                    "hconres",
+                    "sconres",
+                    "hres",
+                    "sres",
+                }:
                     raise HTTPException(422, "unsupported bill_type")
                 path += f"/{bill_type}"
         elif bill_type:
