@@ -1,0 +1,121 @@
+name: Finalize Killinchu runtime convergence v1
+
+on:
+  push:
+    branches:
+      - feat/killinchu-runtime-convergence-v1
+    paths:
+      - .github/workflows/finalize-killinchu-runtime-convergence-v1.yml
+
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  pull-requests: write
+  statuses: read
+
+concurrency:
+  group: finalize-killinchu-runtime-convergence-v1
+  cancel-in-progress: false
+
+jobs:
+  reconcile-and-merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: feat/killinchu-runtime-convergence-v1
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Check out runtime branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.BRANCH }}
+          fetch-depth: 0
+
+      - name: Reconcile and prove runtime contract
+        run: |
+          set -euo pipefail
+          test -f killinchu_runtime_contract.py
+          test -f contracts/killinchu-runtime-convergence.v1.json
+          test -f tests/test_killinchu_runtime_convergence.py
+          git config user.name "SZL Frontier Operator"
+          git config user.email "stephenlutar2@gmail.com"
+          git fetch origin main
+          git merge --no-edit origin/main
+          python -m json.tool contracts/killinchu-runtime-convergence.v1.json >/dev/null
+          python -m unittest tests.test_killinchu_runtime_convergence -v
+          python -m py_compile killinchu_runtime_contract.py tests/test_killinchu_runtime_convergence.py
+          git diff --check
+
+      - name: Remove finalizer and push candidate
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/finalize-killinchu-runtime-convergence-v1.yml
+          git add -A
+          git commit -m "chore(runtime): reconcile Killinchu service convergence" \
+            -m "Remove the one-shot finalizer after the compatibility and authority contracts pass." \
+            -m "Signed-off-by: Stephen P. Lutar Jr. <stephenlutar2@gmail.com>"
+          git push origin "HEAD:${BRANCH}"
+          echo "CANDIDATE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Find or create pull request
+        id: pr
+        run: |
+          set -euo pipefail
+          pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base main --state open --json number --jq '.[0].number // empty')"
+          if [[ -z "$pr" ]]; then
+            url="$(gh pr create --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base main \
+              --title "feat(runtime): converge Aegis and Vessels under Killinchu" \
+              --body "One canonical Killinchu service authority; Sentra and Vessels remain source-preserving compatibility lobes with explicit headers and fail-closed truth boundaries.")"
+            pr="${url##*/}"
+          fi
+          echo "number=$pr" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for normal checks
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, subprocess, time
+          repo=os.environ["GITHUB_REPOSITORY"]
+          sha=os.environ["CANDIDATE_SHA"]
+          pr=os.environ["PR_NUMBER"]
+          bad={"failure","cancelled","timed_out","action_required","startup_failure"}
+          good={"success","neutral","skipped"}
+          stable=0; previous=None
+          def api(path):
+              return json.loads(subprocess.check_output(["gh","api",path,"-H","Accept: application/vnd.github+json"],text=True))
+          for _ in range(120):
+              meta=api(f"repos/{repo}/pulls/{pr}")
+              if meta.get("head",{}).get("sha") != sha:
+                  raise SystemExit("PR head changed; refusing stale runtime merge")
+              runs=api(f"repos/{repo}/commits/{sha}/check-runs?per_page=100").get("check_runs",[])
+              failures=[r for r in runs if r.get("conclusion") in bad]
+              if failures:
+                  raise SystemExit("checks failed: "+", ".join(f"{r.get('name')}={r.get('conclusion')}" for r in failures))
+              pending=[r for r in runs if r.get("status") != "completed"]
+              signature=tuple(sorted((r.get("name"),r.get("status"),r.get("conclusion")) for r in runs))
+              if runs and not pending and all(r.get("conclusion") in good for r in runs):
+                  stable=stable+1 if signature==previous else 1
+                  if stable>=2: break
+              else: stable=0
+              previous=signature
+              time.sleep(10)
+          else:
+              raise SystemExit("runtime checks did not reach stable terminal state")
+          PY
+
+      - name: Squash merge normally
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash \
+            --subject "feat(runtime): converge Aegis and Vessels under Killinchu (#${PR_NUMBER})" \
+            --body "Preserve domain engines while unifying product identity, compatibility headers, exact formulas, human authority, receipts and simulated-effectors truth boundaries."
