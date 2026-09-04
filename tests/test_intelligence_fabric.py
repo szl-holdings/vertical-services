@@ -87,8 +87,14 @@ def test_each_vertical_has_distinct_jobs_tasks_and_frontend(monkeypatch):
         assert len(data["tasks"]) == 4
         assert len(data["novel_capabilities"]) == 3
         assert data["policy"]["effectors_enabled"] is False
-        assert all(row["proprietary_code_copied"] is False for row in data["reference_patterns"])
-        assert all(row["proprietary_data_copied"] is False for row in data["reference_patterns"])
+        assert all(
+            row["proprietary_code_copied"] is False
+            for row in data["reference_patterns"]
+        )
+        assert all(
+            row["proprietary_data_copied"] is False
+            for row in data["reference_patterns"]
+        )
 
         page = CLIENT.get(f"/intelligence/{vertical}")
         assert page.status_code == 200
@@ -132,7 +138,9 @@ def test_model_routes_fail_closed_when_operator_binding_is_missing(monkeypatch):
     clear_model_env(monkeypatch)
     profile = CLIENT.get("/api/verticals/finance/intelligence").json()
     assert all(item["state"] == "UNAVAILABLE" for item in profile["models"])
-    assert all(item["credential_value_exposed"] is False for item in profile["models"])
+    assert all(
+        item["credential_value_exposed"] is False for item in profile["models"]
+    )
 
     request = plan_payload(task="scenario-analysis")
     response = CLIENT.post(
@@ -164,7 +172,9 @@ def test_non_allowlisted_endpoint_is_blocked_without_leaking_token(monkeypatch):
     monkeypatch.setenv("HF_TOKEN", "never-return-this-test-token")
 
     profile = CLIENT.get("/api/verticals/lyte/intelligence").json()
-    khipu = next(item for item in profile["models"] if item["alias"] == "khipu-1.5b")
+    khipu = next(
+        item for item in profile["models"] if item["alias"] == "khipu-1.5b"
+    )
     assert khipu["state"] == "BLOCKED"
     assert "ENDPOINT_HOST_NOT_ALLOWLISTED" in khipu["blockers"]
     assert khipu["credential_present"] is True
@@ -172,7 +182,9 @@ def test_non_allowlisted_endpoint_is_blocked_without_leaking_token(monkeypatch):
     assert "never-return-this-test-token" not in json.dumps(profile)
 
 
-def test_exact_operator_binding_can_make_a_plan_ready_without_invoking_network(monkeypatch):
+def test_exact_operator_binding_can_make_a_plan_ready_without_invoking_network(
+    monkeypatch,
+):
     clear_model_env(monkeypatch)
     monkeypatch.setenv(
         "SZL_MODEL_ENDPOINT_KHIPU_1_5B",
@@ -192,13 +204,16 @@ def test_exact_operator_binding_can_make_a_plan_ready_without_invoking_network(m
     assert body["selected_model"]["alias"] == "khipu-1.5b"
     assert body["selected_model"]["revision"] == "d" * 40
     assert body["selected_model"]["revision_evidence"] == "OPERATOR_DECLARED"
-    assert body["receipt"]["basis_sha256"] == second.json()["receipt"]["basis_sha256"]
+    assert (
+        body["receipt"]["basis_sha256"]
+        == second.json()["receipt"]["basis_sha256"]
+    )
     assert body["raw_context_returned"] is False
     assert body["raw_context_stored"] is False
     assert "test-token-not-returned" not in json.dumps(body)
 
 
-def test_low_advisory_score_and_non_checkpoint_preference_abstain(monkeypatch):
+def test_low_advisory_score_and_unapproved_preference_abstain(monkeypatch):
     clear_model_env(monkeypatch)
     low = CLIENT.post(
         "/api/verticals/counsel/intelligence/plan",
@@ -217,7 +232,7 @@ def test_low_advisory_score_and_non_checkpoint_preference_abstain(monkeypatch):
         json=invalid,
     )
     assert rejected.status_code == 422
-    assert "not an inference checkpoint" in rejected.json()["detail"]
+    assert "not approved for this vertical" in rejected.json()["detail"]
 
 
 def test_invalid_evidence_digest_is_rejected_before_planning():
