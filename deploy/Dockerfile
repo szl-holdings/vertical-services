@@ -6,6 +6,7 @@ RUN python -m pip install --disable-pip-version-check --no-cache-dir -r requirem
 COPY deploy/app.py ./app.py
 COPY deploy/szl_verticals/ ./szl_verticals/
 COPY deploy/source_revision.txt ./source_revision.txt
+COPY contracts/fashion-lineage.v1.json ./contracts/fashion-lineage.v1.json
 RUN useradd --create-home --uid 1000 --shell /usr/sbin/nologin szl && chown -R szl:szl /app
 USER szl
 EXPOSE 7860

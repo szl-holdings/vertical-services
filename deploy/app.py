@@ -283,7 +283,7 @@ def catalog() -> dict:
     }
 
 
-_FASHION_PATH = Path(__file__).resolve().parents[1] / "contracts" / "fashion-lineage.v1.json"
+_FASHION_PATH = Path(__file__).resolve().parent / "contracts" / "fashion-lineage.v1.json"
 
 
 @app.get("/api/fashion")
