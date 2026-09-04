@@ -14,15 +14,28 @@ CIK = re.compile(r"^\d{1,10}$")
 SAFE_TOKEN = re.compile(r"^[A-Za-z0-9._:/ -]{1,128}$")
 SAFE_REPO = re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$")
 BBL = re.compile(r"^\d{10}$")
-BOROUGHS = {"MN", "BX", "BK", "QN", "SI", "MANHATTAN", "BRONX", "BROOKLYN", "QUEENS", "STATEN ISLAND"}
+CURRENCY = re.compile(r"^[A-Z0-9]{2,10}$")
+BOROUGHS = {
+    "MN",
+    "BX",
+    "BK",
+    "QN",
+    "SI",
+    "MANHATTAN",
+    "BRONX",
+    "BROOKLYN",
+    "QUEENS",
+    "STATEN ISLAND",
+}
 DEFAULT_USER_AGENT = os.environ.get(
     "SZL_HTTP_USER_AGENT",
-    "SZL-Vertical-Services/2.0 (+https://a-11-oy.com)",
+    "SZL-Vertical-Services/2.1 (+https://a-11-oy.com)",
 ).strip()
 SEC_USER_AGENT = os.environ.get(
     "SEC_USER_AGENT",
     "SZL Holdings vertical-services https://a-11-oy.com",
 ).strip()
+
 
 @dataclass(frozen=True)
 class ConnectorSpec:
@@ -52,7 +65,10 @@ CONNECTORS: dict[str, ConnectorSpec] = {
         max_bytes=8_000_000,
         required=True,
         auth_env=None,
-        description="Authoritative catalog of vulnerabilities known to be exploited in the wild.",
+        description=(
+            "Authoritative catalog of vulnerabilities known to be exploited "
+            "in the wild."
+        ),
         builder="cisa",
     ),
     "nvd-cve": ConnectorSpec(
@@ -66,7 +82,10 @@ CONNECTORS: dict[str, ConnectorSpec] = {
         max_bytes=4_000_000,
         required=False,
         auth_env=None,
-        description="NVD CVE 2.0 enrichment; an NVD_API_KEY is optional and used only as a header.",
+        description=(
+            "NVD CVE 2.0 enrichment; an NVD_API_KEY is optional and used "
+            "only as a header."
+        ),
         builder="nvd",
     ),
     "github-actions": ConnectorSpec(
@@ -80,7 +99,10 @@ CONNECTORS: dict[str, ConnectorSpec] = {
         max_bytes=4_000_000,
         required=True,
         auth_env=None,
-        description="First-party CI/CD execution telemetry for an allowlisted SZL repository.",
+        description=(
+            "First-party CI/CD execution telemetry for an allowlisted SZL "
+            "repository."
+        ),
         builder="github",
     ),
     "noaa-ais-2025": ConnectorSpec(
@@ -94,14 +116,20 @@ CONNECTORS: dict[str, ConnectorSpec] = {
         max_bytes=4_000_000,
         required=True,
         auth_env=None,
-        description="Official 2025 nationwide AIS metadata and distribution references. It is historical planning data, not a live vessel feed.",
+        description=(
+            "Official 2025 nationwide AIS metadata and distribution references. "
+            "It is historical planning data, not a live vessel feed."
+        ),
         builder="noaa",
     ),
     "sec-submissions": ConnectorSpec(
         id="sec-submissions",
         vertical="finance",
         authority="U.S. Securities and Exchange Commission",
-        authority_url="https://www.sec.gov/search-filings/edgar-application-programming-interfaces",
+        authority_url=(
+            "https://www.sec.gov/search-filings/"
+            "edgar-application-programming-interfaces"
+        ),
         method="GET",
         response_format="json",
         freshness_seconds=900,
@@ -115,7 +143,10 @@ CONNECTORS: dict[str, ConnectorSpec] = {
         id="sec-companyfacts",
         vertical="finance",
         authority="U.S. Securities and Exchange Commission",
-        authority_url="https://www.sec.gov/search-filings/edgar-application-programming-interfaces",
+        authority_url=(
+            "https://www.sec.gov/search-filings/"
+            "edgar-application-programming-interfaces"
+        ),
         method="GET",
         response_format="json",
         freshness_seconds=900,
@@ -125,25 +156,127 @@ CONNECTORS: dict[str, ConnectorSpec] = {
         description="Extracted XBRL company facts from data.sec.gov.",
         builder="sec-companyfacts",
     ),
+    "polymarket-markets": ConnectorSpec(
+        id="polymarket-markets",
+        vertical="finance",
+        authority="Polymarket Gamma API",
+        authority_url="https://docs.polymarket.com/",
+        method="GET",
+        response_format="json",
+        freshness_seconds=60,
+        max_bytes=8_000_000,
+        required=False,
+        auth_env=None,
+        description=(
+            "Public market-discovery metadata and outcome prices in read-only "
+            "mode; no orders, custody, wallet, or trading authority."
+        ),
+        builder="polymarket",
+    ),
+    "coinbase-spot": ConnectorSpec(
+        id="coinbase-spot",
+        vertical="finance",
+        authority="Coinbase public prices API",
+        authority_url="https://docs.cdp.coinbase.com/",
+        method="GET",
+        response_format="json",
+        freshness_seconds=60,
+        max_bytes=1_000_000,
+        required=False,
+        auth_env=None,
+        description=(
+            "Public spot reference price for an allowlisted base and quote "
+            "currency; no account or trading access."
+        ),
+        builder="coinbase",
+    ),
+    "treasury-average-rates": ConnectorSpec(
+        id="treasury-average-rates",
+        vertical="finance",
+        authority="U.S. Department of the Treasury FiscalData",
+        authority_url=(
+            "https://fiscaldata.treasury.gov/datasets/"
+            "average-interest-rates-treasury-securities/"
+        ),
+        method="GET",
+        response_format="json",
+        freshness_seconds=3600,
+        max_bytes=4_000_000,
+        required=False,
+        auth_env=None,
+        description=(
+            "Official average interest rates on U.S. Treasury securities, "
+            "used as a public macro reference."
+        ),
+        builder="treasury",
+    ),
     "nyc-pluto": ConnectorSpec(
         id="nyc-pluto",
         vertical="terra",
         authority="NYC Department of City Planning",
-        authority_url="https://data.cityofnewyork.us/City-Government/Primary-Land-Use-Tax-Lot-Output-PLUTO-/64uk-42ks",
+        authority_url=(
+            "https://data.cityofnewyork.us/City-Government/"
+            "Primary-Land-Use-Tax-Lot-Output-PLUTO-/64uk-42ks"
+        ),
         method="GET",
         response_format="json",
         freshness_seconds=21_600,
         max_bytes=4_000_000,
         required=True,
         auth_env=None,
-        description="Current Primary Land Use Tax Lot Output records through NYC Open Data.",
+        description=(
+            "Current Primary Land Use Tax Lot Output records through NYC "
+            "Open Data."
+        ),
         builder="pluto",
+    ),
+    "nyc-hpd-violations": ConnectorSpec(
+        id="nyc-hpd-violations",
+        vertical="terra",
+        authority="NYC Department of Housing Preservation and Development",
+        authority_url=(
+            "https://data.cityofnewyork.us/Housing-Development/"
+            "Housing-Maintenance-Code-Violations/wvxf-dwi5"
+        ),
+        method="GET",
+        response_format="json",
+        freshness_seconds=900,
+        max_bytes=8_000_000,
+        required=False,
+        auth_env=None,
+        description=(
+            "Recent public Housing Maintenance Code violations for parcel-level "
+            "condition and distress research."
+        ),
+        builder="hpd",
+    ),
+    "nyc-dob-violations": ConnectorSpec(
+        id="nyc-dob-violations",
+        vertical="terra",
+        authority="NYC Department of Buildings",
+        authority_url=(
+            "https://data.cityofnewyork.us/Housing-Development/"
+            "DOB-Violations/3h2n-5cm9"
+        ),
+        method="GET",
+        response_format="json",
+        freshness_seconds=900,
+        max_bytes=8_000_000,
+        required=False,
+        auth_env=None,
+        description=(
+            "Recent public Department of Buildings violations for property "
+            "condition research."
+        ),
+        builder="dob",
     ),
     "federal-register": ConnectorSpec(
         id="federal-register",
         vertical="counsel",
         authority="Office of the Federal Register",
-        authority_url="https://www.federalregister.gov/developers/documentation/api/v1",
+        authority_url=(
+            "https://www.federalregister.gov/developers/documentation/api/v1"
+        ),
         method="GET",
         response_format="json",
         freshness_seconds=900,
@@ -164,22 +297,33 @@ CONNECTORS: dict[str, ConnectorSpec] = {
         max_bytes=4_000_000,
         required=False,
         auth_env="CONGRESS_API_KEY",
-        description="Congress.gov bill metadata. Requires a configured api.data.gov key.",
+        description=(
+            "Congress.gov bill metadata. Requires a configured api.data.gov key."
+        ),
         builder="congress",
     ),
 }
 
 GITHUB_REPOSITORIES = {
     "a11oy",
-    "killinchu",
-    "platform",
-    "vertical-services",
-    "lyte-lattice",
-    "szl-real-estate",
-    "puriq-live",
-    "szl-defensive-control-plane",
+    "anatomy",
     "counsel",
     "david-leads",
+    "hatun-mcp",
+    "immune",
+    "killinchu",
+    "lyte-lattice",
+    "lyte-services",
+    "platform",
+    "puriq-live",
+    "szl-defensive-control-plane",
+    "szl-estate-os",
+    "szl-formulas",
+    "szl-quant",
+    "szl-quant-witness",
+    "szl-real-estate",
+    "szl-second-brain",
+    "vertical-services",
 }
 
 
