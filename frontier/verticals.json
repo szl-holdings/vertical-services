@@ -1,0 +1,271 @@
+{
+  "schema": "szl.vertical-frontier.v1",
+  "generated_at": "2026-09-04T02:10:00Z",
+  "authority": {
+    "product_origin": "https://a-11-oy.com",
+    "evidence_origin": "https://a11oy.net",
+    "source_origin": "https://github.com/szl-holdings",
+    "explorer_origin": "https://huggingface.co/spaces/SZLHOLDINGS/szl-command-lab",
+    "model_may_authorize": false,
+    "kernel_may_authorize": false,
+    "human_binding_required": true,
+    "public_effectors_enabled": false,
+    "lambda_uniqueness": "CONJECTURE_1_OPEN"
+  },
+  "shared_edge": [
+    "one cross-vertical evidence ontology",
+    "source-bound proposals with deterministic receipts",
+    "nine-organ Living Anatomy health contract",
+    "bounded Second-Brain memory scoped by session",
+    "portable SZL kernel and model routing",
+    "human-bound consequential action",
+    "live source freshness and provenance separated from model confidence"
+  ],
+  "verticals": [
+    {
+      "slug": "a11oy",
+      "name": "A11oy",
+      "category": "Governed AI command fabric",
+      "promise": "Turn model proposals into policy-bounded, evidence-linked, human-accountable decisions.",
+      "unserved_wedge": "A decision compiler that preserves the full proposal, policy, approval, action, and verification chain instead of stopping at chat or dashboards.",
+      "experience": {
+        "layout": "decision-ribbon",
+        "instrument": "proof-lattice",
+        "motion": "slow-orbit",
+        "palette": ["#090B10", "#F3EEE4", "#D97757", "#8FA9C6", "#2A313C"],
+        "type_voice": "editorial-command",
+        "hero": "Every consequential decision should be reconstructable.",
+        "interaction": "compose a proposal, inspect policy gates, bind a human decision, verify the receipt"
+      },
+      "models": [
+        {"id": "SZLHOLDINGS/szl-nemo", "role": "planner", "execution": "PROPOSAL_ONLY"},
+        {"id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2", "role": "receipt-composer", "execution": "PROPOSAL_ONLY"}
+      ],
+      "kernels": [
+        {"id": "SZLHOLDINGS/szl-invariants", "role": "policy-invariants"},
+        {"id": "SZLHOLDINGS/szl-lambda-gate", "role": "advisory-routing"},
+        {"id": "SZLHOLDINGS/governed-inference-meter", "role": "inference-receipts"}
+      ],
+      "sources": [
+        {"id": "github-estate", "host": "api.github.com", "mode": "PUBLIC_OR_TOKEN", "freshness": "LIVE", "purpose": "source revisions and workflow evidence"},
+        {"id": "hf-estate", "host": "huggingface.co", "mode": "PUBLIC", "freshness": "LIVE", "purpose": "model, kernel, dataset, and Space metadata"}
+      ],
+      "prohibited": ["self-authorization", "silent policy bypass", "fabricated evidence", "unreceipted consequential action"]
+    },
+    {
+      "slug": "killinchu",
+      "name": "Killinchu",
+      "category": "Defense and maritime decision intelligence",
+      "promise": "Fuse public maritime and mission evidence into bounded, explainable operator decisions.",
+      "unserved_wedge": "One operator surface that joins maritime anomaly detection, ownership and sanctions context, mission simulation, and after-action evidence without enabling public physical actuation.",
+      "experience": {
+        "layout": "theater-map",
+        "instrument": "orbital-maritime-radar",
+        "motion": "sweep-and-track",
+        "palette": ["#04080A", "#D8F7E8", "#4EE0A0", "#E0A95A", "#17313A"],
+        "type_voice": "tactical-precise",
+        "hero": "See the theater. Bound the decision. Preserve the evidence.",
+        "interaction": "select a track, inspect provenance, run a simulation, send only an advisory recommendation to a human operator"
+      },
+      "models": [
+        {"id": "SZLHOLDINGS/A11OY-MINI", "role": "bounded-analyst", "execution": "PROPOSAL_ONLY"},
+        {"id": "SZLHOLDINGS/szl-nemo", "role": "mission-planner", "execution": "PROPOSAL_ONLY"}
+      ],
+      "kernels": [
+        {"id": "SZLHOLDINGS/szl-blocked", "role": "hard-deny-controls"},
+        {"id": "SZLHOLDINGS/szl-invariants", "role": "mission-invariants"},
+        {"id": "SZLHOLDINGS/szl-lambda-gate", "role": "advisory-risk-routing"}
+      ],
+      "sources": [
+        {"id": "noaa-ais-2025", "host": "coast.noaa.gov", "mode": "PUBLIC", "freshness": "HISTORICAL", "purpose": "official historical AIS planning data"},
+        {"id": "uscg-navcen", "host": "navcen.uscg.gov", "mode": "PUBLIC", "freshness": "REFERENCE", "purpose": "official AIS and navigation reference"},
+        {"id": "ofac-sanctions", "host": "sanctionslistservice.ofac.treas.gov", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "sanctions screening source"}
+      ],
+      "prohibited": ["public weapon command", "autonomous target selection", "live effector control", "covert access", "claiming historical AIS is live"]
+    },
+    {
+      "slug": "lyte",
+      "name": "Lyte",
+      "category": "Business observability and execution intelligence",
+      "promise": "Connect technical telemetry to business commitments, decisions, and outcomes.",
+      "unserved_wedge": "An outcome graph that explains which technical signals threaten which customer, revenue, delivery, or governance commitments and who must decide next.",
+      "experience": {
+        "layout": "signal-waterfall",
+        "instrument": "outcome-topology",
+        "motion": "pulse-and-cascade",
+        "palette": ["#07111C", "#EAF8FF", "#51C8FF", "#B7F36B", "#233349"],
+        "type_voice": "high-signal-observability",
+        "hero": "Telemetry becomes useful when it can explain an outcome.",
+        "interaction": "trace a signal through service, commitment, owner, decision, and verified outcome"
+      },
+      "models": [
+        {"id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2", "role": "incident-narrative", "execution": "PROPOSAL_ONLY"},
+        {"id": "SZLHOLDINGS/szl-nemo", "role": "outcome-reasoner", "execution": "PROPOSAL_ONLY"}
+      ],
+      "kernels": [
+        {"id": "SZLHOLDINGS/governed-inference-meter", "role": "cost-and-energy-receipts"},
+        {"id": "SZLHOLDINGS/szl-governed-norm", "role": "signal-normalization"},
+        {"id": "SZLHOLDINGS/szl-invariants", "role": "slo-and-policy-invariants"}
+      ],
+      "sources": [
+        {"id": "github-actions", "host": "api.github.com", "mode": "PUBLIC_OR_TOKEN", "freshness": "LIVE", "purpose": "workflow execution telemetry"},
+        {"id": "opentelemetry", "host": "opentelemetry.io", "mode": "OPERATOR_CONNECTED", "freshness": "LIVE_WHEN_CONNECTED", "purpose": "traces, metrics, and logs"}
+      ],
+      "prohibited": ["fabricated telemetry", "automatic production mutation", "declaring root cause without evidence", "conflating correlation and causation"]
+    },
+    {
+      "slug": "sentra",
+      "name": "Sentra",
+      "category": "Cyber exposure and remediation command",
+      "promise": "Prioritize exploitable exposure by business path, evidence, and bounded remediation authority.",
+      "unserved_wedge": "A remediation compiler that joins vulnerability evidence, asset criticality, exploitability, attack paths, compensating controls, owner capacity, and proof of closure.",
+      "experience": {
+        "layout": "exposure-graph",
+        "instrument": "blast-radius-prism",
+        "motion": "scan-and-collapse",
+        "palette": ["#07070C", "#EEF2FF", "#7AA2FF", "#E66BFF", "#26263A"],
+        "type_voice": "forensic-command",
+        "hero": "Prioritize the path an attacker can use, not the count a scanner can produce.",
+        "interaction": "open an exposure path, inspect exploit and asset evidence, stage a remediation plan, verify closure"
+      },
+      "models": [
+        {"id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2", "role": "remediation-drafter", "execution": "PROPOSAL_ONLY"},
+        {"id": "SZLHOLDINGS/A11OY-MINI", "role": "evidence-summarizer", "execution": "PROPOSAL_ONLY"}
+      ],
+      "kernels": [
+        {"id": "SZLHOLDINGS/szl-blocked", "role": "prohibited-action-gate"},
+        {"id": "SZLHOLDINGS/szl-invariants", "role": "security-invariants"},
+        {"id": "SZLHOLDINGS/szl-lambda-gate", "role": "advisory-prioritization"}
+      ],
+      "sources": [
+        {"id": "cisa-kev", "host": "www.cisa.gov", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "known exploited vulnerabilities"},
+        {"id": "nvd", "host": "services.nvd.nist.gov", "mode": "PUBLIC_OR_KEY", "freshness": "PUBLISHED", "purpose": "CVE and CVSS enrichment"},
+        {"id": "github-advisories", "host": "api.github.com", "mode": "PUBLIC_OR_TOKEN", "freshness": "LIVE", "purpose": "repository advisory evidence"}
+      ],
+      "prohibited": ["exploit execution", "credential collection", "unauthorized scanning", "automatic destructive remediation"]
+    },
+    {
+      "slug": "terra",
+      "name": "Terra",
+      "category": "Property and place intelligence",
+      "promise": "Reveal parcel, ownership, regulatory, environmental, and opportunity context in one evidence graph.",
+      "unserved_wedge": "A parcel twin that explains not only what a property is, but why its risk or opportunity changed, what evidence supports it, and what diligence remains open.",
+      "experience": {
+        "layout": "parcel-stack",
+        "instrument": "terrain-ledger",
+        "motion": "layer-and-reveal",
+        "palette": ["#10100D", "#F4F0E6", "#C77B4F", "#84BFA3", "#3A382E"],
+        "type_voice": "cartographic-editorial",
+        "hero": "Every parcel carries a history, a constraint set, and an opportunity surface.",
+        "interaction": "select a parcel, peel ownership and public-record layers, calculate bounded scenarios, build a diligence packet"
+      },
+      "models": [
+        {"id": "SZLHOLDINGS/szl-nemo", "role": "diligence-planner", "execution": "PROPOSAL_ONLY"},
+        {"id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2", "role": "record-summarizer", "execution": "PROPOSAL_ONLY"}
+      ],
+      "kernels": [
+        {"id": "SZLHOLDINGS/szl-governed-norm", "role": "parcel-feature-normalization"},
+        {"id": "SZLHOLDINGS/szl-lambda-gate", "role": "advisory-opportunity-routing"},
+        {"id": "SZLHOLDINGS/szl-invariants", "role": "diligence-invariants"}
+      ],
+      "sources": [
+        {"id": "nyc-pluto", "host": "data.cityofnewyork.us", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "official parcel and land-use records"},
+        {"id": "fema", "host": "hazards.fema.gov", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "flood hazard context"},
+        {"id": "census", "host": "api.census.gov", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "demographic and economic context"}
+      ],
+      "prohibited": ["fair-housing protected-class targeting", "automated lending decisions", "claiming estimated value as appraisal", "concealing source age"]
+    },
+    {
+      "slug": "puriq",
+      "name": "PURIQ Finance",
+      "category": "Evidence-first financial research",
+      "promise": "Convert filings, macro data, and market observations into traceable theses and monitored disconfirming evidence.",
+      "unserved_wedge": "A research terminal where every thesis exposes its source set, assumptions, counterevidence, freshness, and decision boundary instead of presenting a single opaque score.",
+      "experience": {
+        "layout": "research-terminal",
+        "instrument": "thesis-tape",
+        "motion": "tick-and-reconcile",
+        "palette": ["#06101A", "#F1F6F8", "#E4B65B", "#55D6BE", "#21313F"],
+        "type_voice": "analytical-terminal",
+        "hero": "A thesis is only as useful as the evidence that could falsify it.",
+        "interaction": "open a filing, extract claims, link macro context, record assumptions, watch confirming and disconfirming evidence"
+      },
+      "models": [
+        {"id": "SZLHOLDINGS/szl-nemo", "role": "research-planner", "execution": "PROPOSAL_ONLY"},
+        {"id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2", "role": "filing-extractor", "execution": "PROPOSAL_ONLY"}
+      ],
+      "kernels": [
+        {"id": "SZLHOLDINGS/szl-invariants", "role": "research-invariants"},
+        {"id": "SZLHOLDINGS/szl-lambda-gate", "role": "advisory-thesis-routing"},
+        {"id": "SZLHOLDINGS/governed-inference-meter", "role": "research-run-receipts"}
+      ],
+      "sources": [
+        {"id": "sec-submissions", "host": "data.sec.gov", "mode": "PUBLIC_WITH_USER_AGENT", "freshness": "PUBLISHED", "purpose": "issuer filing history"},
+        {"id": "sec-companyfacts", "host": "data.sec.gov", "mode": "PUBLIC_WITH_USER_AGENT", "freshness": "PUBLISHED", "purpose": "XBRL company facts"},
+        {"id": "treasury-fiscal-data", "host": "api.fiscaldata.treasury.gov", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "official fiscal and exchange-rate data"},
+        {"id": "fred", "host": "api.stlouisfed.org", "mode": "API_KEY", "freshness": "PUBLISHED", "purpose": "macroeconomic series"}
+      ],
+      "prohibited": ["trade execution", "personalized investment advice", "guaranteed return claims", "fabricated market data", "using stale filings without disclosure"]
+    },
+    {
+      "slug": "prism",
+      "name": "PRISM Counsel",
+      "category": "Citation-first legal matter command",
+      "promise": "Organize authorities, facts, deadlines, obligations, and human decisions into a verifiable matter record.",
+      "unserved_wedge": "A matter twin that preserves the exact authority-to-fact-to-deadline-to-decision chain and makes every unresolved citation or jurisdictional assumption visible.",
+      "experience": {
+        "layout": "citation-rail",
+        "instrument": "matter-chronology",
+        "motion": "annotate-and-bind",
+        "palette": ["#12100F", "#F8F3EA", "#8F3342", "#526A8A", "#3B302D"],
+        "type_voice": "legal-editorial",
+        "hero": "Every conclusion should point back to authority, fact, and jurisdiction.",
+        "interaction": "build a chronology, attach authority, mark disputed facts, calculate deadlines, prepare a human-reviewed work product"
+      },
+      "models": [
+        {"id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2", "role": "citation-and-matter-composer", "execution": "PROPOSAL_ONLY"},
+        {"id": "SZLHOLDINGS/szl-nemo", "role": "issue-spotting-planner", "execution": "PROPOSAL_ONLY"}
+      ],
+      "kernels": [
+        {"id": "SZLHOLDINGS/szl-invariants", "role": "jurisdiction-and-citation-invariants"},
+        {"id": "SZLHOLDINGS/szl-blocked", "role": "unauthorized-practice-and-action-gate"},
+        {"id": "SZLHOLDINGS/szl-lambda-gate", "role": "advisory-priority-routing"}
+      ],
+      "sources": [
+        {"id": "federal-register", "host": "www.federalregister.gov", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "federal rules and notices"},
+        {"id": "congress", "host": "api.congress.gov", "mode": "API_KEY", "freshness": "PUBLISHED", "purpose": "legislative materials"},
+        {"id": "courtlistener", "host": "www.courtlistener.com", "mode": "PUBLIC_OR_TOKEN", "freshness": "PUBLISHED", "purpose": "case-law research enrichment"}
+      ],
+      "prohibited": ["legal advice without licensed review", "filing or deadline action without human confirmation", "invented citations", "cross-jurisdiction assumptions hidden from the user"]
+    },
+    {
+      "slug": "anatomy",
+      "name": "Living Anatomy",
+      "category": "System health and governed cognition",
+      "promise": "Make the health, memory, policy, evidence, and execution organs of an AI system inspectable as one living body.",
+      "unserved_wedge": "A system twin that exposes which cognitive or operational organ is degraded, what downstream decisions are affected, and why the body must fail closed.",
+      "experience": {
+        "layout": "organ-body",
+        "instrument": "living-system-map",
+        "motion": "breath-and-synapse",
+        "palette": ["#0C0A0D", "#F4EDEA", "#B84A62", "#4DB7A5", "#332A35"],
+        "type_voice": "biological-systems",
+        "hero": "A healthy model is not enough. The whole decision body must be healthy.",
+        "interaction": "inspect organs, injure a dependency, observe propagation, verify the fail-closed receipt"
+      },
+      "models": [
+        {"id": "SZLHOLDINGS/szl-nemo", "role": "system-explainer", "execution": "PROPOSAL_ONLY"}
+      ],
+      "kernels": [
+        {"id": "SZLHOLDINGS/szl-kernels", "role": "portable-organ-runtime"},
+        {"id": "SZLHOLDINGS/szl-invariants", "role": "body-invariants"},
+        {"id": "SZLHOLDINGS/governed-inference-meter", "role": "energy-and-runtime-observation"}
+      ],
+      "sources": [
+        {"id": "runtime-health", "host": "localhost", "mode": "OPERATOR_CONNECTED", "freshness": "LIVE_WHEN_CONNECTED", "purpose": "organ and dependency health"},
+        {"id": "opentelemetry", "host": "opentelemetry.io", "mode": "OPERATOR_CONNECTED", "freshness": "LIVE_WHEN_CONNECTED", "purpose": "traces, metrics, and logs"}
+      ],
+      "prohibited": ["sentience claims", "fabricated health", "automatic recovery with consequential side effects", "model self-authorization"]
+    }
+  ]
+}
