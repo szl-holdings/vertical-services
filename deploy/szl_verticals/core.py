@@ -11,10 +11,10 @@ from typing import Annotated, Any
 from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict
 
-VERSION = "1.1.0"
+VERSION = "2.0.0"
 SOURCE_REPOSITORY = "szl-holdings/vertical-services"
 HF_REPOSITORY = "SZLHOLDINGS/vertical-services"
-ENGINES = ("sentra", "lyte", "vessels", "finance", "terra", "counsel")
+ENGINES = ("sentra", "lyte", "killinchu", "finance", "terra", "counsel")
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 STATE_LOCK = threading.RLock()
 
