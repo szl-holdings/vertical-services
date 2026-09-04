@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Apply Killinchu public topology once
+
+on:
+  push:
+    branches: [feat/vertical-intelligence-fabric-v1]
+    paths:
+      - .github/workflows/zz-apply-killinchu-public-taxonomy-once.yml
+      - scripts/apply_killinchu_public_taxonomy.py
+      - tests/test_public_product_topology.py
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-killinchu-public-topology
+  cancel-in-progress: false
+
+jobs:
+  apply-and-prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+      - name: Checkout exact feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+      - name: Apply exact taxonomy transformation
+        run: python scripts/apply_killinchu_public_taxonomy.py
+      - name: Install and run full vertical contract
+        env:
+          SENTRA_SIGNING_KEY: ci-topology-key-not-used-in-production
+          SZL_SOURCE_REVISION: ${{ github.sha }}
+          SZL_STATE_PATH: /tmp/szl-taxonomy.sqlite3
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt -r requirements-test.txt
+          python -m pip check
+          python -m compileall -q deploy tools tests scripts/apply_killinchu_public_taxonomy.py
+          python -m pytest tests -q
+      - name: Commit transformed runtime files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Taxonomy already exact."
+            exit 0
+          fi
+          git config user.name "Lutar, Stephen P."
+          git config user.email "stephenlutar2@gmail.com"
+          git add README.md deploy/app.py deploy/szl_verticals/profiles.py deploy/szl_verticals/intelligence.py tests/test_intelligence_fabric.py
+          git diff --cached --check
+          git commit --signoff -m "feat(taxonomy): make Killinchu the sole public Aegis/Sentra home"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
