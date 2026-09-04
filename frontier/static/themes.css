@@ -1,0 +1,918 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * Original SZL visual grammars. These compositions are not vendor skins: each
+ * vertical owns a different spatial model, instrument, cadence, and interaction
+ * metaphor while sharing the same accessibility and evidence contract.
+ */
+
+/* A11oy — decision ribbon + proof lattice */
+.theme-a11oy .instrument-shell {
+  border-radius: 2.4rem 0.8rem 2.4rem 0.8rem;
+}
+
+.decision-ribbon {
+  position: absolute;
+  inset: 1.7rem 1.2rem 3.4rem;
+}
+
+.ribbon-track {
+  position: absolute;
+  inset: 48% 7% auto;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.ribbon-track::after {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 0.8rem;
+  height: 0.8rem;
+  transform: translate(-50%, -50%);
+  content: "";
+  border-radius: 999px;
+  background: var(--theme-text);
+  box-shadow: 0 0 1.8rem var(--accent);
+  animation: ribbon-travel 6.4s var(--ease) infinite;
+}
+
+.ribbon-steps {
+  position: absolute;
+  inset: 0 2%;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: center;
+}
+
+.ribbon-step {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  gap: 0.55rem;
+  text-align: center;
+}
+
+.ribbon-step-dot {
+  width: 1.05rem;
+  height: 1.05rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 0 0 0.35rem color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.ribbon-step:nth-child(4) .ribbon-step-dot {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 0.35rem color-mix(in srgb, var(--accent-2) 8%, transparent);
+}
+
+.ribbon-step strong {
+  max-width: 8ch;
+  color: var(--theme-text);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.proof-lattice {
+  position: absolute;
+  inset: 5% 8%;
+  opacity: 0.52;
+}
+
+.proof-lattice line {
+  stroke: color-mix(in srgb, var(--accent) 45%, transparent);
+  stroke-width: 0.6;
+}
+
+.proof-lattice circle {
+  fill: var(--surface);
+  stroke: color-mix(in srgb, var(--accent-2) 58%, transparent);
+  stroke-width: 0.8;
+}
+
+@keyframes ribbon-travel {
+  0%, 8% { left: 0%; opacity: 0; }
+  12% { opacity: 1; }
+  84% { opacity: 1; }
+  92%, 100% { left: 100%; opacity: 0; }
+}
+
+/* Killinchu — orbital maritime radar */
+.theme-killinchu .instrument-shell {
+  border-radius: 50% 50% 1.2rem 1.2rem / 22% 22% 1.2rem 1.2rem;
+}
+
+.theater-map {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.theater-map::before {
+  position: absolute;
+  inset: 7% 7% 12%;
+  content: "";
+  opacity: 0.55;
+  background-image:
+    linear-gradient(28deg, transparent 45%, color-mix(in srgb, var(--accent) 13%, transparent) 46%, transparent 47%),
+    linear-gradient(118deg, transparent 48%, color-mix(in srgb, var(--accent-2) 10%, transparent) 49%, transparent 50%);
+  background-size: 7rem 5rem, 9rem 6rem;
+  clip-path: polygon(3% 9%, 89% 0, 100% 82%, 21% 100%, 0 62%);
+}
+
+.radar-core {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: min(72vw, 21rem);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--accent) 10%, transparent), transparent 58%),
+    conic-gradient(from 0deg, transparent 0 74%, color-mix(in srgb, var(--accent) 22%, transparent) 92%, transparent 100%);
+  box-shadow:
+    inset 0 0 2.4rem color-mix(in srgb, var(--accent) 8%, transparent),
+    0 0 2.8rem color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.radar-core::before,
+.radar-core::after {
+  position: absolute;
+  inset: 16%;
+  content: "";
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: inherit;
+}
+
+.radar-core::after {
+  inset: 34%;
+}
+
+.radar-axis-x,
+.radar-axis-y {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  width: 1px;
+  height: 84%;
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.radar-axis-x {
+  left: 8%;
+  top: 50%;
+  width: 84%;
+  height: 1px;
+  transform: translateY(-50%);
+}
+
+.radar-sweep {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: conic-gradient(from 0deg, transparent 0 84%, color-mix(in srgb, var(--accent) 34%, transparent) 94%, transparent 100%);
+  animation: radar-sweep 5.8s linear infinite;
+}
+
+.track {
+  position: absolute;
+  width: 0.52rem;
+  height: 0.52rem;
+  border: 1px solid var(--accent-2);
+  border-radius: 1px 60% 60% 60%;
+  background: var(--surface);
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--accent-2) 58%, transparent);
+  transform: rotate(45deg);
+}
+
+.track::after {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2.3rem;
+  height: 1px;
+  content: "";
+  transform: rotate(-45deg);
+  transform-origin: left;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-2) 45%, transparent), transparent);
+}
+
+.track-1 { left: 27%; top: 27%; }
+.track-2 { right: 22%; top: 39%; }
+.track-3 { left: 39%; bottom: 24%; }
+.track-4 { right: 34%; bottom: 18%; }
+
+.orbit-mark {
+  position: absolute;
+  right: 8%;
+  top: 12%;
+  width: 4.8rem;
+  height: 4.8rem;
+  border: 1px solid color-mix(in srgb, var(--accent-2) 28%, transparent);
+  border-radius: 999px;
+}
+
+.orbit-mark::after {
+  position: absolute;
+  left: 50%;
+  top: -0.2rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  content: "";
+  border-radius: 999px;
+  background: var(--accent-2);
+  animation: orbit 4.8s linear infinite;
+  transform-origin: 0 2.6rem;
+}
+
+@keyframes radar-sweep {
+  to { transform: rotate(360deg); }
+}
+
+/* Lyte — signal waterfall + outcome topology */
+.theme-lyte .instrument-shell {
+  border-radius: 0.8rem 2.4rem 0.8rem 2.4rem;
+}
+
+.signal-waterfall {
+  position: absolute;
+  inset: 1.5rem 1rem 3rem;
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.6fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.signal-streams {
+  display: grid;
+  align-content: center;
+  gap: 0.55rem;
+}
+
+.signal-stream {
+  display: grid;
+  grid-template-columns: 2.8rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.signal-stream span {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  text-transform: uppercase;
+}
+
+.signal-bar {
+  position: relative;
+  height: 0.45rem;
+  overflow: hidden;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.signal-bar::after {
+  position: absolute;
+  inset: 0;
+  width: var(--signal-size, 70%);
+  content: "";
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transform-origin: left;
+  animation: signal-pulse 3.2s var(--ease) infinite alternate;
+}
+
+.outcome-topology {
+  position: relative;
+  min-height: 18rem;
+  border-left: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.outcome-node {
+  position: absolute;
+  display: grid;
+  min-width: 6.3rem;
+  min-height: 3.6rem;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--line));
+  border-radius: 0.65rem;
+  padding: 0.55rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--theme-text);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.05em;
+  text-align: center;
+  text-transform: uppercase;
+  box-shadow: 0 0 1.4rem color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.outcome-node::before {
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  width: var(--wire, 2rem);
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 50%, transparent));
+}
+
+.outcome-node:nth-child(1) { left: 8%; top: 9%; }
+.outcome-node:nth-child(2) { left: 48%; top: 17%; }
+.outcome-node:nth-child(3) { left: 19%; top: 51%; }
+.outcome-node:nth-child(4) { left: 59%; top: 61%; border-color: var(--accent-2); }
+
+@keyframes signal-pulse {
+  from { transform: scaleX(0.42); opacity: 0.48; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+
+/* Sentra — exposure graph + blast-radius prism */
+.theme-sentra .instrument-shell {
+  clip-path: polygon(0.7rem 0, calc(100% - 0.7rem) 0, 100% 0.7rem, 100% calc(100% - 0.7rem), calc(100% - 0.7rem) 100%, 0.7rem 100%, 0 calc(100% - 0.7rem), 0 0.7rem);
+  border-radius: 0;
+}
+
+.exposure-field {
+  position: absolute;
+  inset: 0.7rem 0.8rem 2.8rem;
+}
+
+.exposure-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.exposure-lines line,
+.exposure-lines path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 36%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+  animation: dash-flow 10s linear infinite;
+}
+
+.exposure-node {
+  position: absolute;
+  display: grid;
+  width: 5.1rem;
+  height: 5.1rem;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--line));
+  border-radius: 22% 42% 26% 46%;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--theme-text);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-transform: uppercase;
+  transform: translate(-50%, -50%);
+}
+
+.exposure-node::before,
+.exposure-node::after {
+  position: absolute;
+  inset: -0.7rem;
+  content: "";
+  border: 1px solid color-mix(in srgb, var(--accent) 17%, transparent);
+  border-radius: inherit;
+}
+
+.exposure-node::after {
+  inset: -1.4rem;
+  opacity: 0.45;
+}
+
+.exposure-node.crown {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 2.4rem color-mix(in srgb, var(--accent-2) 20%, transparent);
+}
+
+.exposure-node.n1 { left: 18%; top: 23%; }
+.exposure-node.n2 { left: 49%; top: 16%; }
+.exposure-node.n3 { left: 78%; top: 36%; }
+.exposure-node.n4 { left: 31%; top: 66%; }
+.exposure-node.n5 { left: 66%; top: 73%; }
+
+.prism-beam {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 5%;
+  height: 0.42rem;
+  transform: skewX(-25deg);
+  background: linear-gradient(90deg, transparent, var(--accent), var(--accent-2), transparent);
+  filter: blur(0.1rem);
+  opacity: 0.65;
+}
+
+@keyframes dash-flow {
+  to { stroke-dashoffset: -48; }
+}
+
+/* Terra — parcel stack + terrain ledger */
+.theme-terra .instrument-shell {
+  border-radius: 0.7rem 0.7rem 3rem 0.7rem;
+}
+
+.parcel-scene {
+  position: absolute;
+  inset: 0;
+  perspective: 900px;
+}
+
+.parcel-stack {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: min(68vw, 22rem);
+  height: 17rem;
+  transform: translate(-50%, -50%) rotateX(58deg) rotateZ(-21deg);
+  transform-style: preserve-3d;
+}
+
+.parcel-layer {
+  position: absolute;
+  inset: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, transparent), color-mix(in srgb, var(--accent-2) 7%, transparent)),
+    var(--surface);
+  clip-path: polygon(5% 18%, 37% 2%, 61% 10%, 94% 0, 100% 65%, 81% 96%, 43% 88%, 15% 100%, 0 64%);
+  box-shadow: 0 1.3rem 3rem rgba(0, 0, 0, 0.22);
+}
+
+.parcel-layer:nth-child(1) { transform: translateZ(0); opacity: 0.32; }
+.parcel-layer:nth-child(2) { transform: translateZ(2.2rem); opacity: 0.48; }
+.parcel-layer:nth-child(3) { transform: translateZ(4.4rem); opacity: 0.72; }
+.parcel-layer:nth-child(4) { transform: translateZ(6.6rem); opacity: 1; }
+
+.parcel-gridline {
+  position: absolute;
+  inset: 8% 10%;
+  opacity: 0.55;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--accent-2) 25%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent-2) 25%, transparent) 1px, transparent 1px);
+  background-size: 3.5rem 3.5rem;
+  clip-path: polygon(5% 18%, 37% 2%, 61% 10%, 94% 0, 100% 65%, 81% 96%, 43% 88%, 15% 100%, 0 64%);
+}
+
+.parcel-pin {
+  position: absolute;
+  left: 62%;
+  top: 17%;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--accent-2);
+  border-radius: 50% 50% 50% 0;
+  background: var(--surface);
+  box-shadow: 0 0 1.2rem var(--accent-2);
+  transform: rotate(-45deg) translateZ(8rem);
+}
+
+.terrain-ledger {
+  position: absolute;
+  left: 1rem;
+  bottom: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.terrain-ledger span {
+  display: inline-flex;
+  width: max-content;
+  border-left: 2px solid var(--accent);
+  padding: 0.25rem 0.5rem;
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* PURIQ — research terminal + thesis tape */
+.theme-puriq .instrument-shell {
+  border-radius: 0.35rem;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent),
+    0 2.5rem 8rem color-mix(in srgb, var(--accent) 9%, transparent);
+}
+
+.research-terminal {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.market-board {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1.05fr) minmax(9rem, 0.55fr);
+  gap: 1px;
+  background: var(--line);
+}
+
+.thesis-tape,
+.evidence-tape {
+  min-width: 0;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--surface) 94%, black);
+}
+
+.terminal-row {
+  display: grid;
+  grid-template-columns: 3.1rem minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+  min-height: 2rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 8%, transparent);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+}
+
+.terminal-row span:first-child {
+  color: var(--faint);
+}
+
+.terminal-row strong {
+  color: var(--theme-text);
+  font-weight: 500;
+}
+
+.terminal-row em {
+  color: var(--accent);
+  font-style: normal;
+}
+
+.terminal-row.negative em {
+  color: var(--negative);
+}
+
+.mini-chart {
+  position: relative;
+  height: 7.5rem;
+  margin-top: 1rem;
+  border-left: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.mini-chart-bars {
+  position: absolute;
+  inset: 0.6rem 0.5rem 0;
+  display: flex;
+  align-items: end;
+  gap: 0.28rem;
+}
+
+.mini-chart-bars span {
+  min-width: 0;
+  flex: 1;
+  height: var(--bar, 50%);
+  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 25%, transparent));
+  opacity: 0.72;
+}
+
+.evidence-tape h4 {
+  color: var(--accent-2);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.evidence-tape ul {
+  display: grid;
+  margin-top: 0.8rem;
+  list-style: none;
+  gap: 0.65rem;
+}
+
+.evidence-tape li {
+  border-left: 1px solid var(--accent-2);
+  padding-left: 0.55rem;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.terminal-command {
+  display: flex;
+  min-height: 2.8rem;
+  align-items: center;
+  gap: 0.55rem;
+  border-top: 1px solid var(--line);
+  padding: 0.55rem 0.8rem;
+  background: #03070a;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+}
+
+.terminal-command::before {
+  content: ">";
+  color: var(--accent);
+}
+
+.terminal-cursor {
+  width: 0.45rem;
+  height: 0.85rem;
+  background: var(--accent);
+  animation: cursor-blink 1.1s steps(1) infinite;
+}
+
+@keyframes cursor-blink {
+  50% { opacity: 0; }
+}
+
+/* PRISM — citation rail + matter chronology */
+.theme-prism .instrument-shell {
+  border-radius: 0 2rem 0 2rem;
+}
+
+.citation-scene {
+  position: absolute;
+  inset: 1.1rem 1rem 3rem;
+  display: grid;
+  grid-template-columns: minmax(4.5rem, 0.3fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.citation-rail {
+  position: relative;
+  border-right: 1px solid color-mix(in srgb, var(--accent) 36%, transparent);
+}
+
+.citation-rail::before {
+  position: absolute;
+  right: -0.27rem;
+  top: 0.5rem;
+  width: 0.52rem;
+  height: 0.52rem;
+  content: "";
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 1rem var(--accent);
+  animation: citation-travel 5.4s var(--ease) infinite;
+}
+
+.citation-mark {
+  position: absolute;
+  right: 0.8rem;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+}
+
+.citation-mark:nth-child(1) { top: 8%; }
+.citation-mark:nth-child(2) { top: 34%; }
+.citation-mark:nth-child(3) { top: 61%; }
+.citation-mark:nth-child(4) { top: 86%; }
+
+.matter-stack {
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 0.65rem;
+}
+
+.authority-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 3.4rem;
+  border: 1px solid var(--line);
+  border-radius: 0.2rem 0.8rem 0.8rem 0.2rem;
+  padding: 0.6rem 0.75rem;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+}
+
+.authority-card::before {
+  width: 0.3rem;
+  height: 1.8rem;
+  content: "";
+  border-radius: 99px;
+  background: var(--accent);
+}
+
+.authority-card:nth-child(2)::before {
+  background: var(--accent-2);
+}
+
+.authority-card strong {
+  color: var(--theme-text);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.authority-card small {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  text-transform: uppercase;
+}
+
+.chronology-dots {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.8rem;
+  border-top: 1px solid color-mix(in srgb, var(--accent-2) 32%, transparent);
+  padding-top: 0.65rem;
+}
+
+.chronology-dots span {
+  width: 0.45rem;
+  height: 0.45rem;
+  border: 1px solid var(--accent-2);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+@keyframes citation-travel {
+  0%, 8% { top: 0.5rem; opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { top: calc(100% - 1rem); opacity: 0; }
+}
+
+/* Living Anatomy — organ body + synaptic paths */
+.theme-anatomy .instrument-shell {
+  border-radius: 48% 48% 1.7rem 1.7rem / 14% 14% 1.7rem 1.7rem;
+}
+
+.anatomy-scene {
+  position: absolute;
+  inset: 0.5rem 1rem 2.7rem;
+}
+
+.body-outline {
+  position: absolute;
+  inset: 2% 16% 0;
+  width: auto;
+  height: 96%;
+  margin: auto;
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 25%, transparent);
+  stroke-width: 1.1;
+}
+
+.synapse-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.synapse-lines path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent-2) 35%, transparent);
+  stroke-width: 0.8;
+  stroke-dasharray: 2 5;
+  animation: dash-flow 10s linear infinite;
+}
+
+.organ-node {
+  position: absolute;
+  display: grid;
+  width: 4.6rem;
+  height: 4.6rem;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border: 1px solid color-mix(in srgb, var(--accent) 52%, var(--line));
+  border-radius: 48% 52% 46% 54%;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--theme-text);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.05em;
+  text-align: center;
+  text-transform: uppercase;
+  box-shadow: 0 0 1.5rem color-mix(in srgb, var(--accent) 11%, transparent);
+  animation: organ-breath 4.4s var(--ease) infinite alternate;
+}
+
+.organ-node:nth-of-type(1) { left: 50%; top: 15%; }
+.organ-node:nth-of-type(2) { left: 50%; top: 38%; animation-delay: -0.8s; }
+.organ-node:nth-of-type(3) { left: 28%; top: 57%; animation-delay: -1.6s; }
+.organ-node:nth-of-type(4) { left: 72%; top: 57%; animation-delay: -2.4s; }
+.organ-node:nth-of-type(5) { left: 50%; top: 79%; animation-delay: -3.2s; }
+
+.organ-node.heart {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 2rem color-mix(in srgb, var(--accent-2) 20%, transparent);
+}
+
+.organ-pulse {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: 0.65rem;
+  height: 0.65rem;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--accent-2);
+  border-radius: 999px;
+  animation: pulse-ring 2.6s var(--ease) infinite;
+}
+
+@keyframes organ-breath {
+  from { transform: translate(-50%, -50%) scale(0.94); }
+  to { transform: translate(-50%, -50%) scale(1.04); }
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-2) 45%, transparent); opacity: 1; }
+  100% { box-shadow: 0 0 0 3.5rem transparent; opacity: 0; }
+}
+
+/* Shared responsive adaptations for the bespoke instruments */
+@media (max-width: 35.99rem) {
+  .decision-ribbon {
+    inset-inline: 0.4rem;
+  }
+
+  .ribbon-step strong {
+    font-size: 0.46rem;
+  }
+
+  .radar-core {
+    width: 17rem;
+  }
+
+  .signal-waterfall {
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: 0.55rem;
+  }
+
+  .outcome-node {
+    min-width: 4.8rem;
+    font-size: 0.47rem;
+  }
+
+  .exposure-node {
+    width: 4rem;
+    height: 4rem;
+    font-size: 0.45rem;
+  }
+
+  .parcel-stack {
+    width: 18rem;
+    height: 14rem;
+  }
+
+  .market-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .evidence-tape {
+    display: none;
+  }
+
+  .citation-scene {
+    grid-template-columns: 3.2rem minmax(0, 1fr);
+  }
+
+  .authority-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .authority-card small {
+    display: none;
+  }
+
+  .organ-node {
+    width: 3.8rem;
+    height: 3.8rem;
+    font-size: 0.45rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ribbon-track::after,
+  .radar-sweep,
+  .orbit-mark::after,
+  .signal-bar::after,
+  .exposure-lines line,
+  .exposure-lines path,
+  .terminal-cursor,
+  .citation-rail::before,
+  .synapse-lines path,
+  .organ-node,
+  .organ-pulse {
+    animation: none !important;
+  }
+}
