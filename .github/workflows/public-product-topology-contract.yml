@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Public product topology contract
+
+"on":
+  pull_request:
+    paths:
+      - deploy/app.py
+      - deploy/szl_verticals/profiles.py
+      - docs/VERTICAL_INTELLIGENCE_FABRIC_V1.md
+      - tests/test_frontier_v3.py
+      - tests/test_intelligence_fabric.py
+      - .github/workflows/public-product-topology-contract.yml
+  push:
+    branches: [main]
+    paths:
+      - deploy/app.py
+      - deploy/szl_verticals/profiles.py
+      - docs/VERTICAL_INTELLIGENCE_FABRIC_V1.md
+      - tests/test_frontier_v3.py
+      - tests/test_intelligence_fabric.py
+      - .github/workflows/public-product-topology-contract.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-product-topology-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  topology:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Prove five public products and bounded capability planes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e .github/workflows/zz-align-public-product-taxonomy-once.yml
+          test ! -e .github/workflows/zz-finalize-public-product-taxonomy-once.yml
+          test ! -e scripts/apply_public_product_taxonomy.py
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, "deploy")
+          from szl_verticals.profiles import ALIASES, VERTICALS
+
+          expected_public_spaces = {
+              "sentra": "SZLHOLDINGS/killinchu",
+              "killinchu": "SZLHOLDINGS/killinchu",
+              "lyte": "SZLHOLDINGS/lyte",
+              "finance": "SZLHOLDINGS/finance",
+              "terra": "SZLHOLDINGS/terra",
+              "counsel": "SZLHOLDINGS/counsel",
+          }
+          observed = {
+              key: VERTICALS[key]["public_space"]
+              for key in expected_public_spaces
+          }
+          assert observed == expected_public_spaces
+          assert set(observed.values()) == {
+              "SZLHOLDINGS/killinchu",
+              "SZLHOLDINGS/lyte",
+              "SZLHOLDINGS/finance",
+              "SZLHOLDINGS/terra",
+              "SZLHOLDINGS/counsel",
+          }
+          assert ALIASES["aegis"] == "sentra"
+          assert ALIASES["defend"] == "sentra"
+          assert ALIASES["vessels"] == "killinchu"
+          assert "immune" not in ALIASES
+          sentra = VERTICALS["sentra"]
+          assert sentra["product"] == "Killinchu · Defend"
+          assert sentra["consolidation"]["aegis_status"] == "PORTFOLIO_LABEL"
+          assert sentra["consolidation"]["sentra_status"] == "CAPABILITY_PLANE"
+          assert sentra["consolidation"]["immune_status"] == "MIGRATION_REQUIRED"
+          assert sentra["consolidation"]["effectors"] == "DISABLED"
+          PY
+          git diff --check
