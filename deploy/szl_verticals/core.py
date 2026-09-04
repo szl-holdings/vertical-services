@@ -11,7 +11,7 @@ from typing import Annotated, Any
 from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict
 
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 SOURCE_REPOSITORY = "szl-holdings/vertical-services"
 HF_REPOSITORY = "SZLHOLDINGS/vertical-services"
 ENGINES = ("sentra", "lyte", "killinchu", "finance", "terra", "counsel")

@@ -1,0 +1,221 @@
+name: Vertical intelligence live evidence
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/intelligence-live.yml
+      - deploy/app.py
+      - deploy/szl_verticals/intelligence.py
+      - deploy/szl_verticals/showcase.py
+      - deploy/szl_verticals/core.py
+      - tests/test_intelligence_fabric.py
+      - docs/VERTICAL_INTELLIGENCE_FABRIC_V1.md
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/intelligence-live.yml
+      - deploy/app.py
+      - deploy/szl_verticals/intelligence.py
+      - deploy/szl_verticals/showcase.py
+      - deploy/szl_verticals/core.py
+      - tests/test_intelligence_fabric.py
+      - docs/VERTICAL_INTELLIGENCE_FABRIC_V1.md
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vertical-intelligence-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate intelligence closure
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up exact Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+      - name: Compile intelligence and showcase modules
+        run: python -m py_compile deploy/szl_verticals/intelligence.py deploy/szl_verticals/showcase.py deploy/app.py tests/test_intelligence_fabric.py
+
+  live:
+    name: Attest exact live intelligence rooms
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up exact Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+      - name: Wait for exact deployment and attest public routes
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          BASE_URL: https://szlholdings-vertical-services.hf.space
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import time
+          from datetime import datetime, timezone
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          base = os.environ["BASE_URL"].rstrip("/")
+          expected = os.environ["EXPECTED_SHA"].lower()
+          verticals = {
+              "sentra": "threat-shield",
+              "lyte": "service-lattice",
+              "killinchu": "voyage-radar",
+              "finance": "probability-orbit",
+              "terra": "parcel-grid",
+              "counsel": "authority-chain",
+          }
+
+          def get(path: str, timeout: float = 15.0) -> tuple[int, bytes, str]:
+              request = Request(
+                  base + path,
+                  headers={
+                      "User-Agent": "szl-vertical-intelligence-live-evidence/1.0",
+                      "Accept": "application/json,text/html;q=0.9",
+                  },
+              )
+              with urlopen(request, timeout=timeout) as response:
+                  return (
+                      int(response.status),
+                      response.read(2_000_000),
+                      response.headers.get("content-type", ""),
+                  )
+
+          deadline = time.monotonic() + 1_200
+          observed = "UNAVAILABLE"
+          last_error = ""
+          while time.monotonic() < deadline:
+              try:
+                  status, raw, _ = get("/api/build-info")
+                  payload = json.loads(raw)
+                  observed = str(payload.get("build", {}).get("revision", "UNAVAILABLE")).lower()
+                  if status == 200 and observed == expected:
+                      break
+                  last_error = f"build revision {observed} != {expected}"
+              except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+                  last_error = f"{exc.__class__.__name__}: {exc}"
+              time.sleep(15)
+          else:
+              raise SystemExit(f"exact deployment did not converge: {last_error}")
+
+          report = {
+              "schema": "szl.vertical-intelligence-live-evidence/v1",
+              "captured_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+              "base_url": base,
+              "expected_source_revision": expected,
+              "observed_source_revision": observed,
+              "routes": {},
+              "verticals": {},
+              "state": "UNKNOWN",
+          }
+
+          status, raw, content_type = get("/api/intelligence")
+          catalog = json.loads(raw)
+          if status != 200 or "json" not in content_type.lower():
+              raise SystemExit("intelligence catalog did not return JSON 200")
+          if set(catalog.get("verticals", {})) != set(verticals):
+              raise SystemExit("intelligence catalog vertical set drifted")
+          if catalog.get("caller_supplied_endpoints_allowed") is not False:
+              raise SystemExit("caller-supplied endpoint boundary drifted")
+          if catalog.get("effectors_enabled") is not False:
+              raise SystemExit("effector boundary drifted")
+          report["routes"]["/api/intelligence"] = {
+              "http": status,
+              "sha256": hashlib.sha256(raw).hexdigest(),
+          }
+
+          page_hashes = set()
+          for vertical, motif in verticals.items():
+              p_status, p_raw, p_type = get(f"/intelligence/{vertical}")
+              if p_status != 200 or "html" not in p_type.lower():
+                  raise SystemExit(f"{vertical} intelligence room did not return HTML 200")
+              text = p_raw.decode("utf-8")
+              required = (
+                  f'data-vertical="{vertical}"',
+                  f'data-motif="{motif}"',
+                  "Skip to intelligence room",
+                  "Learn broadly. Copy nothing proprietary.",
+                  "@media(prefers-reduced-motion:reduce)",
+              )
+              missing = [item for item in required if item not in text]
+              if missing:
+                  raise SystemExit(f"{vertical} intelligence room missing {missing!r}")
+              page_sha = hashlib.sha256(p_raw).hexdigest()
+              page_hashes.add(page_sha)
+
+              j_status, j_raw, j_type = get(
+                  f"/api/verticals/{vertical}/intelligence"
+              )
+              if j_status != 200 or "json" not in j_type.lower():
+                  raise SystemExit(f"{vertical} intelligence profile did not return JSON 200")
+              profile = json.loads(j_raw)
+              if profile.get("vertical") != vertical:
+                  raise SystemExit(f"{vertical} profile identity mismatch")
+              if len(profile.get("tasks", {})) != 4:
+                  raise SystemExit(f"{vertical} task contract drifted")
+              if len(profile.get("novel_capabilities", [])) != 3:
+                  raise SystemExit(f"{vertical} frontier delta drifted")
+              if profile.get("policy", {}).get("effectors_enabled") is not False:
+                  raise SystemExit(f"{vertical} effector boundary drifted")
+              report["verticals"][vertical] = {
+                  "room_http": p_status,
+                  "room_sha256": page_sha,
+                  "profile_http": j_status,
+                  "profile_sha256": hashlib.sha256(j_raw).hexdigest(),
+                  "motif": motif,
+                  "models": len(profile.get("models", [])),
+                  "kernels": len(profile.get("kernels", [])),
+                  "tasks": len(profile.get("tasks", {})),
+              }
+
+          if len(page_hashes) != 6:
+              raise SystemExit("vertical intelligence rooms are not byte-distinct")
+          report["state"] = "VERIFIED"
+          with open("artifacts/live-intelligence.json", "w", encoding="utf-8") as handle:
+              json.dump(report, handle, indent=2, sort_keys=True)
+              handle.write("\n")
+          print(json.dumps(report, indent=2, sort_keys=True))
+          PY
+      - name: Upload immutable live evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vertical-intelligence-live-${{ github.sha }}
+          path: artifacts/live-intelligence.json
+          if-no-files-found: error
+          retention-days: 90
