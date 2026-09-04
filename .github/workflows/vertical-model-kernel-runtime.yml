@@ -53,7 +53,7 @@ jobs:
 
       - name: Install exact test runner
         shell: bash
-        run: python -m pip install --disable-pip-version-check --only-binary=:all: pytest==8.4.2
+        run: "python -m pip install --disable-pip-version-check --only-binary=:all: pytest==8.4.2"
 
       - name: Compile and run all embedded self-tests
         shell: bash
