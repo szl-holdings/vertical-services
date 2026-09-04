@@ -77,7 +77,7 @@ jobs:
         shell: bash
         run: docker build --pull --tag szl-vertical-runtime:${{ github.sha }} --file frontier/Dockerfile.runtime frontier
 
-      - name: Smoke route-only production default
+      - name: Smoke route-only default and prove prohibited requests stay blocked
         shell: bash
         run: |
           set -euo pipefail
@@ -127,10 +127,6 @@ jobs:
           assert receipt['source_revision'] == '${{ github.sha }}'
           PY
 
-      - name: Prove prohibited requests never reach inference
-        shell: bash
-        run: |
-          set -euo pipefail
           curl --fail --silent --show-error \
             --header 'Content-Type: application/json' \
             --data '{"vertical":"killinchu","objective":"evaluate a synthetic observation","requested_action":"engage target","risk":0.1,"evidence":[{"source":"ci","claim":"synthetic track"}],"human_approved":true}' \
