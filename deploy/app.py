@@ -5,10 +5,11 @@ bindings, Living Anatomy contracts, session-scoped Second-Brain memory, bounded
 official-source connectors, source-bound builds, model and kernel routing,
 hash-addressed receipts, and six domain-native command experiences.
 
-Killinchu is the single defense-and-maritime vertical. The legacy ``/vessels``
-route remains only as a compatibility surface. Aegis and Immune resolve to the
-Sentra cyber runtime; PURIQ resolves to Finance; the aliases do not create
-duplicate state or competing execution authority.
+Killinchu is the single public cyber-physical resilience and maritime product.
+The legacy ``/vessels`` route remains only as a compatibility surface. Sentra is
+an independently testable capability plane behind Killinchu ``/defend``; Aegis
+is a portfolio label, IMMUNE remains migration-gated, and neither is another
+public Space. PURIQ resolves to Finance without duplicate execution authority.
 """
 from __future__ import annotations
 
@@ -77,13 +78,15 @@ for router in (
 CATALOG = {
     "sentra": {
         "purpose": (
-            "Aegis cyber command, deny-by-default policy gates, Immune-organ "
-            "inspection, threat evidence, and signed verdicts"
+            "Killinchu Defend capability: evidence-linked attack paths, "
+            "deny-by-default gates, bounded response review, and signed verdicts"
         ),
-        "public_home": "SZLHOLDINGS/sentra",
-        "experience": "/experience/aegis",
-        "intelligence": "/intelligence/aegis",
-        "aliases": ["aegis", "immune"],
+        "public_home": "SZLHOLDINGS/killinchu",
+        "public_route": "https://szlholdings-killinchu.hf.space/defend",
+        "product_state": "CAPABILITY_PLANE",
+        "experience": "/experience/defend",
+        "intelligence": "/intelligence/defend",
+        "aliases": ["aegis", "defend"],
     },
     "lyte": {
         "purpose": (
@@ -150,12 +153,14 @@ def root_health() -> dict:
                 "canonical": "/killinchu",
             },
             "/api/verticals/aegis": {
-                "status": "ENTERPRISE_EXPERIENCE_ALIAS",
+                "status": "PORTFOLIO_ALIAS",
                 "canonical": "/api/verticals/sentra",
+                "public_route": "https://szlholdings-killinchu.hf.space/defend",
             },
-            "/api/verticals/immune": {
-                "status": "CONSOLIDATED_ORGAN_ALIAS",
+            "/api/verticals/defend": {
+                "status": "CAPABILITY_ALIAS",
                 "canonical": "/api/verticals/sentra",
+                "public_route": "https://szlholdings-killinchu.hf.space/defend",
             },
             "/api/verticals/puriq": {
                 "status": "PRODUCT_ALIAS",
@@ -224,8 +229,10 @@ def catalog() -> dict:
         "engines": CATALOG,
         "vessels_independent_vertical": False,
         "vessels_canonical_home": "SZLHOLDINGS/killinchu",
-        "aegis_canonical_runtime": "sentra",
-        "immune_canonical_runtime": "sentra",
+        "aegis_canonical_runtime": "killinchu:defend",
+        "sentra_independent_public_vertical": False,
+        "sentra_public_route": "https://szlholdings-killinchu.hf.space/defend",
+        "immune_canonical_runtime": "MIGRATION_REQUIRED",
         "puriq_canonical_runtime": "finance",
         "operational_fabric": {
             "catalog": "/api/verticals",
@@ -261,7 +268,13 @@ def _landing_page() -> str:
     cards = []
     for engine in ENGINES:
         info = CATALOG[engine]
-        badge = " · VESSELS CONSOLIDATED HERE" if engine == "killinchu" else ""
+        badge = (
+            " · VESSELS CONSOLIDATED HERE"
+            if engine == "killinchu"
+            else " · CAPABILITY PLANE INSIDE KILLINCHU"
+            if engine == "sentra"
+            else ""
+        )
         aliases = " · ".join(info.get("aliases", []))
         cards.append(
             f"""<article class="card"><div class="eyebrow">{html.escape(engine.upper())}{badge}</div>

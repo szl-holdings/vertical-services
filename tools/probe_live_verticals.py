@@ -32,7 +32,7 @@ PROBES = (
 )
 
 EXPERIENCES = {
-    "aegis": ("sentra", "Aegis Immune Cell", "threat-shield"),
+    "defend": ("sentra", "Killinchu Defend Plane", "threat-shield"),
     "lyte": ("lyte", "Lyte Signal Lattice", "service-lattice"),
     "killinchu": ("killinchu", "Killinchu Voyage Radar", "voyage-radar"),
     "puriq": ("finance", "PURIQ Market Chamber", "probability-orbit"),
