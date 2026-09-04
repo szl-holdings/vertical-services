@@ -1,0 +1,17 @@
+# SZL Vertical Frontier Fabric — exact dependency-free runtime closure.
+FROM mirror.gcr.io/library/python:3.12-slim
+
+WORKDIR /app
+ENV HOST=0.0.0.0
+ENV PORT=7860
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+COPY frontier_app.py ./frontier_app.py
+COPY frontier_fabric ./frontier_fabric
+
+EXPOSE 7860
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=5 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860/healthz', timeout=4)"
+
+CMD ["python", "-u", "frontier_app.py"]
