@@ -28,6 +28,11 @@ from szl_verticals.finance import finance
 from szl_verticals.frontier import frontier
 from szl_verticals.intelligence import intelligence
 from szl_verticals.killinchu import killinchu
+from szl_verticals.killinchu_runtime_contract import (
+    architecture as _szl_killinchu_architecture,
+    compatibility_headers as _szl_killinchu_headers,
+    lobe as _szl_killinchu_lobe,
+)
 from szl_verticals.lyte import lyte
 from szl_verticals.operational import STORE, operational, vertical_readiness
 from szl_verticals.sentra import SENTRA_KEY_SOURCE, sentra
@@ -55,6 +60,15 @@ async def response_hardening(request: Request, call_next):
     response.headers["Cross-Origin-Resource-Policy"] = "same-site"
     if request.url.path != "/":
         response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.middleware("http")
+async def killinchu_product_identity(request: Request, call_next):
+    """Label compatibility responses without changing domain payloads."""
+    response = await call_next(request)
+    for key, value in _szl_killinchu_headers(request.url.path).items():
+        response.headers[key] = value
     return response
 
 
@@ -222,6 +236,7 @@ def catalog() -> dict:
         "service": "szl-vertical-services",
         "version": VERSION,
         "engines": CATALOG,
+        "product_authority": _szl_killinchu_architecture(),
         "vessels_independent_vertical": False,
         "vessels_canonical_home": "SZLHOLDINGS/killinchu",
         "aegis_canonical_runtime": "sentra",
@@ -296,6 +311,22 @@ h1{{font-size:clamp(48px,9vw,104px);line-height:.88;letter-spacing:-.055em;margi
 <div class="proof"><span class="pill"><strong>LIVE</strong> Python runtime contract</span><span class="pill">source {html.escape(revision_short)}</span><span class="pill">store {html.escape(store['durability'])}</span><span class="pill">3 model routes</span><span class="pill">6 kernel contracts</span><span class="pill">effectors disabled</span></div>
 <section class="grid">{''.join(cards)}</section><section class="boundary"><strong>Operational boundary:</strong> official-source connectors are fixed and bounded. Connector observations are hash-addressed and stored under a hashed session scope. Model invocation remains unavailable until an operator binds a fixed allowlisted endpoint, credential, protocol, and exact declared revision. Hatun can recommend review or abstention only. NOAA AIS is historical official planning data—not represented as a live vessel feed. Trading, legal advice, cyber effectors, person-level prospecting, and unattended consequential actions remain disabled.</section>
 <footer class="mono">{SOURCE_REPOSITORY} · VERSION {VERSION} · <a href="/api/build-info">BUILD INFO</a> · <a href="/readyz">READINESS</a> · <a href="/api/intelligence">INTELLIGENCE CATALOG</a></footer></main></body></html>"""
+
+
+@app.get("/killinchu/architecture", tags=["Killinchu"])
+def killinchu_architecture() -> dict:
+    """Read the canonical source contract; reachability is not model truth."""
+    return _szl_killinchu_architecture()
+
+
+@app.get("/killinchu/aegis/healthz", tags=["Killinchu"])
+def killinchu_aegis_lobe() -> dict:
+    return _szl_killinchu_lobe("aegis")
+
+
+@app.get("/killinchu/vessels/healthz", tags=["Killinchu"])
+def killinchu_vessels_lobe() -> dict:
+    return _szl_killinchu_lobe("vessels")
 
 
 @app.get("/", response_class=HTMLResponse)

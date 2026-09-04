@@ -13,6 +13,12 @@ license: apache-2.0
 
 A source-bound FastAPI operational fabric for six canonical SZL verticals.
 
+> **Canonical defense authority:** Killinchu is the sole public cyber-physical
+> resilience product. The `sentra` and `vessels` engines remain independently
+> testable compatibility lobes named **Defend/Aegis** and **Maritime/Vessels**;
+> they do not retain standalone product authority. See
+> [`docs/KILLINCHU_RUNTIME_CONVERGENCE.md`](docs/KILLINCHU_RUNTIME_CONVERGENCE.md).
+
 | Route | Canonical vertical | Business engine | Required official source |
 |---|---|---|---|
 | `/sentra` | Sentra | Nine deny-by-default policy gates and HMAC-SHA256 verdict receipts | CISA Known Exploited Vulnerabilities |
