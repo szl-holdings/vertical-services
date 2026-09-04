@@ -77,12 +77,17 @@ for router in (
 CATALOG = {
     "sentra": {
         "purpose": (
-            "Aegis cyber command, deny-by-default policy gates, Immune-organ "
-            "inspection, threat evidence, and signed verdicts"
+            "Killinchu Defend plane: Aegis portfolio context, Sentra defensive "
+            "control, deny-by-default gates, threat evidence, bounded proposals, "
+            "independent approval, simulated rehearsal, rollback, and receipts"
         ),
-        "public_home": "SZLHOLDINGS/sentra",
-        "experience": "/experience/aegis",
+        "public_home": "SZLHOLDINGS/killinchu",
+        "public_route": "https://szlholdings-killinchu.hf.space/defend",
+        "experience": "https://szlholdings-killinchu.hf.space/defend",
+        "component_experience": "/experience/aegis",
         "intelligence": "/intelligence/aegis",
+        "component_engine": "sentra",
+        "portfolio_name": "Aegis",
         "aliases": ["aegis", "immune"],
     },
     "lyte": {
@@ -224,8 +229,10 @@ def catalog() -> dict:
         "engines": CATALOG,
         "vessels_independent_vertical": False,
         "vessels_canonical_home": "SZLHOLDINGS/killinchu",
-        "aegis_canonical_runtime": "sentra",
-        "immune_canonical_runtime": "sentra",
+        "aegis_canonical_runtime": "killinchu/defend",
+        "sentra_component_runtime": "killinchu/defend",
+        "immune_compatibility_runtime": "sentra",
+        "immune_migration_state": "MIGRATION_REQUIRED",
         "puriq_canonical_runtime": "finance",
         "operational_fabric": {
             "catalog": "/api/verticals",

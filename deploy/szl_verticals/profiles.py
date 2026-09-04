@@ -66,10 +66,13 @@ ANATOMY_ORGANS = (
 
 VERTICALS: dict[str, dict[str, Any]] = {
     "sentra": {
-        "product": "Aegis / Sentra",
+        "product": "Killinchu / Defend",
         "domain": "cyber-resilience",
         "canonical_repository": "szl-holdings/szl-defensive-control-plane",
-        "public_space": "SZLHOLDINGS/sentra",
+        "public_space": "SZLHOLDINGS/killinchu",
+        "public_route": "/defend",
+        "component_engine": "Sentra",
+        "portfolio_name": "Aegis",
         "mission": (
             "Turn threat, control, asset, and Immune-organ observations into "
             "fail-closed, receipted response review."
@@ -83,24 +86,29 @@ VERTICALS: dict[str, dict[str, Any]] = {
         "required_connectors": ("cisa-kev",),
         "optional_connectors": ("nvd-cve",),
         "experience": {
-            "title": "Aegis Immune Cell",
-            "kicker": "AEGIS / SENTRA",
-            "archetype": "enterprise cyber command",
+            "title": "Killinchu Defend Plane",
+            "kicker": "KILLINCHU / DEFEND",
+            "archetype": "cyber-physical resilience command",
             "motif": "threat-shield",
             "background": "#050608",
             "panel": "#11131a",
             "accent": "#ff5f78",
             "accent_secondary": "#8b7cff",
-            "signature_view": "Attack path → immune gate → human review",
+            "signature_view": "Attack path → bounded proposal → human approval",
             "benchmark": "coverage · connectivity · causality · governed response",
         },
         "consolidation": {
-            "aegis_status": "ENTERPRISE_EXPERIENCE",
-            "sentra_status": "CANONICAL_RUNTIME",
-            "immune_status": "CONSOLIDATED_ORGAN",
+            "public_product": "KILLINCHU",
+            "public_runtime": "SZLHOLDINGS/killinchu",
+            "public_route": "/defend",
+            "aegis_status": "PORTFOLIO_NAME",
+            "sentra_status": "COMPONENT_ENGINE",
+            "standalone_sentra_space": "RETIRE_AFTER_LIVE_PARITY",
+            "immune_status": "COMPATIBILITY_ALIAS_MIGRATION_REQUIRED",
             "immune_compatibility_alias": "/api/verticals/immune",
             "aegis_compatibility_alias": "/api/verticals/aegis",
             "effectors": "DISABLED",
+            "human_approval_required": True,
         },
     },
     "lyte": {
@@ -256,7 +264,7 @@ VERTICALS: dict[str, dict[str, Any]] = {
     "counsel": {
         "product": "PRISM Counsel",
         "domain": "legal-intelligence",
-        "canonical_repository": "szl-holdings/counsel",
+        "canonical_repository": "szl-holdings/a11oy/verticals/counsel",
         "public_space": "SZLHOLDINGS/counsel",
         "mission": (
             "Map matters, deadlines, obligations, and public legal authority into "
