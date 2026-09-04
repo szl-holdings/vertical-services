@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Exercise every required official-source connector through the deployed runtime.
+"""Exercise the complete public-source and command-surface frontier.
 
 The generated X-SZL-Session token is kept in process memory and never printed.
-The report contains only source-safe receipts, normalized signals, readiness,
-and endpoint status.
+The report contains source-safe receipts, normalized signals, readiness,
+source identity, alias resolution, and public-experience status. No connector
+in this probe places an order, holds custody, or triggers an effector.
 """
 from __future__ import annotations
 
@@ -21,9 +22,23 @@ PROBES = (
     ("lyte", "github-actions", {"repository": "vertical-services", "limit": 10}),
     ("killinchu", "noaa-ais-2025", {}),
     ("finance", "sec-submissions", {"cik": "320193", "limit": 3}),
+    ("finance", "polymarket-markets", {"limit": 5}),
+    ("finance", "coinbase-spot", {"base": "BTC", "currency": "USD"}),
+    ("finance", "treasury-average-rates", {"limit": 5}),
     ("terra", "nyc-pluto", {"borough": "MN", "limit": 1}),
+    ("terra", "nyc-hpd-violations", {"limit": 5}),
+    ("terra", "nyc-dob-violations", {"limit": 5}),
     ("counsel", "federal-register", {"limit": 3}),
 )
+
+EXPERIENCES = {
+    "aegis": ("sentra", "Aegis Immune Cell", "threat-shield"),
+    "lyte": ("lyte", "Lyte Signal Lattice", "service-lattice"),
+    "killinchu": ("killinchu", "Killinchu Voyage Radar", "voyage-radar"),
+    "puriq": ("finance", "PURIQ Market Chamber", "probability-orbit"),
+    "terra": ("terra", "Terra Parcel Loom", "parcel-grid"),
+    "prism": ("counsel", "PRISM Authority Chain", "authority-chain"),
+}
 
 
 def request_with_retry(
@@ -43,7 +58,20 @@ def request_with_retry(
             last = exc
         if attempt < 3:
             time.sleep(2 ** (attempt - 1))
-    raise RuntimeError(f"request did not converge after three attempts: {type(last).__name__}")
+    raise RuntimeError(
+        "request did not converge after three attempts: "
+        f"{type(last).__name__}"
+    )
+
+
+def _receipt_valid(item: dict[str, Any]) -> bool:
+    return (
+        item.get("state") == "OBSERVED"
+        and isinstance(item.get("receipt_id"), str)
+        and len(item["receipt_id"]) == 64
+        and isinstance(item.get("payload_sha256"), str)
+        and len(item["payload_sha256"]) == 64
+    )
 
 
 def main() -> int:
@@ -61,11 +89,16 @@ def main() -> int:
     base = args.base_url.rstrip("/")
     session = secrets.token_urlsafe(32)
     report: dict[str, Any] = {
-        "schema": "szl.live-connector-probe/v2",
+        "schema": "szl.live-frontier-probe/v3",
         "base_url": base,
         "observed_at": time.time(),
         "probes": [],
+        "experiences": [],
+        "frontier_contracts": [],
         "session_token_recorded": False,
+        "trading_enabled": False,
+        "custody_enabled": False,
+        "effectors_enabled": False,
         "truth_label": "MEASURED",
     }
     failures: list[str] = []
@@ -73,7 +106,10 @@ def main() -> int:
     with httpx.Client(
         timeout=httpx.Timeout(75.0, connect=15.0),
         follow_redirects=False,
-        headers={"X-SZL-Session": session, "User-Agent": "SZL-Live-Probe/2.0"},
+        headers={
+            "X-SZL-Session": session,
+            "User-Agent": "SZL-Live-Frontier-Probe/3.0",
+        },
     ) as client:
         for vertical, connector, parameters in PROBES:
             path = f"/api/verticals/{vertical}/connectors/{connector}/fetch"
@@ -106,18 +142,29 @@ def main() -> int:
                         "cache": body.get("cache"),
                     }
                 )
-                if (
-                    item["state"] != "OBSERVED"
-                    or not isinstance(item["receipt_id"], str)
-                    or len(item["receipt_id"]) != 64
-                    or not isinstance(item["payload_sha256"], str)
-                    or len(item["payload_sha256"]) != 64
-                ):
-                    failures.append(f"{vertical}/{connector}: invalid observation receipt")
+                if not _receipt_valid(item):
+                    failures.append(
+                        f"{vertical}/{connector}: invalid observation receipt"
+                    )
+                if connector in {"polymarket-markets", "coinbase-spot"}:
+                    observation = body.get("observation", {})
+                    if observation.get("trading_enabled") is not False:
+                        failures.append(f"{connector}: trading boundary missing")
+                    if observation.get("custody_enabled") is not False:
+                        failures.append(f"{connector}: custody boundary missing")
+                if connector in {"nyc-hpd-violations", "nyc-dob-violations"}:
+                    observation = body.get("observation", {})
+                    if observation.get("person_level_prospecting") is not False:
+                        failures.append(
+                            f"{connector}: person-level prospecting boundary missing"
+                        )
             report["probes"].append(item)
 
+        canonical_verticals = tuple(
+            dict.fromkeys(vertical for vertical, _, _ in PROBES)
+        )
         vertical_readiness: dict[str, Any] = {}
-        for vertical, _, _ in PROBES:
+        for vertical in canonical_verticals:
             response = request_with_retry(
                 client,
                 "GET",
@@ -139,22 +186,128 @@ def main() -> int:
                 "build": body.get("build"),
                 "lambda_advisory": body.get("lambda_advisory"),
             }
+            if body.get("ready") is not True:
+                failures.append(f"{vertical}: readiness is not true")
             if not body.get("live_data", {}).get("observed_in_scope"):
-                failures.append(f"{vertical}: required live observation not visible")
+                failures.append(f"{vertical}: live observation not visible")
+
+        for alias, (canonical, title, motif) in EXPERIENCES.items():
+            path = f"/experience/{alias}"
+            response = request_with_retry(client, "GET", f"{base}{path}")
+            item = {
+                "alias": alias,
+                "canonical": canonical,
+                "path": path,
+                "http_status": response.status_code,
+                "title_observed": title in response.text,
+                "motif_observed": f'data-motif="{motif}"' in response.text,
+                "viewport_observed": "viewport-fit=cover" in response.text,
+                "reduced_motion_observed": (
+                    "@media(prefers-reduced-motion:reduce)" in response.text
+                ),
+            }
+            if response.status_code != 200 or not all(
+                item[key]
+                for key in (
+                    "title_observed",
+                    "motif_observed",
+                    "viewport_observed",
+                    "reduced_motion_observed",
+                )
+            ):
+                failures.append(f"experience/{alias}: contract mismatch")
+            report["experiences"].append(item)
+
+            contract_path = f"/api/verticals/{alias}/frontier"
+            contract_response = request_with_retry(
+                client,
+                "GET",
+                f"{base}{contract_path}",
+            )
+            contract: dict[str, Any] = {
+                "alias": alias,
+                "path": contract_path,
+                "http_status": contract_response.status_code,
+            }
+            if contract_response.status_code == 200:
+                body = contract_response.json()
+                contract.update(
+                    {
+                        "canonical": body.get("vertical"),
+                        "source_revision": (
+                            body.get("source", {}).get("build", {}).get("revision")
+                        ),
+                        "hatun_can_authorize": (
+                            body.get("hatun", {}).get("can_authorize")
+                        ),
+                        "effectors_enabled": (
+                            body.get("hatun", {}).get("effectors_enabled")
+                        ),
+                    }
+                )
+                if (
+                    contract["canonical"] != canonical
+                    or contract["hatun_can_authorize"] is not False
+                    or contract["effectors_enabled"] is not False
+                ):
+                    failures.append(f"frontier/{alias}: authority boundary mismatch")
+            else:
+                contract["body_excerpt"] = contract_response.text[:500]
+                failures.append(
+                    f"frontier/{alias}: HTTP {contract_response.status_code}"
+                )
+            report["frontier_contracts"].append(contract)
 
         root = request_with_retry(client, "GET", f"{base}/readyz")
+        build_info = request_with_retry(client, "GET", f"{base}/api/build-info")
         report["vertical_readiness"] = vertical_readiness
         report["root_readiness"] = {
             "http_status": root.status_code,
-            "body": root.json() if root.headers.get("content-type", "").startswith("application/json") else root.text[:500],
+            "body": (
+                root.json()
+                if root.headers.get("content-type", "").startswith("application/json")
+                else root.text[:500]
+            ),
         }
+        report["build_info"] = {
+            "http_status": build_info.status_code,
+            "body": (
+                build_info.json()
+                if build_info.headers.get("content-type", "").startswith(
+                    "application/json"
+                )
+                else build_info.text[:500]
+            ),
+        }
+        if root.status_code != 200 or report["root_readiness"]["body"].get("ready") is not True:
+            failures.append("root readiness is not closed")
+        build_body = report["build_info"]["body"]
+        if (
+            build_info.status_code != 200
+            or build_body.get("build", {}).get("state") != "OBSERVED"
+            or build_body.get("source_binding", {}).get("bindings_agree") is not True
+        ):
+            failures.append("build source identity is not closed")
 
     report["status"] = "PASS" if not failures else "FAIL"
+    report["complete"] = not failures
     report["failures"] = failures
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({"status": report["status"], "probes": len(PROBES), "report": str(output)}))
+    output.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        json.dumps(
+            {
+                "status": report["status"],
+                "probes": len(PROBES),
+                "experiences": len(EXPERIENCES),
+                "report": str(output),
+            }
+        )
+    )
     return 0 if not failures else 1
 
 
