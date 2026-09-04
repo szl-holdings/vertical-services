@@ -30,6 +30,8 @@ def killinchu_health() -> dict[str, Any]:
             "maritime_position_ingest": "/killinchu/v1/maritime/positions",
             "maritime_vessel_risk": "/killinchu/v1/maritime/vessel/risk",
             "maritime_fleet_risk": "/killinchu/v1/maritime/fleet/risk",
+            "authoritative_source_health": "/killinchu/v1/intelligence/source-health",
+            "authoritative_source_contract": "/killinchu/v1/intelligence/source-contract",
             "second_brain": "/api/verticals/killinchu/second-brain",
             "anatomy": "/api/verticals/killinchu/anatomy",
             "formulas": "/api/verticals/killinchu/formulas",
@@ -45,8 +47,26 @@ def killinchu_health() -> dict[str, Any]:
             "independent_vertical": False,
         },
         "effectors_enabled": False,
+        "automation_authority": "NONE",
+        "human_approval_required": True,
         "truth_label": "MEASURED",
     }
+
+
+@killinchu.get("/v1/intelligence/source-health")
+def killinchu_source_health() -> dict[str, Any]:
+    """Expose Killinchu's current authoritative-source state on its own surface."""
+    from .operational import source_health
+
+    return source_health("killinchu")
+
+
+@killinchu.get("/v1/intelligence/source-contract")
+def killinchu_source_contract() -> dict[str, Any]:
+    """Expose source authority/freshness contracts without credential values."""
+    from .operational import vertical_source_contract
+
+    return vertical_source_contract("killinchu")
 
 
 @killinchu.post("/v1/defense/evaluate")

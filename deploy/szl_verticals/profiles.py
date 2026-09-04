@@ -1,4 +1,4 @@
-"""Canonical product, anatomy, and consolidation profiles."""
+"""Canonical product, anatomy, source, and consolidation profiles."""
 from __future__ import annotations
 
 from typing import Any
@@ -68,7 +68,7 @@ VERTICALS: dict[str, dict[str, Any]] = {
             "szl.lambda_advisory",
             "szl.receipt_hash",
         ),
-        "required_connectors": ("cisa-kev",),
+        "required_connectors": ("cisa-kev", "first-epss"),
         "optional_connectors": ("nvd-cve",),
     },
     "lyte": {
@@ -102,8 +102,13 @@ VERTICALS: dict[str, dict[str, Any]] = {
             "szl.lambda_advisory",
             "szl.receipt_hash",
         ),
-        "required_connectors": ("noaa-ais-2025",),
-        "optional_connectors": (),
+        "required_connectors": (
+            "nws-marine-alerts",
+            "noaa-coops",
+            "ofac-sdn",
+            "un-1718-sanctions",
+        ),
+        "optional_connectors": ("noaa-ais-2025",),
         "consolidation": {
             "vessels_status": "CONSOLIDATED",
             "legacy_product": "Vessels",
@@ -128,7 +133,11 @@ VERTICALS: dict[str, dict[str, Any]] = {
             "szl.lambda_advisory",
             "szl.receipt_hash",
         ),
-        "required_connectors": ("sec-submissions",),
+        "required_connectors": (
+            "sec-submissions",
+            "treasury-debt-to-penny",
+            "fred-series",
+        ),
         "optional_connectors": ("sec-companyfacts",),
     },
     "terra": {
@@ -144,8 +153,12 @@ VERTICALS: dict[str, dict[str, Any]] = {
             "szl.lambda_advisory",
             "szl.receipt_hash",
         ),
-        "required_connectors": ("nyc-pluto",),
-        "optional_connectors": (),
+        "required_connectors": (
+            "census-acs5",
+            "openfema-declarations",
+            "fhfa-hpi-state",
+        ),
+        "optional_connectors": ("nyc-pluto",),
     },
     "counsel": {
         "product": "PRISM Counsel",
@@ -161,7 +174,7 @@ VERTICALS: dict[str, dict[str, Any]] = {
             "szl.lambda_advisory",
             "szl.receipt_hash",
         ),
-        "required_connectors": ("federal-register",),
+        "required_connectors": ("federal-register", "courtlistener-search"),
         "optional_connectors": ("congress-bills",),
     },
 }

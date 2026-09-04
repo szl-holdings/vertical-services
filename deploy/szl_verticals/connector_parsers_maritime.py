@@ -1,16 +1,19 @@
-"""NOAA maritime metadata normalizer."""
+"""NOAA maritime metadata normalizer with entity-safe XML parsing."""
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as XmlTypes
 from typing import Any, Mapping
 
+from defusedxml import ElementTree as SafeET
+from defusedxml.common import DefusedXmlException
 from fastapi import HTTPException
+
 
 def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
-def _first_xml_text(root: ET.Element, names: set[str]) -> str | None:
+def _first_xml_text(root: XmlTypes.Element, names: set[str]) -> str | None:
     for element in root.iter():
         if _local_name(element.tag) in names and element.text and element.text.strip():
             return element.text.strip()
@@ -19,8 +22,8 @@ def _first_xml_text(root: ET.Element, names: set[str]) -> str | None:
 
 def _parse_noaa(raw: bytes, _: Mapping[str, Any]) -> dict[str, Any]:
     try:
-        root = ET.fromstring(raw)
-    except ET.ParseError as exc:
+        root = SafeET.fromstring(raw)
+    except (XmlTypes.ParseError, DefusedXmlException) as exc:
         raise HTTPException(502, "NOAA InPort XML could not be parsed") from exc
     urls: list[str] = []
     for element in root.iter():
