@@ -13,26 +13,28 @@ license: apache-2.0
 
 A source-bound FastAPI operational fabric for six canonical SZL verticals.
 
-| Route | Canonical vertical | Business engine | Required official source |
+| Route | Canonical vertical | Business engine | Required authoritative sources |
 |---|---|---|---|
-| `/sentra` | Sentra | Nine deny-by-default policy gates and HMAC-SHA256 verdict receipts | CISA Known Exploited Vulnerabilities |
-| `/lyte` | Lyte | Metric ingestion, percentiles, summaries, and drift scoring | GitHub Actions execution telemetry |
-| `/killinchu` | Killinchu | Defense policy plus maritime track and voyage-risk calculations | NOAA / U.S. Coast Guard 2025 AIS metadata |
-| `/finance` | PURIQ Finance | Volatility, drawdown, momentum, signals, and filing evidence | SEC EDGAR submissions |
-| `/terra` | Terra | Price-per-square-foot, cap-rate, comps, and parcel evidence | NYC PLUTO |
-| `/counsel` | PRISM Counsel | Matters, obligations, docket ranking, public authority, and receipt chains | Federal Register |
+| `/sentra` | Sentra | Deny-by-default policy gates and receipted verdicts | CISA KEV + FIRST EPSS |
+| `/lyte` | Lyte | Metric ingestion, summaries, percentiles, and drift | GitHub Actions telemetry |
+| `/killinchu` | Killinchu | Defense policy plus maritime risk and evidence | NWS marine alerts + NOAA CO-OPS + OFAC + UN 1718 |
+| `/finance` | PURIQ Finance | Volatility, drawdown, momentum, filings, and macro context | SEC + Treasury Fiscal Data + FRED |
+| `/terra` | Terra | Property calculations and public-market context | Census ACS + OpenFEMA + FHFA HPI |
+| `/counsel` | PRISM Counsel | Matters, obligations, public authority, and proof chains | Federal Register + CourtListener |
 
 ## Vessels consolidation
 
-Vessels is **not** an independent vertical. Its maritime engine remains available
-at `/vessels` only as a compatibility route. The canonical product, source,
-public Space, second brain, formula binding, and operational route are Killinchu:
+Vessels is **not** an independent vertical. Its maritime engine remains at
+`/vessels` only as a compatibility route. The canonical product, source, public
+Space, Second Brain, formula binding, and operational route are Killinchu:
 
 - source: `szl-holdings/killinchu`
 - public product: `SZLHOLDINGS/killinchu`
 - canonical runtime: `/killinchu`
 - maritime organ: `/killinchu/v1/maritime/*`
 - defense policy organ: `/killinchu/v1/defense/evaluate`
+- source health: `/killinchu/v1/intelligence/source-health`
+- source contract: `/killinchu/v1/intelligence/source-contract`
 
 ## Common backend contract
 
@@ -40,14 +42,55 @@ Every vertical exposes the same governed surfaces:
 
 - `/api/verticals/{vertical}/anatomy` — nine ordered Living Anatomy organs;
 - `/api/verticals/{vertical}/formulas` — named math and implementation bindings;
-- `/api/verticals/{vertical}/connectors` — fixed official-source connector catalog;
+- `/api/verticals/{vertical}/connectors` — fixed source-adapter catalog;
+- `/api/verticals/{vertical}/source-contract` — authority, credential, freshness,
+  size, licensing, and operational-role contract;
+- `/api/verticals/{vertical}/source-health` — observed, fresh, stale, expired, or
+  authentication-required state;
+- `/api/verticals/{vertical}/sources/refresh` — bounded batch observation;
 - `/api/verticals/{vertical}/second-brain` — session-scoped observation memory;
-- `/api/verticals/{vertical}/readyz` — exact readiness requirements and evidence;
-- `/api/verticals/{vertical}/connectors/{connector}/fetch` — bounded live observation.
+- `/api/verticals/{vertical}/readyz` — infrastructure and production-source gates;
+- `/api/verticals/{vertical}/connectors/{connector}/fetch` — bounded observation.
 
 The nine organs are **Sense → Normalize → Context → Formula → Policy → Decide →
-Verify → Remember → Receipt**. Every observation carries a source URL, fetch
-time, payload SHA-256, normalized signal, truth label, and deterministic receipt.
+Verify → Remember → Receipt**. Every successful observation carries an authority,
+source URL, fetch time, payload SHA-256, normalized signal, truth label, and
+deterministic receipt.
+
+## Authoritative source mesh
+
+The v3 source mesh includes NOAA/NWS alerts, NOAA CO-OPS, CISA KEV, NVD, FIRST
+EPSS, OFAC SDN, UN Security Council 1718, Census ACS, OpenFEMA, FHFA HPI, SEC
+EDGAR, Treasury Fiscal Data, FRED, Federal Register, CourtListener, Congress.gov,
+GitHub Actions, and optional historical NOAA/USCG AIS metadata.
+
+The transport is fixed-host and deny-by-default. Callers cannot supply URLs.
+Downloads are timeout- and byte-bounded. XML uses `defusedxml`. Redirects are
+rejected except for one exact connector-declared authority host. Secret query
+parameters are redacted before receipts are built. Raw source payloads are not
+stored; bounded normalized summaries and receipt metadata are stored in the
+observation ledger.
+
+See [`docs/AUTHORITATIVE_SOURCE_MESH.md`](docs/AUTHORITATIVE_SOURCE_MESH.md) for
+the complete source matrix, environment variables, freshness semantics,
+operational gates, and Killinchu boundary.
+
+## Runtime readiness versus source operation
+
+`/readyz` answers whether the service can safely accept traffic. It deliberately
+does not flap because an external authority is temporarily unavailable.
+
+Each vertical readiness record separately reports:
+
+- `runtime_ready` — source-bound build, writable store, formula contract, signing
+  where required, and connector code present;
+- `production_ready` — runtime ready plus explicitly persistent storage,
+  configured required credentials, and a fresh observation for every required
+  source;
+- `sources_operational` — required authoritative sources are currently fresh.
+
+A green deployment is not represented as proof that every authority was
+observed.
 
 ## Formula fabric
 
@@ -62,73 +105,52 @@ The shared Lambda roll-up follows the weighted-geometric-mean shape published in
 uniqueness remains **Conjecture 1 (open)** and is never represented as proven
 trust.
 
-## Real-data connector boundary
+## Killinchu safety and data boundary
 
-Callers choose a connector identifier and bounded parameters; they can never
-supply a URL. The runtime:
+Killinchu may use current marine alerts, station observations, sanctions
+candidate evidence, licensed or properly authorized AIS, and historical AIS
+corpora for human-governed decision support.
 
-- resolves only fixed HTTPS destinations;
-- rejects redirects and unknown parameters;
-- enforces response byte and timeout budgets;
-- keeps API keys in headers or redacted query parameters;
-- never returns credential values;
-- normalizes provider payloads into vertical signals;
-- stores only bounded normalized summaries and receipt metadata;
-- uses explicit `REPORTED`, `MODELED`, `MEASURED`, or `UNAVAILABLE` labels.
+- `NO_CANDIDATES_IN_QUERY` is not sanctions clearance.
+- Historical NOAA AIS is not a live vessel feed.
+- Public precise target tracking, autonomous targeting, weapon release, and
+  public effector control are outside this runtime.
+- `effectors_enabled=false`, `automation_authority=NONE`, and
+  `human_approval_required=true` remain explicit.
 
-Required keyless sources are CISA KEV, GitHub Actions, NOAA InPort AIS metadata,
-SEC EDGAR, NYC PLUTO, and the Federal Register. NVD enrichment is optional.
-Congress.gov is optional and remains `AUTH_REQUIRED` until `CONGRESS_API_KEY` is
-configured.
-
-NOAA AIS is official historical planning data. It is **not** described as a
-real-time vessel feed. A licensed or authorized live AIS transport must be
-connected separately before Killinchu may claim live vessel positions.
+A future Spire, Windward, or other commercial maritime data integration remains
+`AUTH_REQUIRED` until a licensed contract, exact host, permitted fields,
+retention policy, and write-only credentials are deliberately configured. No
+proprietary provider data is bundled here.
 
 ## State and durability
 
 Business working sets remain isolated process memory behind a caller-held
-`X-SZL-Session` token. Official-source observations are written to a bounded
-SQLite ledger under the hashed session scope.
+`X-SZL-Session` token. Source observations are written to a bounded SQLite
+ledger under a hashed session scope.
 
-The default SQLite file is labeled `EPHEMERAL_FILE`. The runtime emits
-`PERSISTENT_CONFIGURED` only when an operator explicitly sets both:
+The default is labeled `EPHEMERAL_FILE`. Production source operation requires:
 
 ```text
 SZL_STATE_PATH=/mounted/persistent/path/vertical-services.sqlite3
 SZL_STATE_DURABILITY=persistent
+SZL_SOURCE_MAX_ROWS=20000
 ```
 
-That label is a configuration assertion, not an automatic claim that a hosting
-plan supplies durable storage.
-
-## Live contract
-
-- `/` — responsive user, developer, operator, and investor front door
-- `/healthz` — liveness, canonical engine catalog, and state modes
-- `/readyz` — fail-closed estate readiness
-- `/api/build-info` — exact GitHub revision with `build.state=OBSERVED`
-- `/.well-known/szl-source.json` — machine-readable source identity
-- `/api/catalog` — canonical runtime and operational-fabric routes
-- `/docs` — OpenAPI explorer
+Required credentialed sources also need `FRED_API_KEY`, `CENSUS_API_KEY`, and
+`COURTLISTENER_API_TOKEN`. Optional enrichments use `NVD_API_KEY`,
+`GITHUB_READ_TOKEN`, and `CONGRESS_API_KEY`. Values are never returned.
 
 ## Verification and deployment
 
-`tests/test_deploy_app.py` and `tests/test_operational_fabric.py` cover the
-business engines, Vessels consolidation, Living Anatomy, formula bindings,
-session isolation, official-source normalization, caching, response hashing,
-credential failure, and arbitrary-URL rejection.
+Deterministic tests cover the business engines, Vessels consolidation, Anatomy,
+formula bindings, session isolation, authority normalization, exact OFAC
+redirect handling, secret redaction, safe XML parsing, caching, stale-last-good
+behavior, response hashing, missing credentials, and arbitrary-URL rejection.
 
-`.github/workflows/hf-space.yml` then:
-
-1. compiles and runs all deterministic tests;
-2. validates each vertical in a six-way parallel matrix;
-3. builds and smokes the Docker image;
-4. preserves or creates the write-only Sentra/Killinchu signing key;
-5. publishes the exact protected-main revision to
-   `SZLHOLDINGS/vertical-services`;
-6. restarts the Space and attests the source-bound runtime; and
-7. exercises every required official source through the deployed service,
-   uploading a secret-free live connector receipt.
+`.github/workflows/hf-space.yml` compiles and tests the exact source, validates
+each vertical, builds and smokes the image, routes publication through the
+canonical Hugging Face writer, and records live probe evidence when the writer
+is available.
 
 Public runtime: `SZLHOLDINGS/vertical-services`.
