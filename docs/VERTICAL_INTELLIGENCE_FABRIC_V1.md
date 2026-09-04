@@ -55,7 +55,8 @@ Public routes:
 Aliases resolve to the same canonical runtime:
 
 ```text
-aegis, immune              -> sentra
+aegis, defend              -> sentra (capability plane; public home is Killinchu /defend)
+immune                     -> migration required; no silent alias
 business-observability     -> lyte
 vessels                    -> killinchu
 puriq, markets             -> finance

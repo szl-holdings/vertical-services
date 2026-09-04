@@ -111,13 +111,17 @@ def test_each_vertical_has_distinct_jobs_tasks_and_frontend(monkeypatch):
     assert len(motifs) == 6
     assert len(page_hashes) == 6
     assert len({row["primary_job"] for row in VERTICAL_INTELLIGENCE.values()}) == 6
+    assert VERTICALS["sentra"]["product"] == "Killinchu · Defend"
+    assert VERTICALS["sentra"]["public_space"] == "SZLHOLDINGS/killinchu"
+    assert VERTICALS["sentra"]["consolidation"]["immune_status"] == "MIGRATION_REQUIRED"
+    assert VERTICALS["counsel"]["canonical_repository"] == "szl-holdings/a11oy/verticals/counsel"
 
 
 def test_aliases_resolve_to_one_runtime_and_one_intelligence_room(monkeypatch):
     clear_model_env(monkeypatch)
     expected = {
         "aegis": "sentra",
-        "immune": "sentra",
+        "defend": "sentra",
         "business-observability": "lyte",
         "vessels": "killinchu",
         "puriq": "finance",

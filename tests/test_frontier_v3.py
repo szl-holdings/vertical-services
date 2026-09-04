@@ -49,8 +49,8 @@ def response(payload: object) -> httpx.Response:
 
 def test_aliases_resolve_without_duplicate_runtime_authority():
     expected = {
-        "aegis": ("sentra", "Aegis Immune Cell"),
-        "immune": ("sentra", "Aegis Immune Cell"),
+        "aegis": ("sentra", "Killinchu Defend Plane"),
+        "defend": ("sentra", "Killinchu Defend Plane"),
         "puriq": ("finance", "PURIQ Market Chamber"),
         "markets": ("finance", "PURIQ Market Chamber"),
         "real-estate": ("terra", "Terra Parcel Loom"),
@@ -70,7 +70,7 @@ def test_aliases_resolve_without_duplicate_runtime_authority():
 
 def test_each_canonical_experience_is_unique_mobile_and_accessible():
     expected = {
-        "sentra": ("Aegis Immune Cell", "threat-shield"),
+        "sentra": ("Killinchu Defend Plane", "threat-shield"),
         "lyte": ("Lyte Signal Lattice", "service-lattice"),
         "killinchu": ("Killinchu Voyage Radar", "voyage-radar"),
         "finance": ("PURIQ Market Chamber", "probability-orbit"),
