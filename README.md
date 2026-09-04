@@ -17,7 +17,7 @@ A source-bound FastAPI operational fabric for six canonical SZL verticals.
 > resilience product. The `sentra` and `vessels` engines remain independently
 > testable compatibility lobes named **Defend/Aegis** and **Maritime/Vessels**;
 > they do not retain standalone product authority. See
-> [`docs/KILLINCHU_RUNTIME_CONVERGENCE.md`](docs/KILLINCHU_RUNTIME_CONVERGENCE.md).
+> [`docs/KILLINCHU_RUNTIME_CONVERGENCE.md`](https://github.com/szl-holdings/vertical-services/blob/main/docs/KILLINCHU_RUNTIME_CONVERGENCE.md).
 
 | Route | Canonical vertical | Business engine | Required official source |
 |---|---|---|---|
