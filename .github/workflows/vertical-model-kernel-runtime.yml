@@ -88,6 +88,7 @@ jobs:
           trap 'docker stop szl-vertical-runtime >/dev/null 2>&1 || true' EXIT
 
           for attempt in $(seq 1 30); do
+            : "$attempt"
             if curl --fail --silent --show-error \
               http://127.0.0.1:17866/healthz > /tmp/runtime-health.json; then
               break
