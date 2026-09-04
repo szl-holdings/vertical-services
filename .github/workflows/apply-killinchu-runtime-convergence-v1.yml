@@ -1,0 +1,76 @@
+name: Apply Killinchu runtime convergence v1
+
+on:
+  push:
+    branches:
+      - feat/killinchu-runtime-convergence-v1
+    paths:
+      - .github/workflows/apply-killinchu-runtime-convergence-v1.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-killinchu-runtime-convergence-v1
+  cancel-in-progress: false
+
+jobs:
+  transform:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Check out exact runtime branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feat/killinchu-runtime-convergence-v1
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Apply fail-closed runtime patch
+        id: apply
+        run: |
+          set -euo pipefail
+          entry="$(python tools/apply_killinchu_runtime_convergence_v1.py)"
+          echo "entry=$entry" >> "$GITHUB_OUTPUT"
+
+      - name: Verify source and route contracts
+        env:
+          ENTRY: ${{ steps.apply.outputs.entry }}
+        run: |
+          set -euo pipefail
+          python -m json.tool contracts/killinchu-runtime-convergence.v1.json >/dev/null
+          python -m unittest tests.test_killinchu_runtime_convergence -v
+          python -m py_compile \
+            killinchu_runtime_contract.py \
+            tests/test_killinchu_runtime_convergence.py \
+            "$ENTRY"
+          grep -F '/killinchu/architecture' "$ENTRY"
+          grep -F '/killinchu/aegis/healthz' "$ENTRY"
+          grep -F '/killinchu/vessels/healthz' "$ENTRY"
+          grep -F 'X-SZL-Canonical-Product' killinchu_runtime_contract.py
+          grep -F 'Killinchu' README.md
+          python -m pip install --disable-pip-version-check pytest >/dev/null
+          python -m pytest -q tests/test_killinchu_runtime_convergence.py
+          git diff --check
+
+      - name: Commit durable implementation only
+        run: |
+          set -euo pipefail
+          git rm tools/apply_killinchu_runtime_convergence_v1.py
+          git rm .github/workflows/apply-killinchu-runtime-convergence-v1.yml
+          git add -A
+          git config user.name "SZL Frontier Operator"
+          git config user.email "stephenlutar2@gmail.com"
+          git commit -m "feat(runtime): converge Aegis and Vessels under Killinchu" \
+            -m "Add one canonical service authority, explicit compatibility headers, source-truth lobe routes, the exact locked-eight formula contract, human authority, receipts and simulated-effectors boundaries." \
+            -m "Signed-off-by: Stephen P. Lutar Jr. <stephenlutar2@gmail.com>"
+          git push origin HEAD:feat/killinchu-runtime-convergence-v1
