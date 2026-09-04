@@ -1,0 +1,49 @@
+{
+  "schema": "szl.vertical-services.killinchu/v2",
+  "canonical_product": "killinchu",
+  "product_state": "SOLE_PUBLIC_CYBER_PHYSICAL_RESILIENCE_AUTHORITY",
+  "lobes": {
+    "aegis": {
+      "public_name": "Defend",
+      "engine": "sentra",
+      "compatibility_prefixes": [
+        "/sentra",
+        "/api/verticals/sentra",
+        "/api/verticals/aegis",
+        "/api/verticals/immune"
+      ],
+      "standalone_product": false
+    },
+    "vessels": {
+      "public_name": "Maritime",
+      "engine": "vessels",
+      "compatibility_prefixes": [
+        "/vessels",
+        "/api/verticals/vessels"
+      ],
+      "standalone_product": false
+    }
+  },
+  "formula_ids": [
+    "F1",
+    "F4",
+    "F7",
+    "F11",
+    "F12",
+    "F18",
+    "F19",
+    "F22"
+  ],
+  "lambda_status": "CONJECTURE_1_ADVISORY",
+  "human_authority_required": true,
+  "receipt_required": true,
+  "destructive_or_offensive_autonomy": false,
+  "effectors_enabled": false,
+  "compatibility_source_preserved": true,
+  "reachability_is_not": [
+    "model_quality",
+    "sensor_freshness",
+    "provider_availability",
+    "operational_authorization"
+  ]
+}
