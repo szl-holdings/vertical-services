@@ -1,0 +1,187 @@
+name: Promote exact green authoritative source mesh once
+
+on:
+  push:
+    branches: [feat/authoritative-source-mesh-v3]
+    paths:
+      - .github/workflows/zz-promote-authoritative-source-mesh-once.yml
+  workflow_dispatch: {}
+
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: promote-authoritative-source-mesh-v3
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      BRANCH: feat/authoritative-source-mesh-v3
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout exact source branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feat/authoritative-source-mesh-v3
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Resolve exactly one open pull request
+        id: pr
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(gh pr list --repo "$REPOSITORY" --state open --head "$BRANCH" --json number,headRefOid,baseRefName,isDraft,url)"
+          test "$(jq 'length' <<<"$payload")" -eq 1
+          number="$(jq -r '.[0].number' <<<"$payload")"
+          test "$(jq -r '.[0].baseRefName' <<<"$payload")" = main
+          test "$(jq -r '.[0].isDraft' <<<"$payload")" = false
+          test "$(jq -r '.[0].headRefOid' <<<"$payload")" = "$(git rev-parse HEAD)"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+
+      - name: Install exact runtime and test dependencies
+        run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt -r requirements-test.txt
+
+      - name: Revalidate full source-mesh contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          required = (
+              "deploy/szl_verticals/connector_specs.py",
+              "deploy/szl_verticals/connector_request_builder.py",
+              "deploy/szl_verticals/connector_parameters.py",
+              "deploy/szl_verticals/connector_transport.py",
+              "deploy/szl_verticals/connector_parsers.py",
+              "deploy/szl_verticals/connector_parsers_maritime.py",
+              "deploy/szl_verticals/official_connectors.py",
+              "deploy/szl_verticals/operational.py",
+              "deploy/szl_verticals/killinchu.py",
+              "tests/test_authoritative_source_mesh.py",
+              "docs/AUTHORITATIVE_SOURCE_MESH.md",
+              "docs/SOURCE_CONFIGURATION.md",
+              "docs/OPERATIONAL_ACCEPTANCE.md",
+          )
+          missing = [name for name in required if not Path(name).is_file()]
+          if missing:
+              raise SystemExit(f"missing source-mesh contract files: {missing}")
+          text = "\n".join(Path(name).read_text(encoding="utf-8") for name in required)
+          authorities = (
+              "nws-marine-alerts", "noaa-coops", "cisa-kev", "ofac-sdn",
+              "un-sanctions", "census-acs5", "openfema", "fhfa-hpi",
+              "nvd-cve", "first-epss", "federal-register", "courtlistener",
+              "sec-submissions", "treasury-fiscal-data", "fred-series",
+          )
+          absent = [name for name in authorities if name not in text]
+          if absent:
+              raise SystemExit(f"authority adapters absent: {absent}")
+          boundaries = (
+              "STALE_LAST_GOOD", "AUTH_REQUIRED", "production_source_ready",
+              "effectors_enabled", "human_approval_required",
+          )
+          absent = [name for name in boundaries if name not in text]
+          if absent:
+              raise SystemExit(f"operational boundaries absent: {absent}")
+          PY
+          python -m pip check
+          python -m compileall -q deploy tools tests
+          python -m pytest tests -q
+
+      - name: Remove temporary promotion controls and markers
+        id: finalize
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in \
+            .github/workflows/zz-verify-authoritative-source-mesh-once.yml \
+            .github/workflows/zz-promote-authoritative-source-mesh-once.yml \
+            docs/.source-mesh-docs-complete \
+            docs/.promotion-requested \
+            docs/.release-candidate \
+            docs/.exact-head-gate \
+            docs/.do-not-merge-without-live-proof \
+            docs/.human-approval-required; do
+            test ! -e "$path" || git rm "$path"
+          done
+          git config user.name "Lutar, Stephen P."
+          git config user.email "stephenlutar2@gmail.com"
+          if ! git diff --cached --quiet; then
+            git commit -s -m "chore(sources): finalize authoritative source mesh"
+            git push origin HEAD:"$BRANCH"
+          fi
+          final_head="$(git rev-parse HEAD)"
+          echo "head=$final_head" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for accepted exact-head checks
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          EXPECTED_HEAD: ${{ steps.finalize.outputs.head }}
+        run: |
+          set -euo pipefail
+          accepted='["success","neutral","skipped"]'
+          for attempt in $(seq 1 180); do
+            pr="$(gh pr view "$PR_NUMBER" --repo "$REPOSITORY" --json headRefOid,isDraft,reviewDecision,mergeStateStatus)"
+            test "$(jq -r '.headRefOid' <<<"$pr")" = "$EXPECTED_HEAD"
+            test "$(jq -r '.isDraft' <<<"$pr")" = false
+            test "$(jq -r '.reviewDecision // ""' <<<"$pr")" != CHANGES_REQUESTED
+            checks="$(gh api -H 'Accept: application/vnd.github+json' "/repos/$REPOSITORY/commits/$EXPECTED_HEAD/check-runs?per_page=100")"
+            total="$(jq '.check_runs | length' <<<"$checks")"
+            pending="$(jq '[.check_runs[] | select(.status != "completed")] | length' <<<"$checks")"
+            failed="$(jq --argjson accepted "$accepted" '[.check_runs[] | select(.status == "completed" and ((.conclusion as $c | $accepted | index($c)) == null))] | length' <<<"$checks")"
+            if [ "$failed" -ne 0 ]; then
+              jq --argjson accepted "$accepted" -r '.check_runs[] | select(.status == "completed" and ((.conclusion as $c | $accepted | index($c)) == null)) | "failed: \(.name) / \(.conclusion)"' <<<"$checks"
+              exit 1
+            fi
+            if [ "$total" -ge 3 ] && [ "$pending" -eq 0 ]; then
+              echo "Exact source head $EXPECTED_HEAD has $total accepted terminal checks."
+              break
+            fi
+            if [ "$attempt" -eq 180 ]; then
+              echo "Timed out: total=$total pending=$pending" >&2
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Require zero unresolved review threads
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          owner="${REPOSITORY%/*}"
+          repo="${REPOSITORY#*/}"
+          unresolved="$(gh api graphql \
+            -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}' \
+            -f owner="$owner" -f repo="$repo" -F number="$PR_NUMBER" \
+            --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')"
+          test "$unresolved" -eq 0
+
+      - name: Perform normal protected squash merge
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          EXPECTED_HEAD: ${{ steps.finalize.outputs.head }}
+        run: |
+          set -euo pipefail
+          gh pr merge "$PR_NUMBER" --repo "$REPOSITORY" --squash --match-head-commit "$EXPECTED_HEAD" --delete-branch
