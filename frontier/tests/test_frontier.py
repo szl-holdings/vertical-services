@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import sys
 import threading
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -20,7 +21,15 @@ def load_app() -> ModuleType:
     spec = importlib.util.spec_from_file_location("szl_vertical_frontier", ROOT / "app.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Dataclasses resolve postponed annotations through the defining module.
+    # Mirror normal import semantics before executing the module so Python 3.12
+    # can find that namespace while decorating Snapshot and related contracts.
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop(spec.name, None)
+        raise
     return module
 
 
