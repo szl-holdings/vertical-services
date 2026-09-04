@@ -65,7 +65,7 @@ jobs:
             szl-vertical-frontier:${{ github.sha }}
           trap 'docker stop szl-vertical-frontier >/dev/null 2>&1 || true' EXIT
           for attempt in $(seq 1 30); do
-            : "$attempt"
+            printf 'health probe attempt %s\n' "$attempt" >/dev/null
             if curl --fail --silent --show-error http://127.0.0.1:17865/healthz > /tmp/health.json; then
               break
             fi
