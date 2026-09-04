@@ -1,0 +1,114 @@
+name: Verify authoritative source mesh once
+
+on:
+  push:
+    branches: [feat/authoritative-source-mesh-v3]
+    paths:
+      - .github/workflows/zz-verify-authoritative-source-mesh-once.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: verify-authoritative-source-mesh-v3
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout exact branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feat/authoritative-source-mesh-v3
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+
+      - name: Install exact runtime and tests
+        run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt -r requirements-test.txt
+
+      - name: Require the full source-mesh contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          required_files = (
+              "deploy/szl_verticals/connector_specs.py",
+              "deploy/szl_verticals/connector_request_builder.py",
+              "deploy/szl_verticals/connector_parameters.py",
+              "deploy/szl_verticals/connector_transport.py",
+              "deploy/szl_verticals/connector_parsers.py",
+              "deploy/szl_verticals/connector_parsers_maritime.py",
+              "deploy/szl_verticals/official_connectors.py",
+              "deploy/szl_verticals/operational.py",
+              "deploy/szl_verticals/killinchu.py",
+              "tests/test_authoritative_source_mesh.py",
+              "docs/AUTHORITATIVE_SOURCE_MESH.md",
+          )
+          missing = [path for path in required_files if not Path(path).is_file()]
+          if missing:
+              raise SystemExit(f"missing source-mesh files: {missing}")
+
+          combined = "\n".join(Path(path).read_text(encoding="utf-8") for path in required_files)
+          required_tokens = (
+              "nws-marine-alerts",
+              "noaa-coops",
+              "cisa-kev",
+              "ofac-sdn",
+              "un-sanctions",
+              "census-acs5",
+              "openfema",
+              "fhfa-hpi",
+              "nvd-cve",
+              "first-epss",
+              "federal-register",
+              "courtlistener",
+              "sec-submissions",
+              "treasury-fiscal-data",
+              "fred-series",
+              "STALE_LAST_GOOD",
+              "AUTH_REQUIRED",
+              "production_source_ready",
+              "effectors_enabled",
+              "human_approval_required",
+          )
+          absent = [token for token in required_tokens if token not in combined]
+          if absent:
+              raise SystemExit(f"source-mesh contract missing tokens: {absent}")
+          if "effectors_enabled\": False" not in combined and '"effectors_enabled": False' not in combined:
+              raise SystemExit("public effector boundary missing")
+          PY
+
+      - name: Compile and run all deterministic contracts
+        env:
+          SENTRA_SIGNING_KEY: ci-source-mesh-key-not-used-in-production
+          SZL_SOURCE_REVISION: ${{ github.sha }}
+          SZL_STATE_PATH: /tmp/szl-source-mesh.sqlite3
+        run: |
+          python -m pip check
+          python -m compileall -q deploy tools tests
+          python -m pytest tests -q
+
+      - name: Remove one-shot verifier after success
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/zz-verify-authoritative-source-mesh-once.yml
+          git config user.name "Lutar, Stephen P."
+          git config user.email "stephenlutar2@gmail.com"
+          git commit -s -m "chore(sources): remove one-shot source-mesh verifier"
+          git push origin HEAD:feat/authoritative-source-mesh-v3
