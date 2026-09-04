@@ -14,6 +14,8 @@ public Space. PURIQ resolves to Finance without duplicate execution authority.
 from __future__ import annotations
 
 import html
+import json
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -276,7 +278,19 @@ def catalog() -> dict:
         "caller_supplied_model_endpoints_allowed": False,
         "effectors_enabled": False,
         "truth_label": "MEASURED",
+        "fashion_rule": "take the job, never proprietary code",
+        "fashion": "/api/fashion",
     }
+
+
+_FASHION_PATH = Path(__file__).resolve().parents[1] / "contracts" / "fashion-lineage.v1.json"
+
+
+@app.get("/api/fashion")
+def fashion_lineage() -> dict:
+    payload = json.loads(_FASHION_PATH.read_text(encoding="utf-8"))
+    payload["served_from"] = "contracts/fashion-lineage.v1.json"
+    return payload
 
 
 def _landing_page() -> str:
