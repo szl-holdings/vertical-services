@@ -886,6 +886,15 @@ button.button {
   font-size: 0.94rem;
 }
 
+.system-fashion,
+.vertical-fashion {
+  max-width: 42rem;
+  margin-top: 0.85rem;
+  color: var(--muted);
+  font-size: var(--f2, 0.88rem);
+  line-height: 1.45;
+}
+
 .system-card-bottom {
   display: flex;
   margin-top: auto;

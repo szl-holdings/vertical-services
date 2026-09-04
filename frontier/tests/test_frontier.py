@@ -131,6 +131,9 @@ def test_public_frontend_has_local_assets_and_accessibility_markers(app: ModuleT
     ):
         assert selector in themes
 
+    assert "system-fashion" in js
+    assert "vertical-fashion" in js
+
 
 def test_local_and_historical_snapshots_are_honest(app: ModuleType) -> None:
     a11oy = app.snapshot_a11oy({}).as_dict()
