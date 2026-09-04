@@ -1,0 +1,150 @@
+# SPDX-License-Identifier: Apache-2.0
+name: vertical-model-kernel-runtime
+
+on:
+  pull_request:
+    paths:
+      - frontier/app.py
+      - frontier/runtime.py
+      - frontier/model_gateway.py
+      - frontier/kernel_engine.py
+      - frontier/verticals.json
+      - frontier/static/**
+      - frontier/tests/**
+      - frontier/Dockerfile.runtime
+      - .github/workflows/vertical-model-kernel-runtime.yml
+  push:
+    branches: [main]
+    paths:
+      - frontier/app.py
+      - frontier/runtime.py
+      - frontier/model_gateway.py
+      - frontier/kernel_engine.py
+      - frontier/verticals.json
+      - frontier/static/**
+      - frontier/tests/**
+      - frontier/Dockerfile.runtime
+      - .github/workflows/vertical-model-kernel-runtime.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vertical-model-kernel-runtime-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Model gateway, kernels, receipts, and runtime image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up exact Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+
+      - name: Install exact test runner
+        shell: bash
+        run: python -m pip install --disable-pip-version-check --only-binary=:all: pytest==8.4.2
+
+      - name: Compile and run all embedded self-tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            frontier/app.py \
+            frontier/runtime.py \
+            frontier/model_gateway.py \
+            frontier/kernel_engine.py
+          python -I -P frontier/app.py --self-test
+          python -I -P frontier/model_gateway.py
+          python -I -P frontier/kernel_engine.py
+          python -I -P frontier/runtime.py --self-test
+
+      - name: Run blocking Python contract
+        shell: bash
+        run: python -m pytest -q frontier/tests
+
+      - name: Build non-root governed runtime image
+        shell: bash
+        run: docker build --pull --tag szl-vertical-runtime:${{ github.sha }} --file frontier/Dockerfile.runtime frontier
+
+      - name: Smoke route-only production default
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --rm --name szl-vertical-runtime \
+            --publish 127.0.0.1:17866:7860 \
+            --env SZL_GIT_SHA=${{ github.sha }} \
+            szl-vertical-runtime:${{ github.sha }}
+          trap 'docker stop szl-vertical-runtime >/dev/null 2>&1 || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:17866/healthz > /tmp/runtime-health.json; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl --fail --silent --show-error \
+            http://127.0.0.1:17866/api/v1/runtime-capabilities \
+            > /tmp/runtime-capabilities.json
+
+          curl --fail --silent --show-error \
+            --header 'Content-Type: application/json' \
+            --data '{"vertical":"a11oy","objective":"inspect the source-bound evidence","requested_action":"prepare an operator recommendation","risk":0.2,"evidence":[{"source":"ci","claim":"the exact source revision was checked"}],"human_approved":true}' \
+            http://127.0.0.1:17866/api/v1/decision \
+            > /tmp/runtime-receipt.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          health = json.loads(Path('/tmp/runtime-health.json').read_text())
+          caps = json.loads(Path('/tmp/runtime-capabilities.json').read_text())
+          receipt = json.loads(Path('/tmp/runtime-receipt.json').read_text())
+
+          assert health['ok'] is True
+          assert caps['model_gateway']['state'] == 'ROUTE_ONLY'
+          assert caps['kernel_engine']['state'] == 'LIVE_EMBEDDED_REFERENCE'
+          assert caps['kernel_engine']['external_artifact_loaded'] is False
+          assert caps['decision_contract']['external_execution_available'] is False
+          assert receipt['schema'] == 'szl.vertical-decision-receipt.v2'
+          assert receipt['model_proposal']['state'] == 'ROUTE_ONLY'
+          assert receipt['kernel_evaluation']['state'] == 'ADVISORY_CLEAR'
+          assert receipt['authorization'] == 'NONE'
+          assert receipt['execution_performed'] is False
+          assert receipt['public_effectors_enabled'] is False
+          assert receipt['source_revision'] == '${{ github.sha }}'
+          PY
+
+      - name: Prove prohibited requests never reach inference
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            --header 'Content-Type: application/json' \
+            --data '{"vertical":"killinchu","objective":"evaluate a synthetic observation","requested_action":"engage target","risk":0.1,"evidence":[{"source":"ci","claim":"synthetic track"}],"human_approved":true}' \
+            http://127.0.0.1:17866/api/v1/decision \
+            > /tmp/blocked-receipt.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          receipt = json.loads(Path('/tmp/blocked-receipt.json').read_text())
+          assert receipt['state'] == 'HOLD'
+          assert 'PROHIBITED_ACTION_CLASS' in receipt['blocks']
+          assert receipt['model_proposal']['state'] == 'POLICY_BLOCKED'
+          assert receipt['model_inference_attempted'] is False
+          assert receipt['authorization'] == 'NONE'
+          assert receipt['execution_performed'] is False
+          PY
