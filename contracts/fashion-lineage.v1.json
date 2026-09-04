@@ -1,0 +1,96 @@
+{
+  "schema": "szl.fashion-lineage/v1",
+  "rule": "Take the job the field leader already won. Rewrite the mechanism with SZL formulas, receipts, and honest labels. Never take their name, chrome, datasets, or code.",
+  "doctrine": "v11",
+  "truth": "REPORTED",
+  "lanes": [
+    {
+      "id": "killinchu",
+      "job": "sensor-fusion C2 and kill-chain compression",
+      "leader": "Anduril Lattice / JIATF-401",
+      "tweak": "ROE-gated synthetic tracks, DSSE per interdiction, no public effector",
+      "official_source": "NOAA / USCG historical AIS metadata",
+      "szl_software": ["killinchu", "szl-invariants", "chaski"],
+      "sources": ["https://www.anduril.com/news/jiatf-401-selects-lattice-as-enterprise-tactical-command-and-control-platform-for-c-uas"]
+    },
+    {
+      "id": "sentra",
+      "job": "harness-time allow / log / escalate / deny",
+      "leader": "CrowdStrike Baywatch + Credo Agent Governor",
+      "tweak": "eight-plus deny-by-default gates and HMAC/DSSE verdicts, not a compliance dashboard",
+      "official_source": "CISA Known Exploited Vulnerabilities",
+      "szl_software": ["immune", "szl-govsign", "szl-provctl"],
+      "sources": [
+        "https://www.crowdstrike.com/en-us/blog/secure-agent-harness-execution-preventing-escape/",
+        "https://www.credo.ai/ai-agent-registry"
+      ]
+    },
+    {
+      "id": "vessels",
+      "job": "dark-activity and AIS-gap maritime picture",
+      "leader": "Windward Maritime AI",
+      "tweak": "desk under Killinchu: dark / speed / corridor / loiter flags on SAMPLE or historical official data",
+      "official_source": "NOAA InPort AIS metadata — not a live feed",
+      "szl_software": ["vertical-services/vessels", "killinchu"],
+      "independent_vertical": false,
+      "sources": ["https://windward.ai/"]
+    },
+    {
+      "id": "terra",
+      "job": "parcel as the join key for civic and property context",
+      "leader": "Regrid",
+      "tweak": "PLUTO observations stay separate from modeled cap-rate; absence is UNAVAILABLE",
+      "official_source": "NYC PLUTO",
+      "szl_software": ["szl-real-estate", "ReceiptAgent-Nano"],
+      "sources": ["https://regrid.com/mcp", "https://www.nyc.gov/content/planning/pages/resources/datasets/mappluto-pluto-change"]
+    },
+    {
+      "id": "finance",
+      "job": "open backtest engine plus risk overlays",
+      "leader": "QuantConnect LEAN + Riskfolio-Lib",
+      "tweak": "paper-only PURIQ tape, DSSE per signal, not financial advice",
+      "official_source": "SEC EDGAR",
+      "szl_software": ["szl-quant", "szl-quant-witness", "szl-receiptagent-qwen35-0.8b-v3"],
+      "sources": [
+        "https://www.quantconnect.com/docs/v2/writing-algorithms/key-concepts/algorithm-engine",
+        "https://github.com/dcajasn/Riskfolio-Lib"
+      ]
+    },
+    {
+      "id": "lyte",
+      "job": "instrument, collect, export, then diagnose",
+      "leader": "Grafana + OpenTelemetry + Honeycomb question-driven debug",
+      "tweak": "bounded loop-tax, receipted spans, outcome after action",
+      "official_source": "GitHub Actions execution telemetry",
+      "szl_software": ["lyte-services", "szl-ouroboros", "A11OY-MINI"],
+      "sources": ["https://grafana.com/docs/loki/latest/send-data/otel/otel-collector-getting-started/"]
+    },
+    {
+      "id": "counsel",
+      "job": "agentic legal work grounded in an authority stack",
+      "leader": "Harvey + Thomson Reuters CoCounsel",
+      "tweak": "Ayllu 11-seat council, debate-then-converge, LICENSE_REQUIRED hard block, no legal advice",
+      "official_source": "Federal Register",
+      "szl_software": ["ayllu", "szl-lambda-gate"],
+      "sources": ["https://www.harvey.ai/", "https://legal.thomsonreuters.com/en/products/cocounsel-legal"]
+    },
+    {
+      "id": "david-leads",
+      "job": "evidence-backed broker research",
+      "leader": "category owned here — comparable job is official-source diligence, not Apollo graphs",
+      "tweak": "every lead carries an evidence trail or it does not exist",
+      "official_source": "public records declared in david-leads connectors",
+      "szl_software": ["david-leads", "brain-navigator-r2"],
+      "sources": ["https://github.com/szl-holdings/david-leads"]
+    },
+    {
+      "id": "puriq",
+      "job": "formula governance over public signals",
+      "leader": "category invented here",
+      "tweak": "execute canonical-formulas-v1; Yuyay-13 fail-closed; Lambda remains Conjecture 1",
+      "official_source": "public market and filing signals only when fetched",
+      "szl_software": ["puriq-live", "khipu-r3", "canonical-formulas-v1"],
+      "sources": ["https://github.com/szl-holdings/puriq-live"]
+    }
+  ]
+}
