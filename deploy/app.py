@@ -2,8 +2,8 @@
 
 The service combines deterministic vertical calculations, canonical formula
 bindings, Living Anatomy contracts, session-scoped Second-Brain memory, bounded
-official-source connectors, source-bound builds, hash-addressed receipts, and
-six domain-native command experiences.
+official-source connectors, source-bound builds, model and kernel routing,
+hash-addressed receipts, and six domain-native command experiences.
 
 Killinchu is the single defense-and-maritime vertical. The legacy ``/vessels``
 route remains only as a compatibility surface. Aegis and Immune resolve to the
@@ -26,10 +26,12 @@ from szl_verticals.core import (
 from szl_verticals.counsel import counsel
 from szl_verticals.finance import finance
 from szl_verticals.frontier import frontier
+from szl_verticals.intelligence import intelligence
 from szl_verticals.killinchu import killinchu
 from szl_verticals.lyte import lyte
 from szl_verticals.operational import STORE, operational, vertical_readiness
 from szl_verticals.sentra import SENTRA_KEY_SOURCE, sentra
+from szl_verticals.showcase import showcase
 from szl_verticals.terra import terra
 from szl_verticals.vessels import vessels
 
@@ -37,9 +39,9 @@ app = FastAPI(
     title="SZL Vertical Services",
     version=VERSION,
     description=(
-        "Six governed engines with Living Anatomy, formula bindings, "
-        "Second-Brain memory, bounded official-source connectors, Hatun review, "
-        "and distinct accessible command experiences."
+        "Six governed Python engines with Living Anatomy, formula bindings, "
+        "Second-Brain memory, bounded official-source connectors, source-bound "
+        "model and kernel routing, Hatun review, and differentiated command rooms."
     ),
 )
 
@@ -66,6 +68,8 @@ for router in (
     counsel,
     operational,
     frontier,
+    intelligence,
+    showcase,
 ):
     app.include_router(router)
 
@@ -78,6 +82,7 @@ CATALOG = {
         ),
         "public_home": "SZLHOLDINGS/sentra",
         "experience": "/experience/aegis",
+        "intelligence": "/intelligence/aegis",
         "aliases": ["aegis", "immune"],
     },
     "lyte": {
@@ -87,12 +92,14 @@ CATALOG = {
         ),
         "public_home": "SZLHOLDINGS/lyte",
         "experience": "/experience/lyte",
+        "intelligence": "/intelligence/lyte",
         "aliases": ["business-observability"],
     },
     "killinchu": {
         "purpose": "defense policy and maritime track-risk command",
         "public_home": "SZLHOLDINGS/killinchu",
         "experience": "/experience/killinchu",
+        "intelligence": "/intelligence/killinchu",
         "status": "CANONICAL",
         "vessels": "CONSOLIDATED",
         "aliases": ["vessels"],
@@ -104,6 +111,7 @@ CATALOG = {
         ),
         "public_home": "SZLHOLDINGS/finance",
         "experience": "/experience/puriq",
+        "intelligence": "/intelligence/puriq",
         "aliases": ["puriq", "markets"],
     },
     "terra": {
@@ -113,12 +121,14 @@ CATALOG = {
         ),
         "public_home": "SZLHOLDINGS/terra",
         "experience": "/experience/terra",
+        "intelligence": "/intelligence/terra",
         "aliases": ["real-estate"],
     },
     "counsel": {
         "purpose": "matters, obligations, public legal authority, and receipt chains",
         "public_home": "SZLHOLDINGS/counsel",
         "experience": "/experience/prism",
+        "intelligence": "/intelligence/prism",
         "aliases": ["prism"],
     },
 }
@@ -160,6 +170,9 @@ def root_health() -> dict:
         },
         "session_header": "X-SZL-Session",
         "official_source_connectors_wired": True,
+        "vertical_intelligence_wired": True,
+        "model_provider_invocation_fail_closed": True,
+        "caller_supplied_model_endpoints_allowed": False,
         "hatun_can_authorize": False,
         "effectors_enabled": False,
         "truth_label": "MEASURED",
@@ -186,6 +199,8 @@ def readiness() -> JSONResponse:
         },
         "build": _build_info()["build"],
         "store": STORE.status(),
+        "intelligence_plan_ready": True,
+        "inference_requires_operator_model_binding": True,
         "truth_label": "MEASURED",
     }
     return JSONResponse(payload, status_code=200 if ready else 503)
@@ -216,6 +231,10 @@ def catalog() -> dict:
             "catalog": "/api/verticals",
             "frontier": "/api/verticals/{vertical}/frontier",
             "experience": "/experience/{vertical}",
+            "intelligence_room": "/intelligence/{vertical}",
+            "intelligence_profile": "/api/verticals/{vertical}/intelligence",
+            "intelligence_plan": "/api/verticals/{vertical}/intelligence/plan",
+            "intelligence_invoke": "/api/verticals/{vertical}/intelligence/invoke",
             "anatomy": "/api/verticals/{vertical}/anatomy",
             "formulas": "/api/verticals/{vertical}/formulas",
             "connectors": "/api/verticals/{vertical}/connectors",
@@ -232,6 +251,7 @@ def catalog() -> dict:
         "official_source_connectors_wired": True,
         "live_observations_require_explicit_fetch": True,
         "caller_supplied_urls_allowed": False,
+        "caller_supplied_model_endpoints_allowed": False,
         "effectors_enabled": False,
         "truth_label": "MEASURED",
     }
@@ -248,7 +268,8 @@ def _landing_page() -> str:
             <h2>{html.escape(info['purpose'].split(',')[0].title())}</h2>
             <p>{html.escape(info['purpose'])}</p>
             <small>{html.escape(aliases)}</small>
-            <div class="actions"><a href="{html.escape(info['experience'])}">Open</a>
+            <div class="actions"><a href="{html.escape(info['experience'])}">Command</a>
+            <a href="{html.escape(info['intelligence'])}">Intelligence</a>
             <a href="/{engine}/healthz">Health</a>
             <a href="/api/verticals/{engine}/formulas">Math</a></div></article>"""
         )
@@ -265,16 +286,16 @@ a{{color:inherit;min-height:44px;display:inline-flex;align-items:center}}a:focus
 .brand,.eyebrow,.mono{{font:700 11px/1.4 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase}}.brand,.eyebrow{{color:var(--accent)}}
 h1{{font-size:clamp(48px,9vw,104px);line-height:.88;letter-spacing:-.055em;margin:40px 0 24px;max-width:10ch}}.lede{{font-size:clamp(17px,2vw,22px);max-width:72ch;color:var(--muted)}}
 .proof{{display:flex;gap:8px;flex-wrap:wrap;margin:28px 0 42px}}.pill{{border:1px solid var(--line);border-radius:999px;padding:8px 12px;color:var(--muted)}}.pill strong{{color:var(--good)}}
-.grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}}.card{{background:linear-gradient(145deg,rgba(255,255,255,.035),transparent),var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;min-height:260px;display:flex;flex-direction:column}}
+.grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}}.card{{background:linear-gradient(145deg,rgba(255,255,255,.035),transparent),var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;min-height:280px;display:flex;flex-direction:column}}
 .card h2{{font-size:26px;margin:14px 0 8px}}.card p,.card small{{color:var(--muted);margin:0 0 14px}}.actions{{display:flex;gap:14px;flex-wrap:wrap;margin-top:auto}}.actions a{{text-decoration:none;border-bottom:1px solid var(--accent)}}
 .boundary{{margin-top:18px;padding:18px;border:1px solid var(--line);border-radius:14px;color:var(--muted)}}footer{{margin-top:36px;color:var(--muted)}}
 @media(max-width:900px){{.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}@media(max-width:620px){{.grid{{grid-template-columns:1fr}}h1{{font-size:clamp(46px,18vw,72px)}}}}
 @media(pointer:coarse){{a{{min-height:48px}}}}@media(prefers-reduced-motion:reduce){{*,*::before,*::after{{scroll-behavior:auto!important;animation:none!important;transition:none!important}}}}
-</style></head><body><main class="shell"><div class="top"><div class="brand">SZL / VERTICAL SERVICES V2.1</div><a href="/docs">OpenAPI</a></div>
-<h1>Six engines. One second brain.</h1><p class="lede">Real vertical calculations, official-source connectors, Living Anatomy, formula bindings, source identity, governed memory, Hatun review, and receipts—without fabricated feeds or silent authority.</p>
-<div class="proof"><span class="pill"><strong>LIVE</strong> runtime contract</span><span class="pill">source {html.escape(revision_short)}</span><span class="pill">store {html.escape(store['durability'])}</span><span class="pill">Aegis + Immune → Sentra</span><span class="pill">PURIQ → Finance</span><span class="pill">Vessels → Killinchu</span></div>
-<section class="grid">{''.join(cards)}</section><section class="boundary"><strong>Operational boundary:</strong> official-source connectors are fixed and bounded. Connector observations are hash-addressed and stored under a hashed session scope. Hatun can recommend review or abstention only. NOAA AIS is historical official planning data—not represented as a live vessel feed. Trading, legal advice, cyber effectors, and unattended consequential actions remain disabled.</section>
-<footer class="mono">{SOURCE_REPOSITORY} · VERSION {VERSION} · <a href="/api/build-info">BUILD INFO</a> · <a href="/readyz">READINESS</a> · <a href="/api/verticals">VERTICAL CATALOG</a></footer></main></body></html>"""
+</style></head><body><main class="shell"><div class="top"><div class="brand">SZL / VERTICAL SERVICES V2.2</div><a href="/docs">OpenAPI</a></div>
+<h1>Six engines. One governed intelligence fabric.</h1><p class="lede">Real vertical calculations, official-source connectors, Living Anatomy, formula bindings, source identity, governed memory, Hatun review, model routing, kernel gates, and receipts—without fabricated feeds or silent authority.</p>
+<div class="proof"><span class="pill"><strong>LIVE</strong> Python runtime contract</span><span class="pill">source {html.escape(revision_short)}</span><span class="pill">store {html.escape(store['durability'])}</span><span class="pill">3 model routes</span><span class="pill">6 kernel contracts</span><span class="pill">effectors disabled</span></div>
+<section class="grid">{''.join(cards)}</section><section class="boundary"><strong>Operational boundary:</strong> official-source connectors are fixed and bounded. Connector observations are hash-addressed and stored under a hashed session scope. Model invocation remains unavailable until an operator binds a fixed allowlisted endpoint, credential, protocol, and exact declared revision. Hatun can recommend review or abstention only. NOAA AIS is historical official planning data—not represented as a live vessel feed. Trading, legal advice, cyber effectors, person-level prospecting, and unattended consequential actions remain disabled.</section>
+<footer class="mono">{SOURCE_REPOSITORY} · VERSION {VERSION} · <a href="/api/build-info">BUILD INFO</a> · <a href="/readyz">READINESS</a> · <a href="/api/intelligence">INTELLIGENCE CATALOG</a></footer></main></body></html>"""
 
 
 @app.get("/", response_class=HTMLResponse)
