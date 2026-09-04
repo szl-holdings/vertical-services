@@ -1,0 +1,118 @@
+name: Promote tested authoritative source mesh recovery once
+
+on:
+  push:
+    branches: [feat/authoritative-source-mesh-v3]
+    paths:
+      - .github/workflows/zz-promote-source-mesh-recovery-once.yml
+  workflow_dispatch: {}
+
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: promote-tested-source-mesh-v3
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      BRANCH: feat/authoritative-source-mesh-v3
+    steps:
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feat/authoritative-source-mesh-v3
+          fetch-depth: 0
+          persist-credentials: true
+      - id: pr
+        shell: bash
+        run: |
+          set -euo pipefail
+          p="$(gh pr list --repo "$REPOSITORY" --state open --head "$BRANCH" --json number,headRefOid,baseRefName,isDraft)"
+          test "$(jq 'length' <<<"$p")" -eq 1
+          test "$(jq -r '.[0].baseRefName' <<<"$p")" = main
+          test "$(jq -r '.[0].isDraft' <<<"$p")" = false
+          test "$(jq -r '.[0].headRefOid' <<<"$p")" = "$(git rev-parse HEAD)"
+          echo "number=$(jq -r '.[0].number' <<<"$p")" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+      - name: Run repository-owned source and runtime contracts
+        env:
+          SENTRA_SIGNING_KEY: ci-source-mesh-key-not-used-in-production
+          SZL_SOURCE_REVISION: ${{ github.sha }}
+          SZL_STATE_PATH: /tmp/szl-source-mesh-recovery.sqlite3
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f tests/test_authoritative_source_mesh.py
+          test -f docs/AUTHORITATIVE_SOURCE_MESH.md
+          python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt -r requirements-test.txt
+          python -m pip check
+          python -m compileall -q deploy tools tests
+          python -m pytest tests -q
+          grep -Rqs 'STALE_LAST_GOOD' deploy/szl_verticals tests
+          grep -Rqs 'AUTH_REQUIRED' deploy/szl_verticals tests
+          grep -Rqs 'production_source_ready' deploy/szl_verticals tests
+          grep -Rqs 'effectors_enabled' deploy/szl_verticals tests
+          grep -Rqs 'human_approval_required' deploy/szl_verticals tests
+      - id: finalize
+        shell: bash
+        run: |
+          set -euo pipefail
+          find .github/workflows -maxdepth 1 -type f -name 'zz-*' -print -delete
+          find docs -maxdepth 1 -type f -name '.*' ! -name '.gitkeep' -print -delete
+          git add -A
+          git config user.name "Lutar, Stephen P."
+          git config user.email "stephenlutar2@gmail.com"
+          if ! git diff --cached --quiet; then
+            git commit -s -m "chore(sources): finalize tested source mesh"
+            git push origin HEAD:"$BRANCH"
+          fi
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Wait for exact final head
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          EXPECTED_HEAD: ${{ steps.finalize.outputs.head }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          accepted='["success","neutral","skipped"]'
+          for attempt in $(seq 1 180); do
+            p="$(gh pr view "$PR_NUMBER" --repo "$REPOSITORY" --json headRefOid,isDraft,reviewDecision)"
+            test "$(jq -r '.headRefOid' <<<"$p")" = "$EXPECTED_HEAD"
+            test "$(jq -r '.isDraft' <<<"$p")" = false
+            test "$(jq -r '.reviewDecision // ""' <<<"$p")" != CHANGES_REQUESTED
+            c="$(gh api "/repos/$REPOSITORY/commits/$EXPECTED_HEAD/check-runs?per_page=100")"
+            total="$(jq '.check_runs|length' <<<"$c")"
+            pending="$(jq '[.check_runs[]|select(.status!="completed")]|length' <<<"$c")"
+            failed="$(jq --argjson accepted "$accepted" '[.check_runs[]|select(.status=="completed" and ((.conclusion as $x | $accepted|index($x))==null))]|length' <<<"$c")"
+            test "$failed" -eq 0
+            if [ "$total" -ge 3 ] && [ "$pending" -eq 0 ]; then break; fi
+            test "$attempt" -lt 180
+            sleep 15
+          done
+      - name: Require resolved review threads
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${REPOSITORY%/*}"; repo="${REPOSITORY#*/}"
+          n="$(gh api graphql -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}' -f owner="$owner" -f repo="$repo" -F number="$PR_NUMBER" --jq '[.data.repository.pullRequest.reviewThreads.nodes[]|select(.isResolved==false)]|length')"
+          test "$n" -eq 0
+      - name: Normal protected squash merge
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          EXPECTED_HEAD: ${{ steps.finalize.outputs.head }}
+        run: gh pr merge "$PR_NUMBER" --repo "$REPOSITORY" --squash --match-head-commit "$EXPECTED_HEAD" --delete-branch
