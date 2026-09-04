@@ -11,7 +11,10 @@ FORMULAS: dict[str, dict[str, Any]] = {
         "source_repository": "szl-holdings/szl-formulas",
         "source_formula": "lambda_aggregate",
         "status": "ADVISORY",
-        "proof_boundary": "Lambda uniqueness remains Conjecture 1 (open); never treated as proven trust.",
+        "proof_boundary": (
+            "Lambda uniqueness remains Conjecture 1 (open); never treated as "
+            "proven trust."
+        ),
     },
     "szl.receipt_hash": {
         "name": "Canonical observation receipt",
@@ -70,7 +73,9 @@ FORMULAS: dict[str, dict[str, Any]] = {
     },
     "killinchu.voyage_risk": {
         "name": "Bounded maritime anomaly score",
-        "equation": "min(1, 0.3·dark_gaps + 0.4·speed_anomaly + 0.05·slow_fixes)",
+        "equation": (
+            "min(1, 0.3·dark_gaps + 0.4·speed_anomaly + 0.05·slow_fixes)"
+        ),
         "implementation": "szl_verticals.vessels._assess_vessel",
         "status": "MODELED_ADVISORY",
     },
@@ -100,9 +105,31 @@ FORMULAS: dict[str, dict[str, Any]] = {
     },
     "finance.signal_gate": {
         "name": "PURIQ signal gate",
-        "equation": "LONG if m>0.02∧σ<0.60; SHORT if m<-0.02; else FLAT",
+        "equation": (
+            "LONG if m>0.02∧σ<0.60; SHORT if m<-0.02; else FLAT"
+        ),
         "implementation": "szl_verticals.finance._finance_metrics",
         "status": "ADVISORY_THRESHOLD",
+    },
+    "finance.market_entropy": {
+        "name": "Binary prediction-market entropy",
+        "equation": "H(p) = -p·log₂(p) - (1-p)·log₂(1-p)",
+        "implementation": "szl_verticals.domain_math.binary_entropy",
+        "status": "TESTED_TRANSFORM",
+        "proof_boundary": (
+            "Entropy summarizes quoted market uncertainty; it is not a forecast "
+            "guarantee or trading instruction."
+        ),
+    },
+    "finance.probability_edge": {
+        "name": "Probability displacement from neutral reference",
+        "equation": "edge(p, r) = clamp(p,0,1) - clamp(r,0,1)",
+        "implementation": "szl_verticals.domain_math.probability_edge",
+        "status": "TESTED_TRANSFORM",
+        "proof_boundary": (
+            "The default reference r=0.5 is descriptive. It does not establish "
+            "mispricing or expected profit."
+        ),
     },
     "terra.price_per_sqft": {
         "name": "Price per square foot",
@@ -121,6 +148,18 @@ FORMULAS: dict[str, dict[str, Any]] = {
         "equation": "σ_comp = pstdev(PPSF_comps)",
         "implementation": "szl_verticals.terra.terra_analysis",
         "status": "MODELED",
+    },
+    "terra.distress_load": {
+        "name": "Weighted property-condition load",
+        "equation": (
+            "D = (1·A + 2·B + 4·C) / (4·max(1,A+B+C))"
+        ),
+        "implementation": "szl_verticals.domain_math.weighted_distress_load",
+        "status": "MODELED_ADVISORY",
+        "proof_boundary": (
+            "HPD classes are public condition signals, not a valuation, "
+            "discrimination, or person-level prospecting score."
+        ),
     },
     "counsel.deadline_slack": {
         "name": "Deadline slack",
