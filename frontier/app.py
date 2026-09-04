@@ -742,6 +742,20 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/build-info":
                 self._send_json(HTTPStatus.OK, build_info())
                 return
+            if path == "/api/fashion":
+                self._send_json(
+                    HTTPStatus.OK,
+                    {
+                        "schema": "szl.fashion-lineage/v1",
+                        "rule": REGISTRY.get("fashion_rule"),
+                        "truth": "REPORTED",
+                        "lanes": [
+                            {"id": row["slug"], **row.get("fashion", {})}
+                            for row in REGISTRY["verticals"]
+                        ],
+                    },
+                )
+                return
             if path == "/api/v1/verticals":
                 self._send_json(
                     HTTPStatus.OK,

@@ -32,25 +32,79 @@
         "layout": "decision-ribbon",
         "instrument": "proof-lattice",
         "motion": "slow-orbit",
-        "palette": ["#090B10", "#F3EEE4", "#D97757", "#8FA9C6", "#2A313C"],
+        "palette": [
+          "#090B10",
+          "#F3EEE4",
+          "#D97757",
+          "#8FA9C6",
+          "#2A313C"
+        ],
         "type_voice": "editorial-command",
         "hero": "Every consequential decision should be reconstructable.",
         "interaction": "compose a proposal, inspect policy gates, bind a human decision, verify the receipt"
       },
       "models": [
-        {"id": "SZLHOLDINGS/szl-nemo", "role": "planner", "execution": "PROPOSAL_ONLY"},
-        {"id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2", "role": "receipt-composer", "execution": "PROPOSAL_ONLY"}
+        {
+          "id": "SZLHOLDINGS/szl-nemo",
+          "role": "planner",
+          "execution": "PROPOSAL_ONLY"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2",
+          "role": "receipt-composer",
+          "execution": "PROPOSAL_ONLY"
+        }
       ],
       "kernels": [
-        {"id": "SZLHOLDINGS/szl-invariants", "role": "policy-invariants"},
-        {"id": "SZLHOLDINGS/szl-lambda-gate", "role": "advisory-routing"},
-        {"id": "SZLHOLDINGS/governed-inference-meter", "role": "inference-receipts"}
+        {
+          "id": "SZLHOLDINGS/szl-invariants",
+          "role": "policy-invariants"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-lambda-gate",
+          "role": "advisory-routing"
+        },
+        {
+          "id": "SZLHOLDINGS/governed-inference-meter",
+          "role": "inference-receipts"
+        }
       ],
       "sources": [
-        {"id": "github-estate", "host": "api.github.com", "mode": "PUBLIC_OR_TOKEN", "freshness": "LIVE", "purpose": "source revisions and workflow evidence"},
-        {"id": "hf-estate", "host": "huggingface.co", "mode": "PUBLIC", "freshness": "LIVE", "purpose": "model, kernel, dataset, and Space metadata"}
+        {
+          "id": "github-estate",
+          "host": "api.github.com",
+          "mode": "PUBLIC_OR_TOKEN",
+          "freshness": "LIVE",
+          "purpose": "source revisions and workflow evidence"
+        },
+        {
+          "id": "hf-estate",
+          "host": "huggingface.co",
+          "mode": "PUBLIC",
+          "freshness": "LIVE",
+          "purpose": "model, kernel, dataset, and Space metadata"
+        }
       ],
-      "prohibited": ["self-authorization", "silent policy bypass", "fabricated evidence", "unreceipted consequential action"]
+      "prohibited": [
+        "self-authorization",
+        "silent policy bypass",
+        "fabricated evidence",
+        "unreceipted consequential action"
+      ],
+      "fashion": {
+        "job": "governed decision fabric that binds proposal, policy, human, receipt",
+        "leader": "Palantir Foundry / Gotham operator loop",
+        "tweak": "deny-by-default, locked-eight formulas, no model authority",
+        "official_source": "https://github.com/szl-holdings/a11oy",
+        "szl_software": [
+          "a11oy",
+          "szl-formulas",
+          "governed-receipt-spec"
+        ],
+        "sources": [
+          "https://github.com/szl-holdings/a11oy"
+        ]
+      }
     },
     {
       "slug": "killinchu",
@@ -62,26 +116,87 @@
         "layout": "theater-map",
         "instrument": "orbital-maritime-radar",
         "motion": "sweep-and-track",
-        "palette": ["#04080A", "#D8F7E8", "#4EE0A0", "#E0A95A", "#17313A"],
+        "palette": [
+          "#04080A",
+          "#D8F7E8",
+          "#4EE0A0",
+          "#E0A95A",
+          "#17313A"
+        ],
         "type_voice": "tactical-precise",
         "hero": "See the theater. Bound the decision. Preserve the evidence.",
         "interaction": "select a track, inspect provenance, run a simulation, send only an advisory recommendation to a human operator"
       },
       "models": [
-        {"id": "SZLHOLDINGS/A11OY-MINI", "role": "bounded-analyst", "execution": "PROPOSAL_ONLY"},
-        {"id": "SZLHOLDINGS/szl-nemo", "role": "mission-planner", "execution": "PROPOSAL_ONLY"}
+        {
+          "id": "SZLHOLDINGS/A11OY-MINI",
+          "role": "bounded-analyst",
+          "execution": "PROPOSAL_ONLY"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-nemo",
+          "role": "mission-planner",
+          "execution": "PROPOSAL_ONLY"
+        }
       ],
       "kernels": [
-        {"id": "SZLHOLDINGS/szl-blocked", "role": "hard-deny-controls"},
-        {"id": "SZLHOLDINGS/szl-invariants", "role": "mission-invariants"},
-        {"id": "SZLHOLDINGS/szl-lambda-gate", "role": "advisory-risk-routing"}
+        {
+          "id": "SZLHOLDINGS/szl-blocked",
+          "role": "hard-deny-controls"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-invariants",
+          "role": "mission-invariants"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-lambda-gate",
+          "role": "advisory-risk-routing"
+        }
       ],
       "sources": [
-        {"id": "noaa-ais-2025", "host": "coast.noaa.gov", "mode": "PUBLIC", "freshness": "HISTORICAL", "purpose": "official historical AIS planning data"},
-        {"id": "uscg-navcen", "host": "navcen.uscg.gov", "mode": "PUBLIC", "freshness": "REFERENCE", "purpose": "official AIS and navigation reference"},
-        {"id": "ofac-sanctions", "host": "sanctionslistservice.ofac.treas.gov", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "sanctions screening source"}
+        {
+          "id": "noaa-ais-2025",
+          "host": "coast.noaa.gov",
+          "mode": "PUBLIC",
+          "freshness": "HISTORICAL",
+          "purpose": "official historical AIS planning data"
+        },
+        {
+          "id": "uscg-navcen",
+          "host": "navcen.uscg.gov",
+          "mode": "PUBLIC",
+          "freshness": "REFERENCE",
+          "purpose": "official AIS and navigation reference"
+        },
+        {
+          "id": "ofac-sanctions",
+          "host": "sanctionslistservice.ofac.treas.gov",
+          "mode": "PUBLIC",
+          "freshness": "PUBLISHED",
+          "purpose": "sanctions screening source"
+        }
       ],
-      "prohibited": ["public weapon command", "autonomous target selection", "live effector control", "covert access", "claiming historical AIS is live"]
+      "prohibited": [
+        "public weapon command",
+        "autonomous target selection",
+        "live effector control",
+        "covert access",
+        "claiming historical AIS is live"
+      ],
+      "fashion": {
+        "job": "sensor-fusion C2 and kill-chain compression",
+        "leader": "Anduril Lattice / JIATF-401",
+        "tweak": "ROE-gated synthetic tracks, DSSE per interdiction, no public effector",
+        "official_source": "NOAA / USCG historical AIS metadata",
+        "szl_software": [
+          "killinchu",
+          "szl-invariants",
+          "chaski"
+        ],
+        "sources": [
+          "https://www.anduril.com/news/jiatf-401-selects-lattice-as-enterprise-tactical-command-and-control-platform-for-c-uas"
+        ]
+      }
     },
     {
       "slug": "lyte",
@@ -93,25 +208,79 @@
         "layout": "signal-waterfall",
         "instrument": "outcome-topology",
         "motion": "pulse-and-cascade",
-        "palette": ["#07111C", "#EAF8FF", "#51C8FF", "#B7F36B", "#233349"],
+        "palette": [
+          "#07111C",
+          "#EAF8FF",
+          "#51C8FF",
+          "#B7F36B",
+          "#233349"
+        ],
         "type_voice": "high-signal-observability",
         "hero": "Telemetry becomes useful when it can explain an outcome.",
         "interaction": "trace a signal through service, commitment, owner, decision, and verified outcome"
       },
       "models": [
-        {"id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2", "role": "incident-narrative", "execution": "PROPOSAL_ONLY"},
-        {"id": "SZLHOLDINGS/szl-nemo", "role": "outcome-reasoner", "execution": "PROPOSAL_ONLY"}
+        {
+          "id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2",
+          "role": "incident-narrative",
+          "execution": "PROPOSAL_ONLY"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-nemo",
+          "role": "outcome-reasoner",
+          "execution": "PROPOSAL_ONLY"
+        }
       ],
       "kernels": [
-        {"id": "SZLHOLDINGS/governed-inference-meter", "role": "cost-and-energy-receipts"},
-        {"id": "SZLHOLDINGS/szl-governed-norm", "role": "signal-normalization"},
-        {"id": "SZLHOLDINGS/szl-invariants", "role": "slo-and-policy-invariants"}
+        {
+          "id": "SZLHOLDINGS/governed-inference-meter",
+          "role": "cost-and-energy-receipts"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-governed-norm",
+          "role": "signal-normalization"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-invariants",
+          "role": "slo-and-policy-invariants"
+        }
       ],
       "sources": [
-        {"id": "github-actions", "host": "api.github.com", "mode": "PUBLIC_OR_TOKEN", "freshness": "LIVE", "purpose": "workflow execution telemetry"},
-        {"id": "opentelemetry", "host": "opentelemetry.io", "mode": "OPERATOR_CONNECTED", "freshness": "LIVE_WHEN_CONNECTED", "purpose": "traces, metrics, and logs"}
+        {
+          "id": "github-actions",
+          "host": "api.github.com",
+          "mode": "PUBLIC_OR_TOKEN",
+          "freshness": "LIVE",
+          "purpose": "workflow execution telemetry"
+        },
+        {
+          "id": "opentelemetry",
+          "host": "opentelemetry.io",
+          "mode": "OPERATOR_CONNECTED",
+          "freshness": "LIVE_WHEN_CONNECTED",
+          "purpose": "traces, metrics, and logs"
+        }
       ],
-      "prohibited": ["fabricated telemetry", "automatic production mutation", "declaring root cause without evidence", "conflating correlation and causation"]
+      "prohibited": [
+        "fabricated telemetry",
+        "automatic production mutation",
+        "declaring root cause without evidence",
+        "conflating correlation and causation"
+      ],
+      "fashion": {
+        "job": "instrument, collect, export, then diagnose",
+        "leader": "Grafana + OpenTelemetry + Honeycomb question-driven debug",
+        "tweak": "bounded loop-tax, receipted spans, outcome after action",
+        "official_source": "GitHub Actions execution telemetry",
+        "szl_software": [
+          "lyte-services",
+          "szl-ouroboros",
+          "A11OY-MINI"
+        ],
+        "sources": [
+          "https://grafana.com/docs/loki/latest/send-data/otel/otel-collector-getting-started/"
+        ]
+      }
     },
     {
       "slug": "sentra",
@@ -123,26 +292,87 @@
         "layout": "exposure-graph",
         "instrument": "blast-radius-prism",
         "motion": "scan-and-collapse",
-        "palette": ["#07070C", "#EEF2FF", "#7AA2FF", "#E66BFF", "#26263A"],
+        "palette": [
+          "#07070C",
+          "#EEF2FF",
+          "#7AA2FF",
+          "#E66BFF",
+          "#26263A"
+        ],
         "type_voice": "forensic-command",
         "hero": "Prioritize the path an attacker can use, not the count a scanner can produce.",
         "interaction": "open an exposure path, inspect exploit and asset evidence, stage a remediation plan, verify closure"
       },
       "models": [
-        {"id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2", "role": "remediation-drafter", "execution": "PROPOSAL_ONLY"},
-        {"id": "SZLHOLDINGS/A11OY-MINI", "role": "evidence-summarizer", "execution": "PROPOSAL_ONLY"}
+        {
+          "id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2",
+          "role": "remediation-drafter",
+          "execution": "PROPOSAL_ONLY"
+        },
+        {
+          "id": "SZLHOLDINGS/A11OY-MINI",
+          "role": "evidence-summarizer",
+          "execution": "PROPOSAL_ONLY"
+        }
       ],
       "kernels": [
-        {"id": "SZLHOLDINGS/szl-blocked", "role": "prohibited-action-gate"},
-        {"id": "SZLHOLDINGS/szl-invariants", "role": "security-invariants"},
-        {"id": "SZLHOLDINGS/szl-lambda-gate", "role": "advisory-prioritization"}
+        {
+          "id": "SZLHOLDINGS/szl-blocked",
+          "role": "prohibited-action-gate"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-invariants",
+          "role": "security-invariants"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-lambda-gate",
+          "role": "advisory-prioritization"
+        }
       ],
       "sources": [
-        {"id": "cisa-kev", "host": "www.cisa.gov", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "known exploited vulnerabilities"},
-        {"id": "nvd", "host": "services.nvd.nist.gov", "mode": "PUBLIC_OR_KEY", "freshness": "PUBLISHED", "purpose": "CVE and CVSS enrichment"},
-        {"id": "github-advisories", "host": "api.github.com", "mode": "PUBLIC_OR_TOKEN", "freshness": "LIVE", "purpose": "repository advisory evidence"}
+        {
+          "id": "cisa-kev",
+          "host": "www.cisa.gov",
+          "mode": "PUBLIC",
+          "freshness": "PUBLISHED",
+          "purpose": "known exploited vulnerabilities"
+        },
+        {
+          "id": "nvd",
+          "host": "services.nvd.nist.gov",
+          "mode": "PUBLIC_OR_KEY",
+          "freshness": "PUBLISHED",
+          "purpose": "CVE and CVSS enrichment"
+        },
+        {
+          "id": "github-advisories",
+          "host": "api.github.com",
+          "mode": "PUBLIC_OR_TOKEN",
+          "freshness": "LIVE",
+          "purpose": "repository advisory evidence"
+        }
       ],
-      "prohibited": ["exploit execution", "credential collection", "unauthorized scanning", "automatic destructive remediation"]
+      "prohibited": [
+        "exploit execution",
+        "credential collection",
+        "unauthorized scanning",
+        "automatic destructive remediation"
+      ],
+      "fashion": {
+        "job": "harness-time allow / log / escalate / deny",
+        "leader": "CrowdStrike Baywatch + Credo Agent Governor",
+        "tweak": "eight-plus deny-by-default gates and HMAC/DSSE verdicts, not a compliance dashboard",
+        "official_source": "CISA Known Exploited Vulnerabilities",
+        "szl_software": [
+          "immune",
+          "szl-govsign",
+          "szl-provctl"
+        ],
+        "sources": [
+          "https://www.crowdstrike.com/en-us/blog/secure-agent-harness-execution-preventing-escape/",
+          "https://www.credo.ai/ai-agent-registry"
+        ]
+      }
     },
     {
       "slug": "terra",
@@ -154,26 +384,86 @@
         "layout": "parcel-stack",
         "instrument": "terrain-ledger",
         "motion": "layer-and-reveal",
-        "palette": ["#10100D", "#F4F0E6", "#C77B4F", "#84BFA3", "#3A382E"],
+        "palette": [
+          "#10100D",
+          "#F4F0E6",
+          "#C77B4F",
+          "#84BFA3",
+          "#3A382E"
+        ],
         "type_voice": "cartographic-editorial",
         "hero": "Every parcel carries a history, a constraint set, and an opportunity surface.",
         "interaction": "select a parcel, peel ownership and public-record layers, calculate bounded scenarios, build a diligence packet"
       },
       "models": [
-        {"id": "SZLHOLDINGS/szl-nemo", "role": "diligence-planner", "execution": "PROPOSAL_ONLY"},
-        {"id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2", "role": "record-summarizer", "execution": "PROPOSAL_ONLY"}
+        {
+          "id": "SZLHOLDINGS/szl-nemo",
+          "role": "diligence-planner",
+          "execution": "PROPOSAL_ONLY"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2",
+          "role": "record-summarizer",
+          "execution": "PROPOSAL_ONLY"
+        }
       ],
       "kernels": [
-        {"id": "SZLHOLDINGS/szl-governed-norm", "role": "parcel-feature-normalization"},
-        {"id": "SZLHOLDINGS/szl-lambda-gate", "role": "advisory-opportunity-routing"},
-        {"id": "SZLHOLDINGS/szl-invariants", "role": "diligence-invariants"}
+        {
+          "id": "SZLHOLDINGS/szl-governed-norm",
+          "role": "parcel-feature-normalization"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-lambda-gate",
+          "role": "advisory-opportunity-routing"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-invariants",
+          "role": "diligence-invariants"
+        }
       ],
       "sources": [
-        {"id": "nyc-pluto", "host": "data.cityofnewyork.us", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "official parcel and land-use records"},
-        {"id": "fema", "host": "hazards.fema.gov", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "flood hazard context"},
-        {"id": "census", "host": "api.census.gov", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "demographic and economic context"}
+        {
+          "id": "nyc-pluto",
+          "host": "data.cityofnewyork.us",
+          "mode": "PUBLIC",
+          "freshness": "PUBLISHED",
+          "purpose": "official parcel and land-use records"
+        },
+        {
+          "id": "fema",
+          "host": "hazards.fema.gov",
+          "mode": "PUBLIC",
+          "freshness": "PUBLISHED",
+          "purpose": "flood hazard context"
+        },
+        {
+          "id": "census",
+          "host": "api.census.gov",
+          "mode": "PUBLIC",
+          "freshness": "PUBLISHED",
+          "purpose": "demographic and economic context"
+        }
       ],
-      "prohibited": ["fair-housing protected-class targeting", "automated lending decisions", "claiming estimated value as appraisal", "concealing source age"]
+      "prohibited": [
+        "fair-housing protected-class targeting",
+        "automated lending decisions",
+        "claiming estimated value as appraisal",
+        "concealing source age"
+      ],
+      "fashion": {
+        "job": "parcel as the join key for civic and property context",
+        "leader": "Regrid",
+        "tweak": "PLUTO observations stay separate from modeled cap-rate; absence is UNAVAILABLE",
+        "official_source": "NYC PLUTO",
+        "szl_software": [
+          "szl-real-estate",
+          "ReceiptAgent-Nano"
+        ],
+        "sources": [
+          "https://regrid.com/mcp",
+          "https://www.nyc.gov/content/planning/pages/resources/datasets/mappluto-pluto-change"
+        ]
+      }
     },
     {
       "slug": "puriq",
@@ -185,27 +475,94 @@
         "layout": "research-terminal",
         "instrument": "thesis-tape",
         "motion": "tick-and-reconcile",
-        "palette": ["#06101A", "#F1F6F8", "#E4B65B", "#55D6BE", "#21313F"],
+        "palette": [
+          "#06101A",
+          "#F1F6F8",
+          "#E4B65B",
+          "#55D6BE",
+          "#21313F"
+        ],
         "type_voice": "analytical-terminal",
         "hero": "A thesis is only as useful as the evidence that could falsify it.",
         "interaction": "open a filing, extract claims, link macro context, record assumptions, watch confirming and disconfirming evidence"
       },
       "models": [
-        {"id": "SZLHOLDINGS/szl-nemo", "role": "research-planner", "execution": "PROPOSAL_ONLY"},
-        {"id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2", "role": "filing-extractor", "execution": "PROPOSAL_ONLY"}
+        {
+          "id": "SZLHOLDINGS/szl-nemo",
+          "role": "research-planner",
+          "execution": "PROPOSAL_ONLY"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2",
+          "role": "filing-extractor",
+          "execution": "PROPOSAL_ONLY"
+        }
       ],
       "kernels": [
-        {"id": "SZLHOLDINGS/szl-invariants", "role": "research-invariants"},
-        {"id": "SZLHOLDINGS/szl-lambda-gate", "role": "advisory-thesis-routing"},
-        {"id": "SZLHOLDINGS/governed-inference-meter", "role": "research-run-receipts"}
+        {
+          "id": "SZLHOLDINGS/szl-invariants",
+          "role": "research-invariants"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-lambda-gate",
+          "role": "advisory-thesis-routing"
+        },
+        {
+          "id": "SZLHOLDINGS/governed-inference-meter",
+          "role": "research-run-receipts"
+        }
       ],
       "sources": [
-        {"id": "sec-submissions", "host": "data.sec.gov", "mode": "PUBLIC_WITH_USER_AGENT", "freshness": "PUBLISHED", "purpose": "issuer filing history"},
-        {"id": "sec-companyfacts", "host": "data.sec.gov", "mode": "PUBLIC_WITH_USER_AGENT", "freshness": "PUBLISHED", "purpose": "XBRL company facts"},
-        {"id": "treasury-fiscal-data", "host": "api.fiscaldata.treasury.gov", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "official fiscal and exchange-rate data"},
-        {"id": "fred", "host": "api.stlouisfed.org", "mode": "API_KEY", "freshness": "PUBLISHED", "purpose": "macroeconomic series"}
+        {
+          "id": "sec-submissions",
+          "host": "data.sec.gov",
+          "mode": "PUBLIC_WITH_USER_AGENT",
+          "freshness": "PUBLISHED",
+          "purpose": "issuer filing history"
+        },
+        {
+          "id": "sec-companyfacts",
+          "host": "data.sec.gov",
+          "mode": "PUBLIC_WITH_USER_AGENT",
+          "freshness": "PUBLISHED",
+          "purpose": "XBRL company facts"
+        },
+        {
+          "id": "treasury-fiscal-data",
+          "host": "api.fiscaldata.treasury.gov",
+          "mode": "PUBLIC",
+          "freshness": "PUBLISHED",
+          "purpose": "official fiscal and exchange-rate data"
+        },
+        {
+          "id": "fred",
+          "host": "api.stlouisfed.org",
+          "mode": "API_KEY",
+          "freshness": "PUBLISHED",
+          "purpose": "macroeconomic series"
+        }
       ],
-      "prohibited": ["trade execution", "personalized investment advice", "guaranteed return claims", "fabricated market data", "using stale filings without disclosure"]
+      "prohibited": [
+        "trade execution",
+        "personalized investment advice",
+        "guaranteed return claims",
+        "fabricated market data",
+        "using stale filings without disclosure"
+      ],
+      "fashion": {
+        "job": "formula governance over public signals",
+        "leader": "category invented here",
+        "tweak": "execute canonical-formulas-v1; Yuyay-13 fail-closed; Lambda remains Conjecture 1",
+        "official_source": "public market and filing signals only when fetched",
+        "szl_software": [
+          "puriq-live",
+          "khipu-r3",
+          "canonical-formulas-v1"
+        ],
+        "sources": [
+          "https://github.com/szl-holdings/puriq-live"
+        ]
+      }
     },
     {
       "slug": "prism",
@@ -217,26 +574,86 @@
         "layout": "citation-rail",
         "instrument": "matter-chronology",
         "motion": "annotate-and-bind",
-        "palette": ["#12100F", "#F8F3EA", "#8F3342", "#526A8A", "#3B302D"],
+        "palette": [
+          "#12100F",
+          "#F8F3EA",
+          "#8F3342",
+          "#526A8A",
+          "#3B302D"
+        ],
         "type_voice": "legal-editorial",
         "hero": "Every conclusion should point back to authority, fact, and jurisdiction.",
         "interaction": "build a chronology, attach authority, mark disputed facts, calculate deadlines, prepare a human-reviewed work product"
       },
       "models": [
-        {"id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2", "role": "citation-and-matter-composer", "execution": "PROPOSAL_ONLY"},
-        {"id": "SZLHOLDINGS/szl-nemo", "role": "issue-spotting-planner", "execution": "PROPOSAL_ONLY"}
+        {
+          "id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2",
+          "role": "citation-and-matter-composer",
+          "execution": "PROPOSAL_ONLY"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-nemo",
+          "role": "issue-spotting-planner",
+          "execution": "PROPOSAL_ONLY"
+        }
       ],
       "kernels": [
-        {"id": "SZLHOLDINGS/szl-invariants", "role": "jurisdiction-and-citation-invariants"},
-        {"id": "SZLHOLDINGS/szl-blocked", "role": "unauthorized-practice-and-action-gate"},
-        {"id": "SZLHOLDINGS/szl-lambda-gate", "role": "advisory-priority-routing"}
+        {
+          "id": "SZLHOLDINGS/szl-invariants",
+          "role": "jurisdiction-and-citation-invariants"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-blocked",
+          "role": "unauthorized-practice-and-action-gate"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-lambda-gate",
+          "role": "advisory-priority-routing"
+        }
       ],
       "sources": [
-        {"id": "federal-register", "host": "www.federalregister.gov", "mode": "PUBLIC", "freshness": "PUBLISHED", "purpose": "federal rules and notices"},
-        {"id": "congress", "host": "api.congress.gov", "mode": "API_KEY", "freshness": "PUBLISHED", "purpose": "legislative materials"},
-        {"id": "courtlistener", "host": "www.courtlistener.com", "mode": "PUBLIC_OR_TOKEN", "freshness": "PUBLISHED", "purpose": "case-law research enrichment"}
+        {
+          "id": "federal-register",
+          "host": "www.federalregister.gov",
+          "mode": "PUBLIC",
+          "freshness": "PUBLISHED",
+          "purpose": "federal rules and notices"
+        },
+        {
+          "id": "congress",
+          "host": "api.congress.gov",
+          "mode": "API_KEY",
+          "freshness": "PUBLISHED",
+          "purpose": "legislative materials"
+        },
+        {
+          "id": "courtlistener",
+          "host": "www.courtlistener.com",
+          "mode": "PUBLIC_OR_TOKEN",
+          "freshness": "PUBLISHED",
+          "purpose": "case-law research enrichment"
+        }
       ],
-      "prohibited": ["legal advice without licensed review", "filing or deadline action without human confirmation", "invented citations", "cross-jurisdiction assumptions hidden from the user"]
+      "prohibited": [
+        "legal advice without licensed review",
+        "filing or deadline action without human confirmation",
+        "invented citations",
+        "cross-jurisdiction assumptions hidden from the user"
+      ],
+      "fashion": {
+        "job": "agentic legal work grounded in an authority stack",
+        "leader": "Harvey + Thomson Reuters CoCounsel",
+        "tweak": "Ayllu 11-seat council, debate-then-converge, LICENSE_REQUIRED hard block, no legal advice",
+        "official_source": "Federal Register",
+        "szl_software": [
+          "ayllu",
+          "szl-lambda-gate"
+        ],
+        "sources": [
+          "https://www.harvey.ai/",
+          "https://legal.thomsonreuters.com/en/products/cocounsel-legal"
+        ]
+      }
     },
     {
       "slug": "anatomy",
@@ -248,24 +665,74 @@
         "layout": "organ-body",
         "instrument": "living-system-map",
         "motion": "breath-and-synapse",
-        "palette": ["#0C0A0D", "#F4EDEA", "#B84A62", "#4DB7A5", "#332A35"],
+        "palette": [
+          "#0C0A0D",
+          "#F4EDEA",
+          "#B84A62",
+          "#4DB7A5",
+          "#332A35"
+        ],
         "type_voice": "biological-systems",
         "hero": "A healthy model is not enough. The whole decision body must be healthy.",
         "interaction": "inspect organs, injure a dependency, observe propagation, verify the fail-closed receipt"
       },
       "models": [
-        {"id": "SZLHOLDINGS/szl-nemo", "role": "system-explainer", "execution": "PROPOSAL_ONLY"}
+        {
+          "id": "SZLHOLDINGS/szl-nemo",
+          "role": "system-explainer",
+          "execution": "PROPOSAL_ONLY"
+        }
       ],
       "kernels": [
-        {"id": "SZLHOLDINGS/szl-kernels", "role": "portable-organ-runtime"},
-        {"id": "SZLHOLDINGS/szl-invariants", "role": "body-invariants"},
-        {"id": "SZLHOLDINGS/governed-inference-meter", "role": "energy-and-runtime-observation"}
+        {
+          "id": "SZLHOLDINGS/szl-kernels",
+          "role": "portable-organ-runtime"
+        },
+        {
+          "id": "SZLHOLDINGS/szl-invariants",
+          "role": "body-invariants"
+        },
+        {
+          "id": "SZLHOLDINGS/governed-inference-meter",
+          "role": "energy-and-runtime-observation"
+        }
       ],
       "sources": [
-        {"id": "runtime-health", "host": "localhost", "mode": "OPERATOR_CONNECTED", "freshness": "LIVE_WHEN_CONNECTED", "purpose": "organ and dependency health"},
-        {"id": "opentelemetry", "host": "opentelemetry.io", "mode": "OPERATOR_CONNECTED", "freshness": "LIVE_WHEN_CONNECTED", "purpose": "traces, metrics, and logs"}
+        {
+          "id": "runtime-health",
+          "host": "localhost",
+          "mode": "OPERATOR_CONNECTED",
+          "freshness": "LIVE_WHEN_CONNECTED",
+          "purpose": "organ and dependency health"
+        },
+        {
+          "id": "opentelemetry",
+          "host": "opentelemetry.io",
+          "mode": "OPERATOR_CONNECTED",
+          "freshness": "LIVE_WHEN_CONNECTED",
+          "purpose": "traces, metrics, and logs"
+        }
       ],
-      "prohibited": ["sentience claims", "fabricated health", "automatic recovery with consequential side effects", "model self-authorization"]
+      "prohibited": [
+        "sentience claims",
+        "fabricated health",
+        "automatic recovery with consequential side effects",
+        "model self-authorization"
+      ],
+      "fashion": {
+        "job": "living-systems map of organs, evidence flow, and fail-closed gates",
+        "leader": "clinical anatomy atlases / observability service maps",
+        "tweak": "five public bodies over six engines, receipts not dashboards",
+        "official_source": "https://github.com/szl-holdings/anatomy",
+        "szl_software": [
+          "anatomy",
+          "a11oy"
+        ],
+        "sources": [
+          "https://github.com/szl-holdings/anatomy"
+        ]
+      }
     }
-  ]
+  ],
+  "fashion_rule": "Take the job the field leader already won. Rewrite the mechanism with SZL formulas, receipts, and honest labels. Never take their name, chrome, datasets, or code."
 }
