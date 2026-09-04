@@ -1,18 +1,40 @@
 name: CI
-on:
+
+"on":
   push:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
+    name: Python contract suite
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
         with:
-          python-version: "3.12"
-      - run: python -m pip install --upgrade pip
-      - run: pip install -r requirements.txt -r requirements-test.txt
-      - run: python -m compileall services deploy
-      - run: python -m pytest tests -q
+          egress-policy: audit
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+      - name: Install runtime and test dependencies
+        run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt -r requirements-test.txt
+      - name: Compile and test
+        env:
+          SENTRA_SIGNING_KEY: ci-contract-key-not-used-in-production
+          SZL_SOURCE_REVISION: ${{ github.sha }}
+          SZL_STATE_PATH: /tmp/szl-vertical-services-ci.sqlite3
+        run: |
+          python -m pip check
+          python -m compileall -q services deploy tools tests
+          python -m pytest tests -q

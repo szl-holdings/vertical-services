@@ -1,4 +1,4 @@
-name: Vertical Services — test, publish, and attest
+name: Vertical Services — test, publish, probe, and attest
 
 "on":
   push:
@@ -7,18 +7,20 @@ name: Vertical Services — test, publish, and attest
       - .github/workflows/hf-space.yml
       - deploy/**
       - requirements.txt
+      - requirements-test.txt
       - README.md
       - tests/**
-      - tools/szl_frontier_payload.py
+      - tools/**
   pull_request:
     branches: [main]
     paths:
       - .github/workflows/hf-space.yml
       - deploy/**
       - requirements.txt
+      - requirements-test.txt
       - README.md
       - tests/**
-      - tools/szl_frontier_payload.py
+      - tools/**
   workflow_dispatch: {}
 
 permissions:
@@ -40,9 +42,68 @@ jobs:
       fail-on-zizmor-warning: false
 
   test:
-    name: Test six-engine runtime
+    name: Test operational fabric
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+      - name: Install pinned runtime and test dependencies
+        run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt -r requirements-test.txt
+      - name: Compile and run contract tests
+        env:
+          SENTRA_SIGNING_KEY: ci-test-key-not-used-in-production
+          SZL_SOURCE_REVISION: ${{ github.sha }}
+          SZL_STATE_PATH: /tmp/szl-vertical-services-test.sqlite3
+        run: |
+          python -m pip check
+          python -m compileall -q deploy tools tests
+          python -m pytest tests -q
+      - name: Build container and close local smoke routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$GITHUB_SHA" > deploy/source_revision.txt
+          docker build --file deploy/Dockerfile --tag szl-vertical-services:test .
+          cid="$(docker run --detach --publish 127.0.0.1:7860:7860 \
+            --env SENTRA_SIGNING_KEY=container-test-key-not-used-in-production \
+            --env SZL_STATE_PATH=/tmp/szl-vertical-services.sqlite3 \
+            szl-vertical-services:test)"
+          trap 'docker logs "$cid" || true; docker rm --force "$cid" >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:7860/readyz >/dev/null; then break; fi
+            if [ "$attempt" -eq 30 ]; then echo '::error::container readiness did not converge'; exit 1; fi
+            sleep 1
+          done
+          for path in \
+            / /healthz /readyz /api/build-info /api/catalog /api/verticals \
+            /sentra/healthz /lyte/healthz /killinchu/healthz /vessels/healthz \
+            /finance/healthz /terra/healthz /counsel/healthz \
+            /api/verticals/sentra/anatomy /api/verticals/lyte/formulas \
+            /api/verticals/killinchu/connectors /api/verticals/finance/readyz \
+            /api/verticals/terra/anatomy /api/verticals/counsel/formulas; do
+            curl --fail --silent --show-error "http://127.0.0.1:7860${path}" >/dev/null
+          done
+
+  backend-contract:
+    name: Backend contract — ${{ matrix.vertical }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        vertical: [sentra, lyte, killinchu, finance, terra, counsel]
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
@@ -59,37 +120,17 @@ jobs:
           python-version: '3.12.10'
       - name: Install pinned runtime
         run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt
-      - name: Compile and run contract tests
+      - name: Verify canonical vertical
         env:
-          SENTRA_SIGNING_KEY: ci-test-key-not-used-in-production
+          SENTRA_SIGNING_KEY: ci-matrix-key-not-used-in-production
           SZL_SOURCE_REVISION: ${{ github.sha }}
-        run: |
-          python -m pip check
-          python -m compileall -q deploy tools tests
-          python -m unittest discover -s tests -v
-      - name: Build container and close live smoke routes
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s\n' "$GITHUB_SHA" > deploy/source_revision.txt
-          docker build --file deploy/Dockerfile --tag szl-vertical-services:test .
-          cid="$(docker run --detach --publish 127.0.0.1:7860:7860 \
-            --env SENTRA_SIGNING_KEY=container-test-key-not-used-in-production \
-            szl-vertical-services:test)"
-          trap 'docker logs "$cid" || true; docker rm --force "$cid" >/dev/null 2>&1 || true' EXIT
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent --show-error http://127.0.0.1:7860/readyz >/dev/null; then break; fi
-            if [ "$attempt" -eq 30 ]; then echo '::error::container readiness did not converge'; exit 1; fi
-            sleep 1
-          done
-          for path in / /healthz /readyz /api/build-info /sentra/healthz /lyte/healthz /vessels/healthz /finance/healthz /terra/healthz /counsel/healthz; do
-            curl --fail --silent --show-error "http://127.0.0.1:7860${path}" >/dev/null
-          done
+          SZL_STATE_PATH: /tmp/szl-${{ matrix.vertical }}.sqlite3
+        run: python tools/verify_vertical_backend.py --vertical "${{ matrix.vertical }}"
 
   ensure-sentra-secret:
     name: Ensure persistent Sentra signing secret
     if: github.event_name != 'pull_request'
-    needs: test
+    needs: [test, backend-contract]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -126,7 +167,7 @@ jobs:
                   repo_id=repo_id,
                   key="SENTRA_SIGNING_KEY",
                   value=secrets.token_hex(32),
-                  description="Persistent HMAC key for Sentra verdict receipts; generated once by governed CI.",
+                  description="Persistent HMAC key for Sentra and Killinchu defense verdict receipts; generated once by governed CI.",
               )
               print("SENTRA_SIGNING_KEY created; value was never printed or written to disk.")
           PY
@@ -134,7 +175,7 @@ jobs:
   publish:
     name: Publish exact source and attest live state
     if: github.event_name != 'pull_request'
-    needs: [test, ensure-sentra-secret]
+    needs: [test, backend-contract, ensure-sentra-secret]
     uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@c889276e51e7d954c4bba8b216f86fc7577721fa
     with:
       hf-repo: SZLHOLDINGS/vertical-services
@@ -148,6 +189,42 @@ jobs:
       require-default-branch-tip: true
       restart-space: true
       wait-running: 1200
-      smoke-paths: '["/","/healthz","/readyz","/api/build-info","/sentra/healthz","/lyte/healthz","/vessels/healthz","/finance/healthz","/terra/healthz","/counsel/healthz"]'
+      smoke-paths: '["/","/healthz","/readyz","/api/build-info","/api/catalog","/api/verticals","/sentra/healthz","/lyte/healthz","/killinchu/healthz","/vessels/healthz","/finance/healthz","/terra/healthz","/counsel/healthz","/api/verticals/sentra/anatomy","/api/verticals/lyte/formulas","/api/verticals/killinchu/connectors","/api/verticals/finance/readyz","/api/verticals/terra/anatomy","/api/verticals/counsel/formulas"]'
     secrets:
       HF_TOKEN: ${{ secrets.HF_ORG_TOKEN || secrets.HF_ORG_TOKEN1 || secrets.HF_TOKEN || secrets.HF_WRITE_TOKEN }}
+
+  probe-live-official-sources:
+    name: Probe required official sources through deployed runtime
+    if: github.event_name != 'pull_request'
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+      - name: Install pinned probe client
+        run: python -m pip install --disable-pip-version-check --no-cache-dir 'httpx==0.28.1'
+      - name: Observe all required sources and close receipts
+        run: |
+          python tools/probe_live_verticals.py \
+            --base-url https://szlholdings-vertical-services.hf.space \
+            --output artifacts/live-connector-probe.json
+      - name: Upload live connector receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: vertical-services-live-connector-probe-${{ github.run_id }}
+          path: artifacts/live-connector-probe.json
+          if-no-files-found: error
+          retention-days: 30
