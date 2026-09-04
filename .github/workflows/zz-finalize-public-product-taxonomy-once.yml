@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Finalize public product taxonomy once
+
+"on":
+  push:
+    branches: [fix/public-product-taxonomy-20260904]
+    paths:
+      - .github/workflows/zz-finalize-public-product-taxonomy-once.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: align-public-product-taxonomy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout current taxonomy branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/public-product-taxonomy-20260904
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+
+      - name: Complete transaction when the earlier writer did not land
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! grep -Fq '"product": "Killinchu · Defend"' deploy/szl_verticals/profiles.py; then
+            python scripts/apply_public_product_taxonomy.py
+          fi
+
+      - name: Install and prove the repository-owned closure
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir \
+            -r requirements.txt -r requirements-test.txt
+          python -m pip check
+          python -m compileall -q deploy tools tests
+          SENTRA_SIGNING_KEY=ci-taxonomy-key-not-used-in-production \
+          SZL_SOURCE_REVISION="$(git rev-parse HEAD)" \
+          SZL_STATE_PATH=/tmp/szl-taxonomy.sqlite3 \
+            python -m pytest tests -q
+
+      - name: Prove product topology and no silent IMMUNE collapse
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, "deploy")
+          from szl_verticals.profiles import ALIASES, VERTICALS
+
+          assert ALIASES["aegis"] == "sentra"
+          assert ALIASES["defend"] == "sentra"
+          assert "immune" not in ALIASES
+          profile = VERTICALS["sentra"]
+          assert profile["product"] == "Killinchu · Defend"
+          assert profile["public_space"] == "SZLHOLDINGS/killinchu"
+          assert profile["consolidation"]["aegis_status"] == "PORTFOLIO_LABEL"
+          assert profile["consolidation"]["sentra_status"] == "CAPABILITY_PLANE"
+          assert profile["consolidation"]["immune_status"] == "MIGRATION_REQUIRED"
+          PY
+          grep -Fq 'sentra_independent_public_vertical": False' deploy/app.py
+          grep -Fq 'immune_canonical_runtime": "MIGRATION_REQUIRED"' deploy/app.py
+          git diff --check
+
+      - name: Remove all temporary transaction controls and commit final source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f \
+            .github/workflows/zz-align-public-product-taxonomy-once.yml \
+            .github/workflows/zz-finalize-public-product-taxonomy-once.yml \
+            scripts/apply_public_product_taxonomy.py
+          git config user.name "Lutar, Stephen P."
+          git config user.email "stephenlutar2@gmail.com"
+          git add \
+            deploy/app.py \
+            deploy/szl_verticals/profiles.py \
+            tools/probe_live_verticals.py \
+            docs/VERTICAL_INTELLIGENCE_FABRIC_V1.md \
+            tests/test_frontier_v3.py \
+            tests/test_intelligence_fabric.py
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "No finalization delta" >&2
+            exit 1
+          fi
+          git commit --signoff -m "fix(taxonomy): make Defend a Killinchu capability plane"
+          git push origin HEAD:fix/public-product-taxonomy-20260904
