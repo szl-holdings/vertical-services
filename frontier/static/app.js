@@ -393,6 +393,9 @@
           vertical.category,
           vertical.promise,
           vertical.unserved_wedge,
+          (vertical.fashion && vertical.fashion.job) || "",
+          (vertical.fashion && vertical.fashion.leader) || "",
+          (vertical.fashion && vertical.fashion.tweak) || "",
           vertical.experience.layout,
           vertical.experience.instrument,
           ...vertical.models.map((row) => `${row.id} ${row.role}`),
@@ -485,6 +488,12 @@
       node("h3", { class: "system-name", text: vertical.name }),
       node("p", { class: "system-category", text: vertical.category }),
       node("p", { class: "system-promise", text: vertical.promise }),
+      node("p", {
+        class: "system-fashion",
+        text: vertical.fashion
+          ? `Job: ${vertical.fashion.job} · From ${vertical.fashion.leader} · SZL: ${vertical.fashion.tweak}`
+          : "Fashion lineage UNAVAILABLE",
+      }),
     );
     const bottom = node("div", { class: "system-card-bottom" });
     const bindings = node("div", { class: "system-bindings" });
@@ -525,6 +534,12 @@
       node("h1", { class: "vertical-title", text: vertical.name }),
       node("p", { class: "vertical-hero-line", text: vertical.experience.hero }),
       node("p", { class: "vertical-promise", text: vertical.promise }),
+      node("p", {
+        class: "vertical-fashion",
+        text: vertical.fashion
+          ? `Stolen job: ${vertical.fashion.job}. Leader silhouette: ${vertical.fashion.leader}. SZL tweak: ${vertical.fashion.tweak}.`
+          : "Fashion lineage UNAVAILABLE",
+      }),
     );
     const actions = node("div", { class: "vertical-actions" });
     const runButton = button("Run the evidence cycle", "button button-accent");
