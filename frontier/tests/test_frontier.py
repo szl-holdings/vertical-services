@@ -65,6 +65,11 @@ def test_registry_is_eight_unique_products(app: ModuleType) -> None:
         assert row["sources"]
         assert row["unserved_wedge"]
         assert row["prohibited"]
+        fashion = row["fashion"]
+        assert fashion["job"]
+        assert fashion["leader"]
+        assert fashion["tweak"]
+        assert fashion["official_source"]
 
 
 def test_authority_contract_is_fail_closed(app: ModuleType) -> None:
