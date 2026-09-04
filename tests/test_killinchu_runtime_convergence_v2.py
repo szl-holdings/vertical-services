@@ -118,7 +118,8 @@ def test_existing_engine_payloads_gain_identity_headers_only() -> None:
     assert sentra_response.headers["X-SZL-Canonical-Product"] == "killinchu"
     assert sentra_response.headers["X-SZL-Product-Lobe"] == "aegis"
     assert sentra_response.headers["X-SZL-Standalone-Product"] == "false"
-    assert "ok" in sentra_response.json()
+    assert sentra_response.json()["status"] == "ok"
+    assert sentra_response.json()["service"] == "sentra"
 
     vessels_response = CLIENT.get("/vessels/healthz")
     assert vessels_response.status_code == 200
