@@ -125,7 +125,8 @@ def test_existing_engine_payloads_gain_identity_headers_only() -> None:
     assert vessels_response.status_code == 200
     assert vessels_response.headers["X-SZL-Canonical-Product"] == "killinchu"
     assert vessels_response.headers["X-SZL-Product-Lobe"] == "vessels"
-    assert "ok" in vessels_response.json()
+    assert vessels_response.json()["status"] == "ok"
+    assert vessels_response.json()["service"] == "vessels"
 
     terra_response = CLIENT.get("/terra/healthz")
     assert terra_response.status_code == 200
