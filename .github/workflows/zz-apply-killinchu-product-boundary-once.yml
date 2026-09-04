@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Apply Killinchu product boundary once
+
+on:
+  push:
+    branches: [feat/vertical-intelligence-fabric-v1]
+    paths:
+      - .github/workflows/zz-apply-killinchu-product-boundary-once.yml
+      - tools/apply_killinchu_product_boundary.py
+      - tests/test_public_product_boundary.py
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: killinchu-product-boundary-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  converge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout exact feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Require exact branch identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = feat/vertical-intelligence-fabric-v1
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Set up exact Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+
+      - name: Apply exact idempotent product-boundary transformation
+        run: python tools/apply_killinchu_product_boundary.py
+
+      - name: Install repository-owned test closure
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir \
+            -r requirements.txt -r requirements-test.txt
+          python -m pip check
+
+      - name: Prove public boundary and existing intelligence fabric
+        env:
+          SENTRA_SIGNING_KEY: ci-product-boundary-key-not-production
+          SZL_SOURCE_REVISION: ${{ github.sha }}
+          SZL_STATE_PATH: /tmp/szl-product-boundary.sqlite3
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            tools/apply_killinchu_product_boundary.py \
+            deploy/app.py \
+            deploy/szl_verticals/profiles.py \
+            tests/test_public_product_boundary.py
+          python -m pytest -q \
+            tests/test_public_product_boundary.py \
+            tests/test_intelligence_fabric.py
+          git diff --check
+
+      - name: Commit generated source changes only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add deploy/app.py deploy/szl_verticals/profiles.py
+          if git diff --cached --quiet; then
+            echo "Killinchu product boundary already exact."
+            exit 0
+          fi
+          git diff --cached --check
+          git config user.name "Lutar, Stephen P."
+          git config user.email "stephenlutar2@gmail.com"
+          git commit --signoff -m "feat(estate): bind Sentra engine to Killinchu Defend"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
