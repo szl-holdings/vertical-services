@@ -283,7 +283,19 @@ def catalog() -> dict:
     }
 
 
-_FASHION_PATH = Path(__file__).resolve().parent / "contracts" / "fashion-lineage.v1.json"
+def _fashion_contract_path() -> Path:
+    here = Path(__file__).resolve()
+    candidates = (
+        here.parent / "contracts" / "fashion-lineage.v1.json",
+        here.parents[1] / "contracts" / "fashion-lineage.v1.json",
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError("fashion-lineage.v1.json missing from image and repo")
+
+
+_FASHION_PATH = _fashion_contract_path()
 
 
 @app.get("/api/fashion")
