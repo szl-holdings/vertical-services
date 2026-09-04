@@ -165,7 +165,8 @@ jobs:
             "hf_repository": "SZLHOLDINGS/vertical-services",
             "local_hf_token_available": ${token_available},
             "canonical_writer_repository": "szl-holdings/a11oy",
-            "canonical_writer_workflow": ".github/workflows/hf-publish-vertical-flagships.yml",
+            "canonical_writer_workflow": ".github/workflows/hf-sync.yml",
+            "canonical_writer_job": "publish-vertical-flagships",
             "credential_value_recorded": false,
             "mutation_performed_by_router": false,
             "truth_label": "MEASURED"
@@ -183,7 +184,7 @@ jobs:
           python-version: '3.12.10'
       - name: Install pinned Hugging Face client
         if: steps.route.outputs.mode == 'local'
-        run: python -m pip install --disable-pip-version-check --no-cache-dir 'huggingface_hub==1.10.1'
+        run: python -m pip install --disable-pip-version-check --no-cache-dir 'huggingface_hub==1.14.0'
       - name: Preserve or create the write-only signing secret
         if: steps.route.outputs.mode == 'local'
         shell: bash
@@ -211,7 +212,7 @@ jobs:
           PY
       - name: Upload publication routing receipt
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: vertical-services-publication-routing-${{ github.run_id }}
           path: artifacts/publication-routing.json
@@ -263,7 +264,8 @@ jobs:
             "source_revision": "${GITHUB_SHA}",
             "hf_repository": "SZLHOLDINGS/vertical-services",
             "writer_repository": "szl-holdings/a11oy",
-            "writer_workflow": ".github/workflows/hf-publish-vertical-flagships.yml",
+            "writer_workflow": ".github/workflows/hf-sync.yml",
+            "writer_job": "publish-vertical-flagships",
             "writer_reason": "Hugging Face credentials are intentionally scoped to the established single writer",
             "deployment_claimed": false,
             "credential_value_recorded": false,
@@ -272,7 +274,7 @@ jobs:
           JSON
           echo "Publication authority is delegated; this job does not claim that deployment has occurred."
       - name: Upload delegated authority receipt
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: vertical-services-delegated-publication-${{ github.run_id }}
           path: artifacts/delegated-publication.json
@@ -308,7 +310,7 @@ jobs:
             --output artifacts/live-connector-probe.json
       - name: Upload live connector receipt
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: vertical-services-live-connector-probe-${{ github.run_id }}
           path: artifacts/live-connector-probe.json
