@@ -138,18 +138,20 @@ class VerticalServicesContractTests(unittest.TestCase):
     def test_present_malformed_revision_bindings_fail_closed(self):
         import szl_verticals.core as core
 
-        with (
-            patch.dict(
-                os.environ,
-                {"SZL_SOURCE_REVISION": "malformed-configured-revision"},
-            ),
-            patch.object(core.Path, "read_text", return_value="a" * 40),
-        ):
-            observation = core._revision_observation()
-            self.assertEqual(observation["state"], "INVALID")
-            self.assertEqual(observation["revision"], "UNAVAILABLE")
-            self.assertFalse(observation["bindings_agree"])
-            self.assertEqual(observation["invalid_sources"], ["env"])
+        for configured_value in ("", "   ", "malformed-configured-revision"):
+            with (
+                self.subTest(configured_value=configured_value),
+                patch.dict(
+                    os.environ,
+                    {"SZL_SOURCE_REVISION": configured_value},
+                ),
+                patch.object(core.Path, "read_text", return_value="a" * 40),
+            ):
+                observation = core._revision_observation()
+                self.assertEqual(observation["state"], "INVALID")
+                self.assertEqual(observation["revision"], "UNAVAILABLE")
+                self.assertFalse(observation["bindings_agree"])
+                self.assertEqual(observation["invalid_sources"], ["env"])
 
         with (
             patch.dict(os.environ, {"SZL_SOURCE_REVISION": "b" * 40}),

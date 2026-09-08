@@ -1,8 +1,11 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from tools.resolve_deployable_revision import (
     DEPLOY_TRIGGER_PATHS,
+    require_deployable_revision,
     resolve_deployable_revision,
 )
 from tools.verify_runtime_identity import (
@@ -60,6 +63,8 @@ def test_deployable_revision_paths_match_publisher_triggers():
     assert set(DEPLOY_TRIGGER_PATHS) == set(expected_filters)
     for path_filter in expected_filters.values():
         assert workflow.count(f"- {path_filter}") == 2
+    assert "Validate manual dispatch source selection" in workflow
+    assert '--require-revision "$GITHUB_SHA"' in workflow
 
 
 def _run_git(repo: Path, *args: str) -> str:
@@ -103,8 +108,12 @@ def test_monitor_uses_latest_deployable_main_revision(tmp_path: Path):
     uptime_path.write_text("name: monitor-v2\n", encoding="utf-8")
     _run_git(tmp_path, "add", ".github/workflows/uptime-monitor.yml")
     _run_git(tmp_path, "commit", "-m", "monitor-only revision C")
-    assert _run_git(tmp_path, "rev-parse", "HEAD") != deployable_b
+    monitor_only_c = _run_git(tmp_path, "rev-parse", "HEAD")
+    assert monitor_only_c != deployable_b
     assert resolve_deployable_revision(tmp_path) == deployable_b
+    assert require_deployable_revision(tmp_path, deployable_b) == deployable_b
+    with pytest.raises(RuntimeError, match="outside the deployment path model"):
+        require_deployable_revision(tmp_path, monitor_only_c)
 
 
 def test_stale_live_revision_fails_independent_freshness_check():

@@ -33,8 +33,8 @@ def _revision_observation() -> dict[str, Any]:
     """Observe all supported source bindings and fail closed on disagreement."""
     candidates: list[tuple[str, str]] = []
     invalid_sources: set[str] = set()
-    env_revision = os.environ.get("SZL_SOURCE_REVISION", "").strip().lower()
-    if env_revision:
+    if "SZL_SOURCE_REVISION" in os.environ:
+        env_revision = os.environ["SZL_SOURCE_REVISION"].strip().lower()
         if SHA40.fullmatch(env_revision):
             candidates.append(("env", env_revision))
         else:

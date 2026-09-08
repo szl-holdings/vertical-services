@@ -43,6 +43,20 @@ def resolve_deployable_revision(repo_root: Path) -> str:
     return revision
 
 
+def require_deployable_revision(repo_root: Path, requested_revision: str) -> str:
+    """Reject manual publication of a revision outside the path-trigger model."""
+    requested = requested_revision.strip().lower()
+    if SHA40.fullmatch(requested) is None:
+        raise RuntimeError("required revision is not an exact Git SHA")
+    selected = resolve_deployable_revision(repo_root)
+    if requested != selected:
+        raise RuntimeError(
+            "manual dispatch revision is outside the deployment path model: "
+            f"requested={requested} expected={selected}"
+        )
+    return selected
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -50,8 +64,14 @@ def main() -> int:
         type=Path,
         default=Path(__file__).resolve().parents[1],
     )
+    parser.add_argument("--require-revision")
     args = parser.parse_args()
-    print(resolve_deployable_revision(args.repo_root.resolve()))
+    repo_root = args.repo_root.resolve()
+    if args.require_revision is None:
+        revision = resolve_deployable_revision(repo_root)
+    else:
+        revision = require_deployable_revision(repo_root, args.require_revision)
+    print(revision)
     return 0
 
 
