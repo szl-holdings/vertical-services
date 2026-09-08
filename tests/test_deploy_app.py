@@ -67,11 +67,12 @@ class VerticalServicesContractTests(unittest.TestCase):
             "/api/source",
             "/.well-known/szl-source.json",
         )
+        expected_revision = os.environ["SZL_SOURCE_REVISION"].strip().lower()
         expected = {
             "source_repository": SOURCE_REPOSITORY,
-            "source_revision": "1" * 40,
+            "source_revision": expected_revision,
             "runtime_repository": RUNTIME_REPOSITORY,
-            "runtime_source_revision": "1" * 40,
+            "runtime_source_revision": expected_revision,
             "effectors_enabled": False,
             "human_approval_required": True,
         }
@@ -87,7 +88,7 @@ class VerticalServicesContractTests(unittest.TestCase):
                 }
                 self.assertEqual(identity, expected)
                 self.assertEqual(body["build"]["state"], "OBSERVED")
-                self.assertEqual(body["build"]["revision"], "1" * 40)
+                self.assertEqual(body["build"]["revision"], expected_revision)
                 bodies[path] = body
 
         self.assertEqual(
