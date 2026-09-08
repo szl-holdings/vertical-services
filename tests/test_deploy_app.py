@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -52,6 +53,118 @@ class VerticalServicesContractTests(unittest.TestCase):
         readiness = self.client.get("/readyz")
         self.assertEqual(readiness.status_code, 200)
         self.assertTrue(readiness.json()["ready"])
+
+    def test_runtime_source_identity_routes_have_safe_parity(self):
+        from szl_verticals.core import (
+            RUNTIME_REPOSITORY,
+            RUNTIME_SOURCE_IDENTITY_FIELDS,
+            SOURCE_REPOSITORY,
+        )
+
+        paths = (
+            "/healthz",
+            "/api/build-info",
+            "/api/source",
+            "/.well-known/szl-source.json",
+        )
+        expected_revision = os.environ["SZL_SOURCE_REVISION"].strip().lower()
+        expected = {
+            "source_repository": SOURCE_REPOSITORY,
+            "source_revision": expected_revision,
+            "runtime_repository": RUNTIME_REPOSITORY,
+            "runtime_source_revision": expected_revision,
+            "effectors_enabled": False,
+            "human_approval_required": True,
+        }
+        bodies = {}
+        for path in paths:
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                body = response.json()
+                identity = {
+                    field: body[field]
+                    for field in RUNTIME_SOURCE_IDENTITY_FIELDS
+                }
+                self.assertEqual(identity, expected)
+                self.assertEqual(body["build"]["state"], "OBSERVED")
+                self.assertEqual(body["build"]["revision"], expected_revision)
+                bodies[path] = body
+
+        self.assertEqual(
+            bodies["/api/source"],
+            bodies["/api/build-info"],
+        )
+        self.assertEqual(
+            bodies["/.well-known/szl-source.json"],
+            bodies["/api/build-info"],
+        )
+        self.assertEqual(
+            bodies["/healthz"]["build"],
+            bodies["/api/build-info"]["build"],
+        )
+
+    def test_runtime_source_identity_fails_closed_on_revision_mismatch(self):
+        import szl_verticals.core as core
+
+        observation = {
+            "state": "MISMATCH",
+            "revision": "a" * 40,
+            "bindings_agree": False,
+            "evidence_sources": ["container-file", "env"],
+            "invalid_sources": [],
+        }
+        identity = core.runtime_source_identity(observation)
+        self.assertEqual(identity["source_revision"], "UNAVAILABLE")
+        self.assertEqual(identity["runtime_source_revision"], "UNAVAILABLE")
+        self.assertFalse(identity["effectors_enabled"])
+        self.assertTrue(identity["human_approval_required"])
+
+        with patch.object(core, "_revision_observation", return_value=observation):
+            build = core.build_info()
+            self.assertEqual(build["build"]["revision"], "UNAVAILABLE")
+            self.assertEqual(build["source_revision"], "UNAVAILABLE")
+
+            health = self.client.get("/healthz")
+            self.assertEqual(health.status_code, 200)
+            self.assertFalse(health.json()["ok"])
+            self.assertEqual(health.json()["source_revision"], "UNAVAILABLE")
+
+            readiness = self.client.get("/readyz")
+            self.assertEqual(readiness.status_code, 503)
+            self.assertFalse(readiness.json()["ready"])
+            self.assertEqual(readiness.json()["source_revision"], "UNAVAILABLE")
+
+    def test_present_malformed_revision_bindings_fail_closed(self):
+        import szl_verticals.core as core
+
+        for configured_value in ("", "   ", "malformed-configured-revision"):
+            with (
+                self.subTest(configured_value=configured_value),
+                patch.dict(
+                    os.environ,
+                    {"SZL_SOURCE_REVISION": configured_value},
+                ),
+                patch.object(core.Path, "read_text", return_value="a" * 40),
+            ):
+                observation = core._revision_observation()
+                self.assertEqual(observation["state"], "INVALID")
+                self.assertEqual(observation["revision"], "UNAVAILABLE")
+                self.assertFalse(observation["bindings_agree"])
+                self.assertEqual(observation["invalid_sources"], ["env"])
+
+        with (
+            patch.dict(os.environ, {"SZL_SOURCE_REVISION": "b" * 40}),
+            patch.object(core.Path, "read_text", return_value="not-a-git-sha"),
+        ):
+            observation = core._revision_observation()
+            self.assertEqual(observation["state"], "INVALID")
+            self.assertEqual(observation["revision"], "UNAVAILABLE")
+            self.assertFalse(observation["bindings_agree"])
+            self.assertEqual(
+                observation["invalid_sources"],
+                ["adjacent-file", "container-file"],
+            )
 
     def test_every_canonical_engine_health_route(self):
         for engine in self.module.ENGINES:

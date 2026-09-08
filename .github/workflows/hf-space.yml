@@ -3,24 +3,8 @@ name: Vertical Services — test, publish, probe, and attest
 "on":
   push:
     branches: [main]
-    paths:
-      - .github/workflows/hf-space.yml
-      - deploy/**
-      - requirements.txt
-      - requirements-test.txt
-      - README.md
-      - tests/**
-      - tools/**
   pull_request:
     branches: [main]
-    paths:
-      - .github/workflows/hf-space.yml
-      - deploy/**
-      - requirements.txt
-      - requirements-test.txt
-      - README.md
-      - tests/**
-      - tools/**
   workflow_dispatch: {}
 
 permissions:
@@ -54,11 +38,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12.10'
+      - name: Validate manual dispatch source selection
+        if: github.event_name == 'workflow_dispatch'
+        run: >-
+          python tools/resolve_deployable_revision.py
+          --require-ref "$GITHUB_REF"
+          --require-revision "$GITHUB_SHA"
       - name: Install pinned runtime and test dependencies
         run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt -r requirements-test.txt
       - name: Compile and run contract tests
@@ -87,7 +78,8 @@ jobs:
             sleep 1
           done
           for path in \
-            / /healthz /readyz /api/build-info /api/catalog /api/verticals \
+            / /healthz /readyz /api/build-info /api/source \
+            /.well-known/szl-source.json /api/catalog /api/verticals \
             /sentra/healthz /lyte/healthz /killinchu/healthz /vessels/healthz \
             /finance/healthz /terra/healthz /counsel/healthz \
             /api/verticals/sentra/anatomy /api/verticals/lyte/formulas \
@@ -95,6 +87,9 @@ jobs:
             /api/verticals/terra/anatomy /api/verticals/counsel/formulas; do
             curl --fail --silent --show-error "http://127.0.0.1:7860${path}" >/dev/null
           done
+          python tools/verify_runtime_identity.py \
+            --base-url http://127.0.0.1:7860 \
+            --expected-revision "$GITHUB_SHA"
 
   backend-contract:
     name: Backend contract — ${{ matrix.vertical }}
@@ -129,7 +124,9 @@ jobs:
 
   resolve-publisher:
     name: Resolve canonical Hugging Face writer
-    if: github.event_name != 'pull_request'
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: [test, backend-contract]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -236,7 +233,7 @@ jobs:
       require-default-branch-tip: true
       restart-space: true
       wait-running: 1200
-      smoke-paths: '["/","/healthz","/readyz","/api/build-info","/api/catalog","/api/verticals","/sentra/healthz","/lyte/healthz","/killinchu/healthz","/vessels/healthz","/finance/healthz","/terra/healthz","/counsel/healthz","/api/verticals/sentra/anatomy","/api/verticals/lyte/formulas","/api/verticals/killinchu/connectors","/api/verticals/finance/readyz","/api/verticals/terra/anatomy","/api/verticals/counsel/formulas"]'
+      smoke-paths: '["/","/healthz","/readyz","/api/build-info","/api/source","/.well-known/szl-source.json","/api/catalog","/api/verticals","/sentra/healthz","/lyte/healthz","/killinchu/healthz","/vessels/healthz","/finance/healthz","/terra/healthz","/counsel/healthz","/api/verticals/sentra/anatomy","/api/verticals/lyte/formulas","/api/verticals/killinchu/connectors","/api/verticals/finance/readyz","/api/verticals/terra/anatomy","/api/verticals/counsel/formulas"]'
     secrets:
       HF_TOKEN: ${{ secrets.HF_ORG_TOKEN || secrets.HF_ORG_TOKEN1 || secrets.HF_TOKEN || secrets.HF_WRITE_TOKEN }}
 
@@ -303,6 +300,11 @@ jobs:
           python-version: '3.12.10'
       - name: Install pinned probe client
         run: python -m pip install --disable-pip-version-check --no-cache-dir 'httpx==0.28.1'
+      - name: Verify live source and runtime identity parity
+        run: |
+          python tools/verify_runtime_identity.py \
+            --base-url https://szlholdings-vertical-services.hf.space \
+            --expected-revision "$GITHUB_SHA"
       - name: Observe all required sources and close receipts
         run: |
           python tools/probe_live_verticals.py \

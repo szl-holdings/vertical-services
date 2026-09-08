@@ -5,6 +5,7 @@ import hashlib
 import os
 import re
 import threading
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -14,17 +15,30 @@ from pydantic import BaseModel, ConfigDict
 VERSION = "2.2.0"
 SOURCE_REPOSITORY = "szl-holdings/vertical-services"
 HF_REPOSITORY = "SZLHOLDINGS/vertical-services"
+RUNTIME_REPOSITORY = SOURCE_REPOSITORY
 ENGINES = ("sentra", "lyte", "killinchu", "finance", "terra", "counsel")
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 STATE_LOCK = threading.RLock()
+RUNTIME_SOURCE_IDENTITY_FIELDS = (
+    "source_repository",
+    "source_revision",
+    "runtime_repository",
+    "runtime_source_revision",
+    "effectors_enabled",
+    "human_approval_required",
+)
 
 
 def _revision_observation() -> dict[str, Any]:
     """Observe all supported source bindings and fail closed on disagreement."""
     candidates: list[tuple[str, str]] = []
-    env_revision = os.environ.get("SZL_SOURCE_REVISION", "").strip().lower()
-    if SHA40.fullmatch(env_revision):
-        candidates.append(("env", env_revision))
+    invalid_sources: set[str] = set()
+    if "SZL_SOURCE_REVISION" in os.environ:
+        env_revision = os.environ["SZL_SOURCE_REVISION"].strip().lower()
+        if SHA40.fullmatch(env_revision):
+            candidates.append(("env", env_revision))
+        else:
+            invalid_sources.add("env")
 
     for label, path in (
         (
@@ -35,40 +49,75 @@ def _revision_observation() -> dict[str, Any]:
     ):
         try:
             revision = path.read_text(encoding="ascii").strip().lower()
-        except OSError:
+        except FileNotFoundError:
+            continue
+        except (OSError, UnicodeError):
+            invalid_sources.add(label)
             continue
         if SHA40.fullmatch(revision):
             candidates.append((label, revision))
+        else:
+            invalid_sources.add(label)
 
     revisions = sorted({revision for _, revision in candidates})
-    if not revisions:
+    if invalid_sources:
+        state, revision = "INVALID", "UNAVAILABLE"
+    elif not revisions:
         state, revision = "UNBOUND", "UNAVAILABLE"
     elif len(revisions) == 1:
         state, revision = "OBSERVED", revisions[0]
     else:
-        state, revision = "MISMATCH", revisions[0]
+        state, revision = "MISMATCH", "UNAVAILABLE"
     return {
         "state": state,
         "revision": revision,
-        "evidence_sources": sorted({label for label, _ in candidates}),
-        "bindings_agree": len(revisions) <= 1,
+        "evidence_sources": sorted(
+            {label for label, _ in candidates} | invalid_sources
+        ),
+        "invalid_sources": sorted(invalid_sources),
+        "bindings_agree": not invalid_sources and len(revisions) <= 1,
+    }
+
+
+def runtime_source_identity(
+    observation: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return this runtime's source tuple without guessing through ambiguity."""
+    observed = _revision_observation() if observation is None else observation
+    candidate = str(observed.get("revision", "")).strip().lower()
+    revision = (
+        candidate
+        if observed.get("state") == "OBSERVED"
+        and observed.get("bindings_agree") is True
+        and SHA40.fullmatch(candidate)
+        else "UNAVAILABLE"
+    )
+    return {
+        "source_repository": SOURCE_REPOSITORY,
+        "source_revision": revision,
+        "runtime_repository": RUNTIME_REPOSITORY,
+        "runtime_source_revision": revision,
+        "effectors_enabled": False,
+        "human_approval_required": True,
     }
 
 
 def build_info() -> dict[str, Any]:
     observation = _revision_observation()
+    identity = runtime_source_identity(observation)
     return {
         "schema": "szl.build-info/v1",
         "service": "szl-vertical-services",
         "version": VERSION,
-        "source_repository": SOURCE_REPOSITORY,
+        **identity,
         "hf_repository": HF_REPOSITORY,
         "build": {
             "state": observation["state"],
-            "revision": observation["revision"],
+            "revision": identity["source_revision"],
         },
         "source_binding": {
             "evidence_sources": observation["evidence_sources"],
+            "invalid_sources": observation["invalid_sources"],
             "bindings_agree": observation["bindings_agree"],
         },
         "receipt_minted": False,

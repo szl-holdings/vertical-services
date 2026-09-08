@@ -13,7 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Poll vertical-services healthz endpoints
+      - name: Checkout exact monitor source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Poll vertical-services identity and health endpoints
         shell: bash
         run: |
           set -euo pipefail
@@ -21,8 +27,12 @@ jobs:
           FAILED=0
           paths=(
             "/healthz"
+            "/api/build-info"
+            "/api/source"
+            "/.well-known/szl-source.json"
             "/sentra/healthz"
             "/lyte/healthz"
+            "/killinchu/healthz"
             "/vessels/healthz"
             "/finance/healthz"
             "/terra/healthz"
@@ -38,6 +48,10 @@ jobs:
             fi
           done
           if [ "$FAILED" -ne 0 ]; then
-            echo "::error::One or more vertical-services healthz endpoints are down"
+            echo "::error::One or more vertical-services identity or health endpoints are down"
             exit 1
           fi
+          EXPECTED_REVISION="$(python tools/resolve_deployable_revision.py)"
+          python tools/verify_runtime_identity.py \
+            --base-url "$BASE" \
+            --expected-revision "$EXPECTED_REVISION"
