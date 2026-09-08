@@ -3,24 +3,8 @@ name: Vertical Services — test, publish, probe, and attest
 "on":
   push:
     branches: [main]
-    paths:
-      - .github/workflows/hf-space.yml
-      - deploy/**
-      - requirements.txt
-      - requirements-test.txt
-      - README.md
-      - tests/**
-      - tools/**
   pull_request:
     branches: [main]
-    paths:
-      - .github/workflows/hf-space.yml
-      - deploy/**
-      - requirements.txt
-      - requirements-test.txt
-      - README.md
-      - tests/**
-      - tools/**
   workflow_dispatch: {}
 
 permissions:
@@ -28,7 +12,7 @@ permissions:
 
 concurrency:
   group: vertical-services-hf-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   validate-workflow:

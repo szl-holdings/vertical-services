@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 
 from tools.resolve_deployable_revision import (
-    DEPLOY_TRIGGER_PATHS,
     require_deployable_revision,
     require_main_ref,
     resolve_deployable_revision,
@@ -48,22 +47,16 @@ def test_uptime_monitor_uses_explicit_paths_without_double_slash_root():
     assert "persist-credentials: false" in workflow
 
 
-def test_deployable_revision_paths_match_publisher_triggers():
+def test_publisher_runs_for_every_main_tip_and_supersedes_obsolete_runs():
     workflow = (ROOT / ".github" / "workflows" / "hf-space.yml").read_text(
         encoding="utf-8"
     )
-    expected_filters = {
-        ".github/workflows/hf-space.yml": ".github/workflows/hf-space.yml",
-        "deploy": "deploy/**",
-        "requirements.txt": "requirements.txt",
-        "requirements-test.txt": "requirements-test.txt",
-        "README.md": "README.md",
-        "tests": "tests/**",
-        "tools": "tools/**",
-    }
-    assert set(DEPLOY_TRIGGER_PATHS) == set(expected_filters)
-    for path_filter in expected_filters.values():
-        assert workflow.count(f"- {path_filter}") == 2
+    trigger_block = workflow.split('"on":', 1)[1].split("\npermissions:", 1)[0]
+    assert "push:" in trigger_block
+    assert "pull_request:" in trigger_block
+    assert "branches: [main]" in trigger_block
+    assert "paths:" not in trigger_block
+    assert "cancel-in-progress: true" in workflow
     assert "Validate manual dispatch source selection" in workflow
     assert '--require-ref "$GITHUB_REF"' in workflow
     assert '--require-revision "$GITHUB_SHA"' in workflow
@@ -80,7 +73,7 @@ def _run_git(repo: Path, *args: str) -> str:
     return completed.stdout.strip()
 
 
-def test_monitor_uses_latest_deployable_main_revision(tmp_path: Path):
+def test_every_main_tip_is_the_deployable_revision(tmp_path: Path):
     _run_git(tmp_path, "init", "-b", "main")
     _run_git(tmp_path, "config", "user.name", "Runtime Identity Test")
     _run_git(tmp_path, "config", "user.email", "runtime-identity@example.invalid")
@@ -113,10 +106,10 @@ def test_monitor_uses_latest_deployable_main_revision(tmp_path: Path):
     _run_git(tmp_path, "commit", "-m", "monitor-only revision C")
     monitor_only_c = _run_git(tmp_path, "rev-parse", "HEAD")
     assert monitor_only_c != deployable_b
-    assert resolve_deployable_revision(tmp_path) == deployable_b
-    assert require_deployable_revision(tmp_path, deployable_b) == deployable_b
-    with pytest.raises(RuntimeError, match="outside the deployment path model"):
-        require_deployable_revision(tmp_path, monitor_only_c)
+    assert resolve_deployable_revision(tmp_path) == monitor_only_c
+    assert require_deployable_revision(tmp_path, monitor_only_c) == monitor_only_c
+    with pytest.raises(RuntimeError, match="does not match the checked-out main tip"):
+        require_deployable_revision(tmp_path, deployable_b)
 
 
 def test_manual_dispatch_rejects_every_non_main_ref():

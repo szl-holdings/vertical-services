@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve the newest first-parent main revision covered by deployment triggers."""
+"""Resolve and validate the exact checked-out default-branch deployment tip."""
 from __future__ import annotations
 
 import argparse
@@ -7,32 +7,20 @@ import re
 import subprocess
 from pathlib import Path
 
-DEPLOY_TRIGGER_PATHS = (
-    ".github/workflows/hf-space.yml",
-    "deploy",
-    "requirements.txt",
-    "requirements-test.txt",
-    "README.md",
-    "tests",
-    "tools",
-)
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 MAIN_REF = "refs/heads/main"
 
 
 def resolve_deployable_revision(repo_root: Path) -> str:
-    """Return the latest first-parent revision changing a deploy-trigger path."""
+    """Return the exact checked-out commit; every main tip is deployable."""
     completed = subprocess.run(
         [
             "git",
             "-C",
             str(repo_root),
-            "log",
-            "--first-parent",
-            "-1",
-            "--format=%H",
-            "--",
-            *DEPLOY_TRIGGER_PATHS,
+            "rev-parse",
+            "--verify",
+            "HEAD^{commit}",
         ],
         check=True,
         capture_output=True,
@@ -40,19 +28,19 @@ def resolve_deployable_revision(repo_root: Path) -> str:
     )
     revision = completed.stdout.strip().lower()
     if SHA40.fullmatch(revision) is None:
-        raise RuntimeError("no exact deploy-trigger revision was found on main history")
+        raise RuntimeError("the checked-out deployment source is not an exact Git SHA")
     return revision
 
 
 def require_deployable_revision(repo_root: Path, requested_revision: str) -> str:
-    """Reject manual publication of a revision outside the path-trigger model."""
+    """Require the event revision to equal the exact checked-out deployment source."""
     requested = requested_revision.strip().lower()
     if SHA40.fullmatch(requested) is None:
         raise RuntimeError("required revision is not an exact Git SHA")
     selected = resolve_deployable_revision(repo_root)
     if requested != selected:
         raise RuntimeError(
-            "manual dispatch revision is outside the deployment path model: "
+            "manual dispatch revision does not match the checked-out main tip: "
             f"requested={requested} expected={selected}"
         )
     return selected
