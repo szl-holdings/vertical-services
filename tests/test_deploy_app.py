@@ -112,6 +112,7 @@ class VerticalServicesContractTests(unittest.TestCase):
             "revision": "a" * 40,
             "bindings_agree": False,
             "evidence_sources": ["container-file", "env"],
+            "invalid_sources": [],
         }
         identity = core.runtime_source_identity(observation)
         self.assertEqual(identity["source_revision"], "UNAVAILABLE")
@@ -133,6 +134,35 @@ class VerticalServicesContractTests(unittest.TestCase):
             self.assertEqual(readiness.status_code, 503)
             self.assertFalse(readiness.json()["ready"])
             self.assertEqual(readiness.json()["source_revision"], "UNAVAILABLE")
+
+    def test_present_malformed_revision_bindings_fail_closed(self):
+        import szl_verticals.core as core
+
+        with (
+            patch.dict(
+                os.environ,
+                {"SZL_SOURCE_REVISION": "malformed-configured-revision"},
+            ),
+            patch.object(core.Path, "read_text", return_value="a" * 40),
+        ):
+            observation = core._revision_observation()
+            self.assertEqual(observation["state"], "INVALID")
+            self.assertEqual(observation["revision"], "UNAVAILABLE")
+            self.assertFalse(observation["bindings_agree"])
+            self.assertEqual(observation["invalid_sources"], ["env"])
+
+        with (
+            patch.dict(os.environ, {"SZL_SOURCE_REVISION": "b" * 40}),
+            patch.object(core.Path, "read_text", return_value="not-a-git-sha"),
+        ):
+            observation = core._revision_observation()
+            self.assertEqual(observation["state"], "INVALID")
+            self.assertEqual(observation["revision"], "UNAVAILABLE")
+            self.assertFalse(observation["bindings_agree"])
+            self.assertEqual(
+                observation["invalid_sources"],
+                ["adjacent-file", "container-file"],
+            )
 
     def test_every_canonical_engine_health_route(self):
         for engine in self.module.ENGINES:

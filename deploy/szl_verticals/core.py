@@ -32,9 +32,13 @@ RUNTIME_SOURCE_IDENTITY_FIELDS = (
 def _revision_observation() -> dict[str, Any]:
     """Observe all supported source bindings and fail closed on disagreement."""
     candidates: list[tuple[str, str]] = []
+    invalid_sources: set[str] = set()
     env_revision = os.environ.get("SZL_SOURCE_REVISION", "").strip().lower()
-    if SHA40.fullmatch(env_revision):
-        candidates.append(("env", env_revision))
+    if env_revision:
+        if SHA40.fullmatch(env_revision):
+            candidates.append(("env", env_revision))
+        else:
+            invalid_sources.add("env")
 
     for label, path in (
         (
@@ -45,13 +49,20 @@ def _revision_observation() -> dict[str, Any]:
     ):
         try:
             revision = path.read_text(encoding="ascii").strip().lower()
-        except OSError:
+        except FileNotFoundError:
+            continue
+        except (OSError, UnicodeError):
+            invalid_sources.add(label)
             continue
         if SHA40.fullmatch(revision):
             candidates.append((label, revision))
+        else:
+            invalid_sources.add(label)
 
     revisions = sorted({revision for _, revision in candidates})
-    if not revisions:
+    if invalid_sources:
+        state, revision = "INVALID", "UNAVAILABLE"
+    elif not revisions:
         state, revision = "UNBOUND", "UNAVAILABLE"
     elif len(revisions) == 1:
         state, revision = "OBSERVED", revisions[0]
@@ -60,8 +71,11 @@ def _revision_observation() -> dict[str, Any]:
     return {
         "state": state,
         "revision": revision,
-        "evidence_sources": sorted({label for label, _ in candidates}),
-        "bindings_agree": len(revisions) <= 1,
+        "evidence_sources": sorted(
+            {label for label, _ in candidates} | invalid_sources
+        ),
+        "invalid_sources": sorted(invalid_sources),
+        "bindings_agree": not invalid_sources and len(revisions) <= 1,
     }
 
 
@@ -103,6 +117,7 @@ def build_info() -> dict[str, Any]:
         },
         "source_binding": {
             "evidence_sources": observation["evidence_sources"],
+            "invalid_sources": observation["invalid_sources"],
             "bindings_agree": observation["bindings_agree"],
         },
         "receipt_minted": False,
