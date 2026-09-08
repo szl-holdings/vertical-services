@@ -113,10 +113,17 @@ plan supplies durable storage.
 - `/` — responsive user, developer, operator, and investor front door
 - `/healthz` — liveness, canonical engine catalog, and state modes
 - `/readyz` — fail-closed estate readiness
-- `/api/build-info` — exact GitHub revision with `build.state=OBSERVED`
-- `/.well-known/szl-source.json` — machine-readable source identity
+- `/api/build-info` — exact source/runtime identity with `build.state=OBSERVED`
+- `/api/source` — compatibility route for the same source/runtime identity
+- `/.well-known/szl-source.json` — well-known route for the same identity
 - `/api/catalog` — canonical runtime and operational-fabric routes
 - `/docs` — OpenAPI explorer
+
+The three machine-readable identity documents and `/healthz` carry the same
+top-level source repository, observed source revision, runtime source repository,
+runtime source revision, disabled-effector boundary, and required-human-approval
+boundary. The provider repository remains separately identified by `hf_repository`.
+An unbound or disagreeing revision is reported as `UNAVAILABLE` rather than guessed.
 
 ## Verification and deployment
 

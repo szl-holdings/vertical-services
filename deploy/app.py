@@ -22,6 +22,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from szl_verticals.core import (
     ENGINES,
+    RUNTIME_SOURCE_IDENTITY_FIELDS,
     SOURCE_REPOSITORY,
     VERSION,
     build_info as _build_info,
@@ -156,9 +157,13 @@ CATALOG = {
 @app.get("/healthz")
 def root_health() -> dict:
     build = _build_info()
+    source_ready = (
+        build["build"]["state"] == "OBSERVED"
+        and build["source_binding"]["bindings_agree"] is True
+    )
     return {
-        "ok": True,
-        "status": "ok",
+        "ok": source_ready,
+        "status": "ok" if source_ready else "source-unavailable",
         "service": "szl-vertical-services",
         "version": VERSION,
         "engines": list(ENGINES),
@@ -198,13 +203,19 @@ def root_health() -> dict:
         "effectors_enabled": False,
         "truth_label": "MEASURED",
         "source": SOURCE_REPOSITORY,
+        **{field: build[field] for field in RUNTIME_SOURCE_IDENTITY_FIELDS},
     }
 
 
 @app.get("/readyz")
 def readiness() -> JSONResponse:
     verticals = {engine: vertical_readiness(engine) for engine in ENGINES}
-    ready = all(item["ready"] for item in verticals.values())
+    build = _build_info()
+    ready = (
+        all(item["ready"] for item in verticals.values())
+        and build["build"]["state"] == "OBSERVED"
+        and build["source_binding"]["bindings_agree"] is True
+    )
     payload = {
         "ready": ready,
         "service": "szl-vertical-services",
@@ -218,7 +229,8 @@ def readiness() -> JSONResponse:
             }
             for engine, item in verticals.items()
         },
-        "build": _build_info()["build"],
+        "build": build["build"],
+        **{field: build[field] for field in RUNTIME_SOURCE_IDENTITY_FIELDS},
         "store": STORE.status(),
         "intelligence_plan_ready": True,
         "inference_requires_operator_model_binding": True,
@@ -232,6 +244,7 @@ def build_info() -> dict:
     return _build_info()
 
 
+@app.get("/api/source")
 @app.get("/.well-known/szl-source.json")
 def source_document() -> dict:
     return _build_info()

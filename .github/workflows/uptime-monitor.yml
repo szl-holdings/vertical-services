@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Poll vertical-services healthz endpoints
+      - name: Poll vertical-services identity and health endpoints
         shell: bash
         run: |
           set -euo pipefail
@@ -21,8 +21,12 @@ jobs:
           FAILED=0
           paths=(
             "/healthz"
+            "/api/build-info"
+            "/api/source"
+            "/.well-known/szl-source.json"
             "/sentra/healthz"
             "/lyte/healthz"
+            "/killinchu/healthz"
             "/vessels/healthz"
             "/finance/healthz"
             "/terra/healthz"
@@ -38,6 +42,6 @@ jobs:
             fi
           done
           if [ "$FAILED" -ne 0 ]; then
-            echo "::error::One or more vertical-services healthz endpoints are down"
+            echo "::error::One or more vertical-services identity or health endpoints are down"
             exit 1
           fi

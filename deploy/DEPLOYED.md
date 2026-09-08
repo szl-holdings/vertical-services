@@ -14,7 +14,7 @@ Canonical engines in `deploy/app.py`:
 | `/terra` | real-estate engine |
 | `/counsel` | PRISM counsel engine |
 
-Do not treat this file as a live occupancy receipt. `/api/build-info` is the single runtime record. Brand on the landing page renders `VERSION` from `szl_verticals.core` (currently `2.2.0`).
+Do not treat this file as a live occupancy receipt. `/api/build-info` is the canonical runtime record; `/api/source` and `/.well-known/szl-source.json` preserve the same identity tuple for compatibility. Brand on the landing page renders `VERSION` from `szl_verticals.core` (currently `2.2.0`).
 
 The governed publisher:
 
