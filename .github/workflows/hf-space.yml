@@ -64,6 +64,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: >-
           python tools/resolve_deployable_revision.py
+          --require-ref "$GITHUB_REF"
           --require-revision "$GITHUB_SHA"
       - name: Install pinned runtime and test dependencies
         run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt -r requirements-test.txt
@@ -139,7 +140,9 @@ jobs:
 
   resolve-publisher:
     name: Resolve canonical Hugging Face writer
-    if: github.event_name != 'pull_request'
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: [test, backend-contract]
     runs-on: ubuntu-latest
     timeout-minutes: 10

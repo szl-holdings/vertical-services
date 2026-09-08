@@ -6,6 +6,7 @@ import pytest
 from tools.resolve_deployable_revision import (
     DEPLOY_TRIGGER_PATHS,
     require_deployable_revision,
+    require_main_ref,
     resolve_deployable_revision,
 )
 from tools.verify_runtime_identity import (
@@ -64,7 +65,9 @@ def test_deployable_revision_paths_match_publisher_triggers():
     for path_filter in expected_filters.values():
         assert workflow.count(f"- {path_filter}") == 2
     assert "Validate manual dispatch source selection" in workflow
+    assert '--require-ref "$GITHUB_REF"' in workflow
     assert '--require-revision "$GITHUB_SHA"' in workflow
+    assert "github.ref == 'refs/heads/main'" in workflow
 
 
 def _run_git(repo: Path, *args: str) -> str:
@@ -114,6 +117,17 @@ def test_monitor_uses_latest_deployable_main_revision(tmp_path: Path):
     assert require_deployable_revision(tmp_path, deployable_b) == deployable_b
     with pytest.raises(RuntimeError, match="outside the deployment path model"):
         require_deployable_revision(tmp_path, monitor_only_c)
+
+
+def test_manual_dispatch_rejects_every_non_main_ref():
+    require_main_ref("refs/heads/main")
+    for ref in (
+        "refs/heads/feature/runtime-identity",
+        "refs/tags/v2.2.0",
+        "refs/pull/33/merge",
+    ):
+        with pytest.raises(RuntimeError, match="restricted to refs/heads/main"):
+            require_main_ref(ref)
 
 
 def test_stale_live_revision_fails_independent_freshness_check():

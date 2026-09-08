@@ -17,6 +17,7 @@ DEPLOY_TRIGGER_PATHS = (
     "tools",
 )
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
+MAIN_REF = "refs/heads/main"
 
 
 def resolve_deployable_revision(repo_root: Path) -> str:
@@ -57,6 +58,14 @@ def require_deployable_revision(repo_root: Path, requested_revision: str) -> str
     return selected
 
 
+def require_main_ref(github_ref: str) -> None:
+    """Reject provider-bound manual dispatch from any non-main ref."""
+    if github_ref != MAIN_REF:
+        raise RuntimeError(
+            f"manual dispatch is restricted to {MAIN_REF}; observed={github_ref}"
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -65,12 +74,18 @@ def main() -> int:
         default=Path(__file__).resolve().parents[1],
     )
     parser.add_argument("--require-revision")
+    parser.add_argument("--require-ref")
     args = parser.parse_args()
     repo_root = args.repo_root.resolve()
-    if args.require_revision is None:
-        revision = resolve_deployable_revision(repo_root)
-    else:
-        revision = require_deployable_revision(repo_root, args.require_revision)
+    try:
+        if args.require_ref is not None:
+            require_main_ref(args.require_ref)
+        if args.require_revision is None:
+            revision = resolve_deployable_revision(repo_root)
+        else:
+            revision = require_deployable_revision(repo_root, args.require_revision)
+    except (RuntimeError, subprocess.CalledProcessError) as exc:
+        parser.error(str(exc))
     print(revision)
     return 0
 
