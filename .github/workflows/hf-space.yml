@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: vertical-services-hf-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   validate-workflow:

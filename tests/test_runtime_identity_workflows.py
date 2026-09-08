@@ -47,7 +47,7 @@ def test_uptime_monitor_uses_explicit_paths_without_double_slash_root():
     assert "persist-credentials: false" in workflow
 
 
-def test_publisher_runs_for_every_main_tip_and_supersedes_obsolete_runs():
+def test_publisher_runs_for_every_main_tip_and_serializes_mutations():
     workflow = (ROOT / ".github" / "workflows" / "hf-space.yml").read_text(
         encoding="utf-8"
     )
@@ -56,7 +56,7 @@ def test_publisher_runs_for_every_main_tip_and_supersedes_obsolete_runs():
     assert "pull_request:" in trigger_block
     assert "branches: [main]" in trigger_block
     assert "paths:" not in trigger_block
-    assert "cancel-in-progress: true" in workflow
+    assert "cancel-in-progress: false" in workflow
     assert "Validate manual dispatch source selection" in workflow
     assert '--require-ref "$GITHUB_REF"' in workflow
     assert '--require-revision "$GITHUB_SHA"' in workflow
