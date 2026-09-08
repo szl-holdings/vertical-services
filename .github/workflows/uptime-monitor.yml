@@ -13,6 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Checkout exact monitor source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - name: Poll vertical-services identity and health endpoints
         shell: bash
         run: |
@@ -45,3 +50,6 @@ jobs:
             echo "::error::One or more vertical-services identity or health endpoints are down"
             exit 1
           fi
+          python tools/verify_runtime_identity.py \
+            --base-url "$BASE" \
+            --expected-revision "$GITHUB_SHA"

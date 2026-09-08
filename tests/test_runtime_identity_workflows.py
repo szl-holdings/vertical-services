@@ -26,3 +26,6 @@ def test_uptime_monitor_uses_explicit_paths_without_double_slash_root():
     assert 'for engine in ""' not in workflow
     assert 'url="${BASE}/${engine}/healthz"' not in workflow
     assert 'url="${BASE}${path}"' in workflow
+    assert "tools/verify_runtime_identity.py" in workflow
+    assert '--expected-revision "$GITHUB_SHA"' in workflow
+    assert "persist-credentials: false" in workflow
