@@ -101,17 +101,39 @@ def validate_identity_documents(
     return failures
 
 
+def discover_deployed_revision(
+    documents: dict[str, dict[str, Any]],
+) -> tuple[str, list[str]]:
+    """Select only an exact revision from the canonical deployed build document."""
+    build_info = documents.get("/api/build-info", {})
+    candidate = str(build_info.get("source_revision", "")).strip().lower()
+    if SHA40.fullmatch(candidate) is None:
+        return (
+            "UNAVAILABLE",
+            ["/api/build-info: deployed source_revision is not an exact Git SHA"],
+        )
+    return candidate, []
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", required=True)
-    parser.add_argument("--expected-revision", required=True)
+    parser.add_argument(
+        "--expected-revision",
+        help=(
+            "exact source revision expected by a deployment transaction; when "
+            "omitted, discover the deployed revision from canonical build-info"
+        ),
+    )
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--attempts", type=int, default=3)
     args = parser.parse_args()
 
-    expected_revision = args.expected_revision.strip().lower()
-    if SHA40.fullmatch(expected_revision) is None:
-        parser.error("--expected-revision must be an exact 40-character Git SHA")
+    expected_revision = None
+    if args.expected_revision is not None:
+        expected_revision = args.expected_revision.strip().lower()
+        if SHA40.fullmatch(expected_revision) is None:
+            parser.error("--expected-revision must be an exact 40-character Git SHA")
     if args.timeout <= 0 or args.attempts <= 0:
         parser.error("--timeout and --attempts must be positive")
 
@@ -127,6 +149,12 @@ def main() -> int:
             )
         except RuntimeError as exc:
             request_failures.append(str(exc))
+
+    revision_source = "explicit-deployment-transaction"
+    if expected_revision is None:
+        revision_source = "deployed-build-info"
+        expected_revision, discovery_failures = discover_deployed_revision(documents)
+        request_failures.extend(discovery_failures)
 
     failures = request_failures + validate_identity_documents(
         documents,
@@ -146,6 +174,7 @@ def main() -> int:
             {
                 "schema": "szl.runtime-identity-verification/v1",
                 "base_url": base_url,
+                "revision_source": revision_source,
                 "required_paths": list(IDENTITY_PATHS),
                 "identity": identity,
                 "complete": True,
