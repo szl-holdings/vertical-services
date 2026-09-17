@@ -12,10 +12,15 @@ import html
 import json
 import math
 import re
+import sqlite3
+import time
 from typing import Any
+from collections.abc import Awaitable, Callable
 
-from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.routing import APIRoute
 from pydantic import Field, field_validator
 
 from .contract import (
@@ -26,10 +31,28 @@ from .contract import (
     formulas_for,
 )
 from .core import SessionScope, StrictModel, build_info
+from .connector_specs import CONNECTORS
+from .evidence import HEX64, resolve_evidence
 from .operational import STORE, vertical_readiness
 from .profiles import ALIASES, VERTICALS
 
-frontier = APIRouter(tags=["frontier-command"])
+class _RedactedValidationRoute(APIRoute):
+    """Keep rejected payloads out of public errors, including invalid Unicode."""
+
+    def get_route_handler(self) -> Callable[[Request], Awaitable[Response]]:
+        handler = super().get_route_handler()
+
+        async def bounded_error(request: Request) -> Response:
+            try:
+                return await handler(request)
+            except RequestValidationError:
+                # Preserve rejection; never echo caller context, handles or tokens.
+                return JSONResponse({"detail": "invalid request"}, status_code=422)
+
+        return bounded_error
+
+
+frontier = APIRouter(tags=["frontier-command"], route_class=_RedactedValidationRoute)
 
 AXIS_ID = re.compile(r"^[a-z][a-z0-9_.-]{1,63}$")
 ACTION_ID = re.compile(r"^[a-z][a-z0-9_.:-]{1,63}$", re.IGNORECASE)
@@ -38,15 +61,16 @@ ACTION_ID = re.compile(r"^[a-z][a-z0-9_.:-]{1,63}$", re.IGNORECASE)
 class HatunEvaluateRequest(StrictModel):
     """Bounded evidence review request.
 
-    Evidence references are converted to digests before they enter the response,
-    so caller-held URLs, document handles, or internal identifiers are not
-    reflected by the public API.
+    Only explicit evidence_sha256 payload digests may resolve ledger evidence.
+    Legacy evidence_refs are hashed for compatibility diagnostics, never used
+    for admission. No caller-held URL or document handle is dereferenced.
     """
 
     intent: str = Field(min_length=1, max_length=240)
     requested_action: str = Field(default="review", min_length=2, max_length=64)
     axes: dict[str, float]
     evidence_refs: list[str] = Field(default_factory=list, max_length=32)
+    evidence_sha256: list[str] = Field(default_factory=list, max_length=32)
 
     @field_validator("intent")
     @classmethod
@@ -54,6 +78,7 @@ class HatunEvaluateRequest(StrictModel):
         value = " ".join(value.split())
         if not value:
             raise ValueError("intent must not be blank")
+        _require_utf8(value)
         return value
 
     @field_validator("requested_action")
@@ -77,6 +102,8 @@ class HatunEvaluateRequest(StrictModel):
                 raise ValueError(f"invalid axis identifier: {key!r}")
             if not math.isfinite(numeric) or numeric < 0.0 or numeric > 1.0:
                 raise ValueError(f"axis {normalized!r} must be finite and within [0,1]")
+            if normalized in clean:
+                raise ValueError("axis identifiers must remain unique after normalization")
             clean[normalized] = numeric
         return clean
 
@@ -88,10 +115,29 @@ class HatunEvaluateRequest(StrictModel):
             normalized = " ".join(str(item).split())
             if not normalized or len(normalized) > 240:
                 raise ValueError("each evidence reference must contain 1-240 characters")
+            _require_utf8(normalized)
             clean.append(normalized)
         if len(clean) != len(set(clean)):
             raise ValueError("evidence references must be unique")
         return clean
+
+
+    @field_validator("evidence_sha256")
+    @classmethod
+    def validate_payload_digests(cls, value: list[str]) -> list[str]:
+        if any(HEX64.fullmatch(item) is None for item in value):
+            raise ValueError("evidence_sha256 requires exact lowercase SHA-256 payload digests")
+        if len(value) != len(set(value)):
+            raise ValueError("evidence_sha256 must be unique")
+        return sorted(value)
+
+
+def _require_utf8(value: str) -> None:
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        # Do not echo an unencodable validation input into a JSON error response.
+        raise HTTPException(422, "invalid request") from None
 
 
 def _evidence_digests(refs: list[str]) -> list[str]:
@@ -128,6 +174,9 @@ def frontier_state(vertical: str) -> dict[str, Any]:
             "decision_states": ["REVIEW", "ABSTAIN"],
             "can_authorize": False,
             "effectors_enabled": False,
+            "evidence_input": "evidence_sha256",
+            "evidence_scope": "EXACT_REQUESTED_PAYLOADS_IN_HASHED_CALLER_SESSION",
+            "legacy_references_qualify": False,
         },
         "aliases": sorted(alias for alias, target in ALIASES.items() if target == canonical),
         "truth_label": "MEASURED",
@@ -148,24 +197,42 @@ def hatun_evaluate(
     """Evaluate evidence for review without authorizing or executing anything."""
     requested = vertical.strip().lower()
     canonical = canonical_vertical(requested)
-    readiness = vertical_readiness(canonical, session_scope=session)
     rollup = advisory_lambda(request.axes)
-    evidence_sha256 = _evidence_digests(request.evidence_refs)
-    observations = STORE.counts(vertical=canonical, session_scope=session)
-
-    blockers: list[str] = []
+    resolved_at = time.time()
+    snapshot = resolve_evidence(
+        STORE, vertical=canonical, session_scope=session,
+        digests=request.evidence_sha256, connectors=CONNECTORS, now=resolved_at,
+    )
+    resolution = snapshot.metadata()
+    blockers: list[str] = list(snapshot.blockers)
+    try:
+        readiness = vertical_readiness(canonical, session_scope=session)
+    except (OSError, RuntimeError, sqlite3.Error):
+        # Readiness uses the historical ledger too; do not expose DB diagnostics.
+        readiness = {"ready": False, "build": build_info()["build"],
+                     "requirements": {"formula_registry_bound": None}}
+        blockers.append("READINESS_UNAVAILABLE")
+    assessed_at = time.time()
+    fresh_at_review = snapshot.fresh_at(assessed_at)
     if not readiness["ready"]:
         blockers.append("VERTICAL_NOT_READY")
-    if not evidence_sha256:
+    if not request.evidence_sha256:
         blockers.append("NO_EVIDENCE_REFERENCES")
-    if observations["observations"] == 0:
+    if request.evidence_refs:
+        blockers.append("LEGACY_REFERENCES_UNRESOLVED")
+    if resolution["resolved_count"] == 0:
         blockers.append("NO_SESSION_OBSERVATIONS")
+    if request.evidence_sha256 and not fresh_at_review:
+        blockers.append("EVIDENCE_NOT_QUALIFIED_AT_REVIEW")
+    if assessed_at < resolved_at:
+        blockers.append("ASSESSMENT_CLOCK_REGRESSED")
     if rollup["score"] < 0.80:
         blockers.append("LAMBDA_BELOW_REVIEW_FLOOR")
+    blockers = sorted(set(blockers))
 
     decision = "REVIEW" if not blockers else "ABSTAIN"
     basis = {
-        "schema": "szl.hatun-review-basis/v1",
+        "schema": "szl.hatun-review-basis/v2",
         "requested_vertical": requested,
         "vertical": canonical,
         "intent": request.intent,
@@ -176,8 +243,16 @@ def hatun_evaluate(
         "source_revision": readiness["build"]["revision"],
         "formula_registry_bound": readiness["requirements"]["formula_registry_bound"],
         "vertical_ready": readiness["ready"],
-        "session_observation_count": observations["observations"],
-        "evidence_ref_sha256": evidence_sha256,
+        # Compatibility count now means resolved requested payloads, not history.
+        "session_observation_count": resolution["resolved_count"],
+        "session_observation_count_unit": resolution["count_unit"],
+        "evidence_ref_sha256": _evidence_digests(request.evidence_refs),
+        "evidence_sha256": list(snapshot.requested_digests),
+        "evidence_resolution": resolution,
+        "evidence_resolved_at": resolved_at,
+        "review_assessed_at": assessed_at,
+        "evidence_fresh_at_review": fresh_at_review,
+        "legacy_references_qualify": False,
         "decision": decision,
         "blockers": blockers,
         "can_authorize": False,
@@ -189,12 +264,13 @@ def hatun_evaluate(
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
+        allow_nan=False,
     )
     return {
         **basis,
         "lambda_advisory": rollup,
         "receipt": {
-            "schema": "szl.hatun-review-receipt/v1",
+            "schema": "szl.hatun-review-receipt/v2",
             "algorithm": "SHA-256",
             "basis_sha256": hashlib.sha256(canonical_basis.encode("utf-8")).hexdigest(),
             "signature_claimed": False,
