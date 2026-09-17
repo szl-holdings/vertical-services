@@ -187,7 +187,7 @@ def test_non_allowlisted_endpoint_is_blocked_without_leaking_token(monkeypatch):
 
 
 def test_exact_operator_binding_can_make_a_plan_ready_without_invoking_network(
-    monkeypatch,
+    monkeypatch, tmp_path,
 ):
     clear_model_env(monkeypatch)
     monkeypatch.setenv(
@@ -198,13 +198,39 @@ def test_exact_operator_binding_can_make_a_plan_ready_without_invoking_network(
     monkeypatch.setenv("SZL_MODEL_PROTOCOL_KHIPU_1_5B", "hf-text-generation")
     monkeypatch.setenv("HF_TOKEN", "test-token-not-returned")
 
+    # Keep the positive path, but satisfy it with real scoped ledger rows rather
+    # than treating two arbitrary hexadecimal strings as observed evidence.
+    import importlib
+    import time
+    from szl_verticals.connector_specs import CONNECTORS
+    from szl_verticals.official_connectors import _receipt
+    from szl_verticals.store import ObservationStore
+
+    runtime = importlib.import_module("szl_verticals.intelligence")
+    monkeypatch.setenv("SZL_STATE_PATH", str(tmp_path / "positive-plan.sqlite3"))
+    ledger = ObservationStore()
+    monkeypatch.setattr(runtime, "STORE", ledger)
+    spec = next(item for item in CONNECTORS.values() if item.vertical == "finance")
     payload = plan_payload(task="scenario-analysis")
+    scope = hashlib.sha256(SESSION_TOKEN.encode("utf-8")).hexdigest()
+    observed = time.time()
+    for index, digest in enumerate(payload["evidence_sha256"]):
+        receipt = _receipt(
+            spec=spec, session_scope=scope,
+            query_hash=hashlib.sha256(str(index).encode()).hexdigest(),
+            source_url="https://example.test/synthetic-finance-fixture",
+            http_status=200, payload_sha256=digest,
+            observed_at=observed, state="OBSERVED",
+        )
+        ledger.put(receipt, {"fixture": index, "classification": "SYNTHETIC_TEST_ONLY"})
     first = CLIENT.post("/api/verticals/finance/intelligence/plan", json=payload)
     second = CLIENT.post("/api/verticals/finance/intelligence/plan", json=payload)
     assert first.status_code == 200
     assert second.status_code == 200
     body = first.json()
     assert body["decision"] == "READY_FOR_INFERENCE"
+    assert body["evidence_resolution"]["state"] == "COMPLETE"
+    assert body["evidence_resolution"]["resolved_count"] == 2
     assert body["selected_model"]["alias"] == "khipu-1.5b"
     assert body["selected_model"]["revision"] == "d" * 40
     assert body["selected_model"]["revision_evidence"] == "OPERATOR_DECLARED"
