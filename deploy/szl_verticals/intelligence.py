@@ -610,12 +610,23 @@ def build_intelligence_plan(
         "source": build_info()["build"],
     }
     basis_sha256 = hashlib.sha256(_canonical_json(basis).encode("utf-8")).hexdigest()
+    replay = {"state": "NOT_TRACKED", "original_decision": basis["decision"]}
+    if basis["decision"] == "READY_FOR_INFERENCE":
+        try:
+            replay = STORE.register_assessment(
+                vertical=canonical, session_scope=session_scope, assessment_id=basis_sha256,
+                kind="intelligence-plan", snapshot=evidence, now=time.time())
+        except (OSError, RuntimeError):
+            raise HTTPException(503, "evidence replay unavailable") from None
+        if replay["state"] != "CURRENT":
+            raise HTTPException(409, "evidence changed during assessment")
     return {
         **basis,
         "receipt": {
             "schema": "szl.vertical-intelligence-plan-receipt/v1",
             "algorithm": "SHA-256",
             "basis_sha256": basis_sha256,
+            "evidence_replay": replay,
             "persistent_signature_claimed": False,
             "session_token_recorded": False,
         },
@@ -662,7 +673,18 @@ async def _invoke_provider(
     canonical: str,
     request: IntelligenceInvokeRequest,
     evidence: EvidenceSnapshot,
+    session_scope: str,
+    assessment_id: str,
 ) -> tuple[str, int]:
+    def require_current_assessment():
+        try:
+            status = STORE.assessment_status(vertical=canonical, session_scope=session_scope,
+                                             assessment_id=assessment_id, now=time.time(), connectors=CONNECTORS)
+        except (OSError, RuntimeError):
+            raise HTTPException(503, "evidence replay unavailable") from None
+        if status is None or status["state"] != "CURRENT":
+            raise HTTPException(409, "evidence assessment requires revalidation")
+
     token = os.environ.get(binding["token_env"], "").strip()
     headers = {
         "Authorization": f"Bearer {token}",
@@ -701,6 +723,10 @@ async def _invoke_provider(
         ) as client:
             if not evidence.fresh_at(time.time()):
                 raise HTTPException(503, "evidence expired before provider dispatch")
+            require_current_assessment()
+            current = _resolve_plan_evidence(canonical, request, session_scope)
+            if current.snapshot_sha256 != evidence.snapshot_sha256:
+                raise HTTPException(409, "evidence changed before provider dispatch")
             response = await client.post(
                 binding["endpoint"], headers=headers, json=provider_payload
             )
@@ -710,6 +736,10 @@ async def _invoke_provider(
             f"model provider unavailable: {exc.__class__.__name__}",
         ) from exc
 
+    require_current_assessment()
+    current = _resolve_plan_evidence(canonical, request, session_scope)
+    if current.snapshot_sha256 != evidence.snapshot_sha256 or not evidence.fresh_at(time.time()):
+        raise HTTPException(409, "evidence changed during provider invocation; output withheld")
     if 300 <= response.status_code < 400:
         raise HTTPException(502, "model provider redirect refused")
     if response.status_code < 200 or response.status_code >= 300:
@@ -777,7 +807,8 @@ async def vertical_intelligence_invoke(
         raise HTTPException(503, detail={"error": "INFERENCE_NOT_READY", "plan": plan})
 
     canonical = plan["vertical"]
-    generated, provider_status = await _invoke_provider(binding, canonical, request, evidence)
+    generated, provider_status = await _invoke_provider(
+        binding, canonical, request, evidence, session, plan["receipt"]["basis_sha256"])
     output_sha256 = hashlib.sha256(generated.encode("utf-8")).hexdigest()
     invocation_basis = {
         "schema": "szl.vertical-intelligence-invocation/v1",

@@ -162,7 +162,8 @@ def resolve_evidence(
                     or row["vertical"] != vertical or row["session_scope"] != session_scope):
                 raise ValueError("unexpected or duplicate scoped row")
             seen.add(payload_digest)
-            if (spec is None or spec.vertical != vertical or row["state"] != "OBSERVED"
+            if (row.get("withdrawn", False)
+                    or spec is None or spec.vertical != vertical or row["state"] != "OBSERVED"
                     or row["truth_label"] != "REPORTED" or type(row["http_status"]) is not int
                     or not 200 <= row["http_status"] < 300):
                 raise ValueError("unqualified connector record")
