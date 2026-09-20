@@ -135,6 +135,15 @@ def resolve_get(path: str) -> tuple[int, str, bytes]:
     )
 
 
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in out:
+            raise ValueError("duplicate JSON object keys are rejected")
+        out[key] = value
+    return out
+
+
 def resolve_post(path: str, body: bytes) -> tuple[int, str, bytes]:
     normalized = unquote(path).rstrip("/") or "/"
     if len(body) > MAX_BODY_BYTES:
@@ -142,8 +151,12 @@ def resolve_post(path: str, body: bytes) -> tuple[int, str, bytes]:
             {"ok": False, "error": "request body exceeds the public boundary"}
         )
     try:
-        payload = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+        payload = json.loads(body.decode("utf-8"), object_pairs_hook=_unique_object)
+    except UnicodeDecodeError:
+        return 400, "application/json; charset=utf-8", _json_bytes(
+            {"ok": False, "error": "body must be valid UTF-8 JSON"}
+        )
+    except (json.JSONDecodeError, ValueError):
         return 400, "application/json; charset=utf-8", _json_bytes(
             {"ok": False, "error": "body must be valid UTF-8 JSON"}
         )
@@ -227,31 +240,47 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         raw_length = self.headers.get("Content-Length")
-        if raw_length is None:
-            self._send(
-                411,
-                "application/json; charset=utf-8",
-                _json_bytes({"ok": False, "error": "Content-Length is required"}),
-            )
-            return
-        try:
-            length = int(raw_length)
-        except ValueError:
+        declared: int | None = None
+        if raw_length is not None:
+            try:
+                declared = int(raw_length)
+            except ValueError:
+                self._send(
+                    400,
+                    "application/json; charset=utf-8",
+                    _json_bytes({"ok": False, "error": "invalid Content-Length"}),
+                )
+                return
+            if declared < 0 or declared > MAX_BODY_BYTES:
+                self._send(
+                    413,
+                    "application/json; charset=utf-8",
+                    _json_bytes({"ok": False, "error": "request body exceeds the public boundary"}),
+                )
+                return
+        body = bytearray()
+        remaining = declared if declared is not None else MAX_BODY_BYTES + 1
+        while remaining > 0:
+            piece = self.rfile.read(min(65536, remaining))
+            if not piece:
+                break
+            if len(body) + len(piece) > MAX_BODY_BYTES:
+                self._send(
+                    413,
+                    "application/json; charset=utf-8",
+                    _json_bytes({"ok": False, "error": "request body exceeds the public boundary"}),
+                )
+                return
+            body.extend(piece)
+            remaining = (declared - len(body)) if declared is not None else (MAX_BODY_BYTES + 1 - len(body))
+        if declared is not None and len(body) != declared:
             self._send(
                 400,
                 "application/json; charset=utf-8",
-                _json_bytes({"ok": False, "error": "invalid Content-Length"}),
+                _json_bytes({"ok": False, "error": "Content-Length does not match the received body"}),
             )
             return
-        if length < 0 or length > MAX_BODY_BYTES:
-            self._send(
-                413,
-                "application/json; charset=utf-8",
-                _json_bytes({"ok": False, "error": "request body exceeds the public boundary"}),
-            )
-            return
-        body = self.rfile.read(length)
-        status, content_type, response = resolve_post(urlsplit(self.path).path, body)
+        status, content_type, response = resolve_post(urlsplit(self.path).path, bytes(body))
         self._send(status, content_type, response)
 
 
