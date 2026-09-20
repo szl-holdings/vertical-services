@@ -30,6 +30,7 @@ from szl_verticals.core import (
 from szl_verticals.counsel import counsel
 from szl_verticals.finance import finance
 from szl_verticals.frontier import frontier
+from szl_verticals.http_bounds import BodyBoundError, error_payload, maybe_parse_json, read_bounded_body
 from szl_verticals.intelligence import intelligence
 from szl_verticals.killinchu import killinchu
 from szl_verticals.killinchu_runtime_contract import (
@@ -53,6 +54,19 @@ app = FastAPI(
         "model and kernel routing, Hatun review, and differentiated command rooms."
     ),
 )
+
+
+@app.middleware("http")
+async def inbound_body_bounds(request: Request, call_next):
+    """Cap inbound bytes and reject illegal JSON before route parsers run."""
+    if request.method in {"POST", "PUT", "PATCH"}:
+        try:
+            body = await read_bounded_body(request)
+            maybe_parse_json(request.headers, body)
+        except BodyBoundError as exc:
+            return JSONResponse(error_payload(exc), status_code=exc.status_code)
+        request._body = body
+    return await call_next(request)
 
 
 @app.middleware("http")

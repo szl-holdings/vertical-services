@@ -172,6 +172,13 @@ def test_unknown_and_malformed_requests_fail_closed() -> None:
     assert status == 413
     assert _decode(body)["ok"] is False
 
+    status, _, body = frontier_app.resolve_post(
+        "/api/vertical-fabric/v1/evaluate",
+        b'{"vertical_id":"lyte","vertical_id":"sentra"}',
+    )
+    assert status == 400
+    assert _decode(body)["ok"] is False
+
 
 def test_http_handler_emits_security_headers() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), frontier_app.Handler)
