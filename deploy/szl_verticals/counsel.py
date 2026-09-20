@@ -11,9 +11,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import Field
 
 from .core import STATE_LOCK, SessionScope, StrictModel
+from .counsel_review import counsel_review
 
 # ----------------------------- counsel ------------------------------------
 counsel = APIRouter(prefix="/counsel", tags=["counsel"])
+counsel.include_router(counsel_review)
 MATTERS: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(dict)
 RECEIPT_CHAIN: Dict[str, Deque[Dict[str, Any]]] = defaultdict(lambda: deque(maxlen=500))
 PREVIOUS_HASH: Dict[str, str] = defaultdict(lambda: "GENESIS")
