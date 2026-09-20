@@ -23,6 +23,8 @@ os.environ.setdefault("SZL_SOURCE_REVISION", "4" * 40)
 os.environ.setdefault("SZL_STATE_PATH", str(Path(_STATE.name) / "frontier.sqlite3"))
 
 from app import app  # noqa: E402
+from szl_verticals.connector_specs import CONNECTORS  # noqa: E402
+from szl_verticals.official_connectors import _receipt  # noqa: E402
 from szl_verticals.domain_math import (  # noqa: E402
     binary_entropy,
     probability_edge,
@@ -241,23 +243,14 @@ def test_hatun_abstains_without_evidence_and_never_authorizes():
 
 def test_hatun_emits_review_only_after_session_evidence_exists():
     now = time.time()
-    STORE.put(
-        {
-            "receipt_id": "f" * 64,
-            "vertical": "finance",
-            "connector_id": "polymarket-markets",
-            "session_scope": SESSION_SCOPE,
-            "query_hash": "e" * 64,
-            "observed_at": now,
-            "expires_at": now + 300,
-            "source_url": "https://gamma-api.polymarket.com/markets?limit=1",
-            "http_status": 200,
-            "payload_sha256": "d" * 64,
-            "truth_label": "REPORTED",
-            "state": "OBSERVED",
-        },
-        {"returned": 1, "mode": "PUBLIC_READ_ONLY"},
+    receipt = _receipt(
+        spec=CONNECTORS["polymarket-markets"], session_scope=SESSION_SCOPE,
+        query_hash="e" * 64,
+        source_url="https://gamma-api.polymarket.com/markets?limit=1",
+        http_status=200, payload_sha256="d" * 64,
+        observed_at=now, state="OBSERVED",
     )
+    STORE.put(receipt, {"returned": 1, "mode": "PUBLIC_READ_ONLY"})
     result = CLIENT.post(
         "/api/verticals/puriq/hatun/evaluate",
         json={
@@ -268,7 +261,7 @@ def test_hatun_emits_review_only_after_session_evidence_exists():
                 "freshness": 0.90,
                 "reversibility": 0.96,
             },
-            "evidence_refs": ["receipt:public-market-example"],
+            "evidence_sha256": [receipt["payload_sha256"]],
         },
     )
     assert result.status_code == 200
@@ -276,7 +269,10 @@ def test_hatun_emits_review_only_after_session_evidence_exists():
     assert body["decision"] == "REVIEW"
     assert body["vertical"] == "finance"
     assert body["session_observation_count"] >= 1
-    assert len(body["evidence_ref_sha256"][0]) == 64
+    assert body["evidence_sha256"] == [receipt["payload_sha256"]]
+    assert body["evidence_resolution"]["resolved_count"] == 1
+    assert body["evidence_ref_sha256"] == []
+    assert body["evidence_fresh_at_review"] is True
     assert body["receipt"]["raw_evidence_references_recorded"] is False
     assert body["effectors_enabled"] is False
     assert "Conjecture 1" in body["lambda_status"]

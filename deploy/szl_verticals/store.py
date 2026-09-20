@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import threading
 import time
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 class ObservationStore:
     """Small bounded observation ledger.
@@ -51,6 +52,8 @@ class ObservationStore:
                     );
                     CREATE INDEX IF NOT EXISTS idx_connector_cache
                     ON connector_observations(vertical, connector_id, session_scope, query_hash, expires_at);
+                    CREATE INDEX IF NOT EXISTS idx_connector_evidence
+                    ON connector_observations(vertical, session_scope, payload_sha256, observed_at DESC);
                     CREATE INDEX IF NOT EXISTS idx_connector_recent
                     ON connector_observations(vertical, session_scope, observed_at DESC);
                     """
@@ -153,6 +156,50 @@ class ObservationStore:
             item["summary"] = json.loads(item.pop("summary_json"))
             output.append(item)
         return output
+
+    def resolve_payloads(
+        self, *, vertical: str, session_scope: str, payload_digests: Sequence[str],
+        max_summary_bytes: int = 128_000,
+    ) -> list[dict[str, Any]]:
+        """Return at most one latest row per requested digest in one read snapshot.
+
+        This is a lookup, not admission: freshness/receipt/connector validation is
+        performed by evidence.resolve_evidence. An invalid latest row never
+        silently falls back to historical data. No cross-scope query is issued.
+        """
+        if (not isinstance(vertical, str) or not vertical
+                or not isinstance(session_scope, str) or not session_scope
+                or isinstance(payload_digests, (str, bytes)) or len(payload_digests) > 64
+                or any(not isinstance(item, str) or re.fullmatch(r"[0-9a-f]{64}", item) is None
+                       for item in payload_digests)
+                or type(max_summary_bytes) is not int or not 1 <= max_summary_bytes <= 128_000):
+            raise ValueError("invalid bounded evidence lookup")
+        if self.error:
+            raise RuntimeError("evidence store unavailable")
+        try:
+            with self._lock, closing(self._connect()) as connection:
+                connection.execute("BEGIN")
+                connection.execute("SELECT receipt_id FROM connector_observations LIMIT 0")
+                result: list[dict[str, Any]] = []
+                for digest in sorted(set(payload_digests)):
+                    row = connection.execute(
+                        """
+                        SELECT receipt_id, vertical, connector_id, session_scope, query_hash,
+                               observed_at, expires_at, source_url, http_status, payload_sha256,
+                               truth_label, state,
+                               CASE WHEN length(CAST(summary_json AS BLOB)) <= ?
+                                    THEN summary_json ELSE NULL END AS summary_json
+                        FROM connector_observations
+                        WHERE vertical=? AND session_scope=? AND payload_sha256=?
+                        ORDER BY observed_at DESC, receipt_id ASC LIMIT 1
+                        """,
+                        (max_summary_bytes, vertical, session_scope, digest),
+                    ).fetchone()
+                    if row is not None:
+                        result.append(dict(row))
+                return result
+        except (OSError, sqlite3.Error) as exc:
+            raise RuntimeError("evidence store unavailable") from exc
 
     def counts(self, *, vertical: str, session_scope: str | None = None) -> dict[str, int]:
         if self.error:
