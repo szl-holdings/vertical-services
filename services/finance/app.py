@@ -1,101 +1,150 @@
-import collections
-import math
-import statistics
-import time
+"""
+PURIQ Finance Engine v2 — FastAPI surface.
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+Advisory-only, paper-only. Every computation carries the five-state honesty
+contract (MEASURED / BLOCKED / INVALID / FAILED / PROMOTED) and appends a
+hash-chained UNSIGNED_HONEST receipt. Nothing here is financial advice.
 
-app = FastAPI(title="PURIQ Finance")
-BOOK = collections.defaultdict(list)
-now = time.time()
-for sym, base in {"SZLX": 412.0, "A11Y": 87.5, "PURIQ": 26.4, "TRRA": 153.2}.items():
-    price = base
-    for i in range(60, 0, -1):
-        price *= 1 + 0.004 * math.sin(i * 0.7 + base)
-        BOOK[sym].append({"ts": now - i * 86400, "px": round(price, 4)})
-
-
-class Observation(BaseModel):
-    symbol: str
-    price: float
-    ts: float | None = None
-
-
-def analytics(symbol):
-    prices = [row["px"] for row in BOOK[symbol]]
-    rets = [(b - a) / a for a, b in zip(prices, prices[1:])]
-    peak = prices[0]
-    mdd = 0
-    for price in prices:
-        peak = max(peak, price)
-        mdd = min(mdd, (price - peak) / peak)
-    vol = statistics.pstdev(rets) * math.sqrt(252) if len(rets) > 2 else 0
-    mom = (prices[-1] - prices[-6]) / prices[-6] if len(prices) > 6 else 0
-    return {
-        "symbol": symbol,
-        "last": prices[-1],
-        "points": len(prices),
-        "ann_vol": round(vol, 4),
-        "max_drawdown": round(mdd, 4),
-        "momentum_5p": round(mom, 4),
-        "signal": "RISK_OFF" if mdd < -0.12 else "ACCUMULATE" if mom > 0.02 else "HOLD",
-        "truth": {"price": "SAMPLE", "derived": "MODELED"},
-    }
-
-
-DASH = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PURIQ Finance</title>
-<style>
-body{margin:0;background:#04140c;color:#b7f7c8;font:13px/1.4 ui-monospace,Menlo,monospace}
-header{padding:20px 24px;border-bottom:1px solid #1c3d2a}
-h1{margin:0;font-size:28px;color:#e8ffe9}
-table{width:100%;border-collapse:collapse}
-th,td{padding:10px 14px;border-bottom:1px solid #1c3d2a;text-align:left}
-th{color:#6f9b7c;font-weight:500}
-.off{color:#ffb347}.acc{color:#7dffb3}
-.badge{color:#6f9b7c}
-</style></head>
-<body>
-<header>
-  <div class="badge">SAMPLE book · not an exchange feed</div>
-  <h1>PURIQ TAPE</h1>
-</header>
-<table><thead><tr><th>SYM</th><th>LAST</th><th>VOL</th><th>MDD</th><th>MOM</th><th>SIG</th></tr></thead><tbody id="b"></tbody></table>
-<script>
-async function load(){
-  const j = await (await fetch('/v1/portfolio/brief')).json();
-  b.innerHTML = j.positions.map(p=>`<tr><td>${p.symbol}</td><td>${p.last.toFixed(2)}</td><td>${p.ann_vol}</td><td>${p.max_drawdown}</td><td>${p.momentum_5p}</td><td class="${p.signal==='RISK_OFF'?'off':'acc'}">${p.signal}</td></tr>`).join('');
-}
-load();
-</script>
-</body></html>
+Frontend: static/console.html (signal console) + static/panels.html
+(verification desk) — served at / and /panels respectively.
 """
 
+from __future__ import annotations
 
-@app.get("/", response_class=HTMLResponse)
-def root():
-    return DASH
+import os
+import sys
+from pathlib import Path
+
+from fastapi import FastAPI, Query
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from engine import (
+    SCHEMA_VERSION,
+    STATE_BLOCKED,
+    TRUTH_LABELS,
+    EngineBlocked,
+    beta,
+    max_drawdown,
+    portfolio_report,
+    sharpe,
+    signal_suite,
+    volatility,
+)
+from feed import get_closes
+from receipts import ReceiptChain
+
+DEFAULT_ORIGIN = os.environ.get("SZL_FINANCE_ORIGIN", "stooq").strip() or "stooq"
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+app = FastAPI(
+    title="PURIQ Finance Engine v2 — SZL Holdings",
+    version="2.0.0",
+    description="Provenance-first financial signal and portfolio analytics. "
+                "Advisory-only. Paper-only. Not financial advice.",
+)
+
+CHAIN = ReceiptChain()
+
+
+class PortfolioBody(BaseModel):
+    holdings: dict[str, list[float]] = Field(min_length=1)
+
+
+def _blocked(where: str, exc: EngineBlocked):
+    payload = {
+        "schema": SCHEMA_VERSION,
+        "state": STATE_BLOCKED,
+        "reason": str(exc),
+        **TRUTH_LABELS,
+    }
+    receipt = CHAIN.append("blocked", {"route": where, "reason": str(exc)})
+    payload["receipt_sha256"] = receipt["receipt_sha256"]
+    return JSONResponse(payload, status_code=503)
+
+
+@app.get("/")
+def console():
+    return FileResponse(STATIC_DIR / "console.html")
+
+
+@app.get("/panels")
+def panels():
+    return FileResponse(STATIC_DIR / "panels.html")
 
 
 @app.get("/healthz")
 def healthz():
-    return {"ok": True, "product": "PURIQ Finance", "symbols": len(BOOK), "book": "SAMPLE"}
+    return {"ok": True, "engine": "puriq-finance", "schema": SCHEMA_VERSION,
+            "default_origin": DEFAULT_ORIGIN, **TRUTH_LABELS}
 
 
-@app.post("/v1/observations")
-def ingest(obs: Observation):
-    BOOK[obs.symbol].append({"ts": obs.ts or time.time(), "px": obs.price})
-    return {"accepted": True, "symbol": obs.symbol, "points": len(BOOK[obs.symbol])}
+@app.get("/api/finance/v2/signals/{symbol}")
+def signals(symbol: str, origin: str = Query(DEFAULT_ORIGIN, pattern="^(stooq|fixture)$")):
+    try:
+        closes, lane = get_closes(symbol, origin)
+        result = signal_suite(closes, symbol, lane)
+    except EngineBlocked as exc:
+        return _blocked(f"/signals/{symbol}", exc)
+    receipt = CHAIN.append("signal", {
+        "symbol": result["symbol"], "verdict": result["verdict"],
+        "data_origin": lane, "input_digest": result["input_digest"],
+    })
+    result["receipt_sha256"] = receipt["receipt_sha256"]
+    return result
 
 
-@app.get("/v1/portfolio/brief")
-def brief():
-    return {"positions": [analytics(symbol) for symbol in BOOK], "generated_at": time.time()}
+@app.get("/api/finance/v2/quote/{symbol}")
+def quote(symbol: str,
+          origin: str = Query(DEFAULT_ORIGIN, pattern="^(stooq|fixture)$"),
+          benchmark: "str | None" = Query(default=None)):
+    try:
+        closes, lane = get_closes(symbol, origin)
+        stats = {
+            "last": closes[-1],
+            "bars": len(closes),
+            "volatility": volatility(closes),
+            "sharpe": sharpe(closes),
+            "max_drawdown": max_drawdown(closes),
+        }
+        # beta only exists against a measured benchmark; no benchmark -> omitted, not faked
+        if benchmark:
+            bench_closes, bench_lane = get_closes(benchmark, origin)
+            stats["beta_vs"] = benchmark.upper()
+            stats["beta_lane"] = bench_lane
+            stats["beta"] = beta(closes, bench_closes)
+    except EngineBlocked as exc:
+        return _blocked(f"/quote/{symbol}", exc)
+    payload = {"schema": SCHEMA_VERSION, "state": "MEASURED",
+               "symbol": symbol.upper(), "data_origin": lane,
+               "stats": stats, **TRUTH_LABELS}
+    receipt = CHAIN.append("quote", {"symbol": payload["symbol"], "data_origin": lane})
+    payload["receipt_sha256"] = receipt["receipt_sha256"]
+    return payload
 
 
-@app.get("/v1/series/{symbol}")
-def series(symbol: str):
-    return {"symbol": symbol, "points": BOOK.get(symbol, [])[-200:]}
+@app.post("/api/finance/v2/portfolio")
+def portfolio(body: PortfolioBody):
+    try:
+        report = portfolio_report(body.holdings)
+    except EngineBlocked as exc:
+        return _blocked("/portfolio", exc)
+    receipt = CHAIN.append("portfolio", {
+        "constituents": report["constituents"], "report_digest": report["report_digest"],
+    })
+    report["receipt_sha256"] = receipt["receipt_sha256"]
+    return report
+
+
+@app.get("/api/finance/v2/receipts")
+def receipts():
+    return {"schema": "szl.finance-receipts/v1", "signing": "UNSIGNED_HONEST",
+            "length": len(CHAIN.entries()), "entries": CHAIN.entries()}
+
+
+@app.get("/api/finance/v2/receipts/verify")
+def verify_receipts():
+    return {"schema": "szl.finance-receipts/verify/v1",
+            **ReceiptChain.verify(CHAIN.entries())}
