@@ -30,6 +30,23 @@ Point at live data by omitting the env var (default lane pulls daily bars
 from stooq, no API key). If stooq is unreachable the API returns
 `state: BLOCKED` with the reason — by design.
 
+The standalone image includes the engine, feed, receipt modules, and both HTML
+surfaces. Build it from the repository root:
+
+```bash
+docker build --build-arg SERVICE=finance --tag szl-finance:local .
+docker run --rm --publish 127.0.0.1:7861:7860 \
+  --env SZL_FINANCE_ORIGIN=fixture szl-finance:local
+# In another terminal:
+python tools/verify_finance_engine.py --base-url http://127.0.0.1:7861
+```
+
+CI builds this image and exercises both pages, fixture computations, and the
+unsigned receipt chain through HTTP. This verifies the standalone image only;
+the shared `deploy/app.py` fabric and public Hugging Face publication have
+separate source and deployment contracts. Fixture smoke does not establish
+live market-data availability.
+
 ## Surface
 
 | Route | What it does |

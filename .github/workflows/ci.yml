@@ -38,3 +38,17 @@ jobs:
           python -m pip check
           python -m compileall -q services deploy tools tests
           python -m pytest tests -q
+      - name: Build and exercise standalone finance runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --build-arg SERVICE=finance --tag szl-finance:test .
+          cid="$(docker run --detach --publish 127.0.0.1:7861:7860 \
+            --env SZL_FINANCE_ORIGIN=fixture szl-finance:test)"
+          trap 'docker logs "$cid" || true; docker rm --force "$cid" >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:7861/healthz >/dev/null; then break; fi
+            if [ "$attempt" -eq 30 ]; then echo '::error::finance runtime did not start'; exit 1; fi
+            sleep 1
+          done
+          python tools/verify_finance_engine.py --base-url http://127.0.0.1:7861
