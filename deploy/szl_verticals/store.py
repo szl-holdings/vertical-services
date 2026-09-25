@@ -11,7 +11,9 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-class ObservationStore:
+from szl_verticals.replay_store import REPLAY_SCHEMA, ReplayStoreMixin
+
+class ObservationStore(ReplayStoreMixin):
     """Small bounded observation ledger.
 
     The default path is an ephemeral file. A persistent claim is emitted only
@@ -58,6 +60,7 @@ class ObservationStore:
                     ON connector_observations(vertical, session_scope, observed_at DESC);
                     """
                 )
+                connection.executescript(REPLAY_SCHEMA)
                 connection.commit()
         except (OSError, sqlite3.Error) as exc:
             self.error = f"{type(exc).__name__}: {exc}"
@@ -107,6 +110,8 @@ class ObservationStore:
                     receipt["state"],
                 ),
             )
+            self._invalidate_changed_payload(connection, receipt["vertical"],
+                                             receipt["session_scope"], receipt["payload_sha256"])
             connection.commit()
 
     def cached(
@@ -122,15 +127,18 @@ class ObservationStore:
         with self._lock, closing(self._connect()) as connection:
             row = connection.execute(
                 """
-                SELECT * FROM connector_observations
+                SELECT *, EXISTS (SELECT 1 FROM evidence_withdrawals w
+                    WHERE w.vertical=connector_observations.vertical
+                      AND w.session_scope=connector_observations.session_scope
+                      AND w.payload_sha256=connector_observations.payload_sha256) AS withdrawn
+                FROM connector_observations
                 WHERE vertical=? AND connector_id=? AND session_scope=? AND query_hash=?
-                  AND expires_at > ?
-                  AND state='OBSERVED'
-                ORDER BY observed_at DESC LIMIT 1
+                ORDER BY observed_at DESC, receipt_id ASC LIMIT 1
                 """,
-                (vertical, connector_id, session_scope, query_hash, time.time()),
+                (vertical, connector_id, session_scope, query_hash),
             ).fetchone()
-        if row is None:
+        if (row is None or row["withdrawn"] or row["state"] != "OBSERVED"
+                or not row["observed_at"] <= time.time() < row["expires_at"]):
             return None
         result = dict(row)
         result["summary"] = json.loads(result.pop("summary_json"))
@@ -161,12 +169,6 @@ class ObservationStore:
         self, *, vertical: str, session_scope: str, payload_digests: Sequence[str],
         max_summary_bytes: int = 128_000,
     ) -> list[dict[str, Any]]:
-        """Return at most one latest row per requested digest in one read snapshot.
-
-        This is a lookup, not admission: freshness/receipt/connector validation is
-        performed by evidence.resolve_evidence. An invalid latest row never
-        silently falls back to historical data. No cross-scope query is issued.
-        """
         if (not isinstance(vertical, str) or not vertical
                 or not isinstance(session_scope, str) or not session_scope
                 or isinstance(payload_digests, (str, bytes)) or len(payload_digests) > 64
@@ -187,6 +189,10 @@ class ObservationStore:
                         SELECT receipt_id, vertical, connector_id, session_scope, query_hash,
                                observed_at, expires_at, source_url, http_status, payload_sha256,
                                truth_label, state,
+                               EXISTS (SELECT 1 FROM evidence_withdrawals w
+                                 WHERE w.vertical=connector_observations.vertical
+                                   AND w.session_scope=connector_observations.session_scope
+                                   AND w.payload_sha256=connector_observations.payload_sha256) AS withdrawn,
                                CASE WHEN length(CAST(summary_json AS BLOB)) <= ?
                                     THEN summary_json ELSE NULL END AS summary_json
                         FROM connector_observations
