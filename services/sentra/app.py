@@ -13,7 +13,7 @@ KEY_SOURCE = "MEASURED" if SIGNING_KEY else "REPORTED"
 if not SIGNING_KEY:
     SIGNING_KEY = hashlib.sha256(os.urandom(32)).hexdigest()
 
-app = FastAPI(title="Sentra — policy-gate immune service")
+app = FastAPI(title="CHAPAQ — policy-gate immune service")
 RATE = collections.defaultdict(list)
 VERDICTS = collections.deque(maxlen=500)
 POLICIES = {
@@ -57,7 +57,7 @@ def run_gates(a):
 
 DASH = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sentra</title>
+<title>CHAPAQ</title>
 <style>
 :root{--bg:#07090c;--panel:#10151c;--line:#243041;--ink:#e8eef6;--mute:#8ea0b5;--deny:#ff4d4f;--allow:#3dd68c}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 ui-sans-serif,system-ui}
@@ -79,7 +79,7 @@ pre{white-space:pre-wrap;color:#c9d4e3}
 <body>
 <header>
   <div class="badge">SZLHOLDINGS / sentra</div>
-  <h1>Sentra</h1>
+  <h1>CHAPAQ</h1>
   <p class="sub">Deny-by-default eight-gate engine. Signed verdicts. No auto-remediation.</p>
 </header>
 <main>
@@ -112,7 +112,7 @@ def root():
 
 @app.get("/healthz")
 def healthz():
-    return {"ok": True, "product": "Sentra", "mode": "deny-by-default", "gates": 8, "key_source": KEY_SOURCE}
+    return {"ok": True, "product": "Sentra", "display_name": "CHAPAQ", "mode": "deny-by-default", "gates": 8, "key_source": KEY_SOURCE}
 
 
 @app.post("/v1/evaluate")
