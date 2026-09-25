@@ -1,9 +1,4 @@
-"""Direct evidence dependencies in the existing observation database.
-
-These are session-scoped historical assessments, not durable matters or a
-complete decision graph. Invalidation is monotonic; CURRENT means only that
-the recorded evidence basis still matches at the time of this read.
-"""
+"""Direct evidence dependencies in the existing observation database."""
 from __future__ import annotations
 
 import hashlib
