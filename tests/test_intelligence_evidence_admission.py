@@ -4,8 +4,11 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import importlib
+import itertools
 import json
+import sqlite3
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -101,7 +104,7 @@ def test_scope_mismatched_internal_snapshot_fails_closed(runtime, ledger):
         runtime.build_intelligence_plan("finance", request(runtime), SCOPE, _evidence=snapshot)
 
 
-def test_provider_consumes_exact_planned_snapshot_despite_later_db_change(runtime, ledger, monkeypatch):
+def test_provider_consumes_exact_planned_snapshot_when_basis_is_unchanged(runtime, ledger, monkeypatch):
     original = [put(ledger, digest, summary={"finding": "original"}) for digest in DIGESTS[:2]]
     payload = request(runtime)
     expected = runtime.build_intelligence_plan("finance", payload, SCOPE)
@@ -122,9 +125,6 @@ def test_provider_consumes_exact_planned_snapshot_despite_later_db_change(runtim
     def client_factory(**kwargs):
         assert kwargs["trust_env"] is False
         assert kwargs["follow_redirects"] is False
-        # Mutate after the actual invoke has frozen its plan; it must not reread.
-        for receipt in original:
-            ledger.put(receipt, {"finding": "changed after planning"})
         return real_client(transport=httpx.MockTransport(response), **kwargs)
     monkeypatch.setattr(runtime.httpx, "AsyncClient", client_factory)
     result = asyncio.run(runtime.vertical_intelligence_invoke("finance", payload, SCOPE))
@@ -134,6 +134,48 @@ def test_provider_consumes_exact_planned_snapshot_despite_later_db_change(runtim
     assert result["model_revision_evidence"] == "OPERATOR_DECLARED"
     assert result["effectors_enabled"] is False
     assert result["evidence_fresh_at_response"] is True
+
+
+@pytest.mark.parametrize("change", ["summary", "withdrawal", "change-then-restore"])
+def test_changed_basis_before_dispatch_prevents_network(runtime, ledger, monkeypatch, change):
+    original = [put(ledger, digest, summary={"finding": "original"}) for digest in DIGESTS[:2]]
+    real_client = httpx.AsyncClient
+    seen = []
+    def response(req):
+        seen.append(req)
+        raise AssertionError("obsolete evidence must not leave the process")
+    def factory(**kwargs):
+        if change in {"summary", "change-then-restore"}:
+            ledger.put(original[0], {"finding": "changed after planning"})
+            if change == "change-then-restore":
+                ledger.put(original[0], {"finding": "original"})
+        else:
+            ledger.withdraw_payloads(vertical="finance", session_scope=SCOPE,
+                                     payload_digests=DIGESTS[:1], now=CLOCK)
+        return real_client(transport=httpx.MockTransport(response), **kwargs)
+    monkeypatch.setattr(runtime.httpx, "AsyncClient", factory)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(runtime.vertical_intelligence_invoke("finance", request(runtime), SCOPE))
+    assert error.value.status_code == 409
+    assert not seen
+
+
+def test_withdrawal_during_provider_call_withholds_output(runtime, ledger, monkeypatch):
+    for digest in DIGESTS[:2]:
+        put(ledger, digest)
+    real_client = httpx.AsyncClient
+    seen = []
+    def response(req):
+        seen.append(req)
+        ledger.withdraw_payloads(vertical="finance", session_scope=SCOPE,
+                                 payload_digests=DIGESTS[:1], now=CLOCK)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "WITHHOLD_THIS"}}]})
+    monkeypatch.setattr(runtime.httpx, "AsyncClient",
+                        lambda **kwargs: real_client(transport=httpx.MockTransport(response), **kwargs))
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(runtime.vertical_intelligence_invoke("finance", request(runtime), SCOPE))
+    assert error.value.status_code == 409 and len(seen) == 1
+    assert "WITHHOLD_THIS" not in str(error.value.detail)
 
 
 def test_expiry_before_dispatch_prevents_network(runtime, ledger, monkeypatch):
@@ -161,3 +203,151 @@ def test_serialized_observations_count_against_real_context_budget(runtime, ledg
     plan = runtime.build_intelligence_plan("finance", request(runtime), SCOPE)
     assert plan["decision"] == "ABSTAIN"
     assert not plan["gates"]["context_budget_met"] or "EVIDENCE_CONTEXT_BUDGET_EXCEEDED" in plan["blockers"]
+
+
+def test_plan_refuses_a_registration_that_is_not_current(runtime, ledger, monkeypatch):
+    for digest in DIGESTS[:2]:
+        put(ledger, digest)
+    monkeypatch.setattr(ledger, "register_assessment", lambda **kwargs: {
+        "state": "REVALIDATION_REQUIRED", "original_decision": "READY_FOR_INFERENCE"})
+    with pytest.raises(HTTPException) as error:
+        runtime.build_intelligence_plan("finance", request(runtime), SCOPE)
+    assert error.value.status_code == 409
+
+
+def test_malformed_stored_plan_assessment_is_unavailable_not_a_raw_error(runtime, ledger):
+    for digest in DIGESTS[:2]:
+        put(ledger, digest)
+    payload = request(runtime)
+    assert runtime.build_intelligence_plan("finance", payload, SCOPE)["decision"] == "READY_FOR_INFERENCE"
+    with sqlite3.connect(ledger.path) as connection:
+        connection.execute("UPDATE evidence_assessments SET dependencies_json='not json'")
+    with pytest.raises(HTTPException) as error:
+        runtime.build_intelligence_plan("finance", payload, SCOPE)
+    assert error.value.status_code == 503
+
+
+def _isolate_layer(runtime, ledger, monkeypatch, keep):
+    """Neutralise every dispatch check except `keep`, so each layer has its own test."""
+    if keep != "assessment":
+        monkeypatch.setattr(ledger, "assessment_status", lambda **kwargs: {"state": "CURRENT"})
+    if keep != "reresolve":
+        real, pinned = runtime._resolve_plan_evidence, []
+        def first_snapshot(*args, **kwargs):
+            if not pinned:
+                pinned.append(real(*args, **kwargs))
+            return pinned[0]
+        monkeypatch.setattr(runtime, "_resolve_plan_evidence", first_snapshot)
+
+
+def _change(ledger, original, how):
+    if how == "withdraw":
+        ledger.withdraw_payloads(vertical="finance", session_scope=SCOPE,
+                                 payload_digests=DIGESTS[:1], now=CLOCK)
+    else:
+        ledger.put(original[0], {"finding": "changed"})
+
+
+@pytest.mark.parametrize("keep,how", [("assessment", "withdraw"), ("reresolve", "summary")])
+def test_each_pre_dispatch_layer_alone_keeps_obsolete_evidence_in_process(runtime, ledger, monkeypatch, keep, how):
+    original = [put(ledger, digest, summary={"finding": "original"}) for digest in DIGESTS[:2]]
+    _isolate_layer(runtime, ledger, monkeypatch, keep)
+    real_client, seen = httpx.AsyncClient, []
+    def response(req):
+        seen.append(req)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "LEAKED"}}]})
+    def factory(**kwargs):
+        _change(ledger, original, how)
+        return real_client(transport=httpx.MockTransport(response), **kwargs)
+    monkeypatch.setattr(runtime.httpx, "AsyncClient", factory)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(runtime.vertical_intelligence_invoke("finance", request(runtime), SCOPE))
+    assert error.value.status_code == 409
+    assert not seen
+
+
+@pytest.mark.parametrize("keep,how", [("assessment", "withdraw"), ("reresolve", "summary"), ("fresh", "expire")])
+def test_each_post_response_layer_alone_withholds_output(runtime, ledger, monkeypatch, keep, how):
+    original = [put(ledger, digest, summary={"finding": "original"}) for digest in DIGESTS[:2]]
+    _isolate_layer(runtime, ledger, monkeypatch, keep)
+    real_client, seen = httpx.AsyncClient, []
+    def response(req):
+        seen.append(req)
+        if how == "expire":
+            monkeypatch.setattr(runtime, "time", SimpleNamespace(time=lambda: CLOCK + 50.0))
+        else:
+            _change(ledger, original, how)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "WITHHOLD_THIS"}}]})
+    monkeypatch.setattr(runtime.httpx, "AsyncClient",
+                        lambda **kwargs: real_client(transport=httpx.MockTransport(response), **kwargs))
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(runtime.vertical_intelligence_invoke("finance", request(runtime), SCOPE))
+    assert error.value.status_code == 409 and len(seen) == 1
+    assert "WITHHOLD_THIS" not in str(error.value.detail)
+
+
+def test_plan_and_dispatch_hand_the_store_a_clock_not_a_pre_read_value(runtime, ledger, monkeypatch):
+    # A time read before the store's lock can predate a concurrent reader's check
+    # and falsely latch ASSESSMENT_CLOCK_REGRESSED (see the racing-reader test in
+    # test_evidence_replay.py), so every replay call must pass the clock itself.
+    for digest in DIGESTS[:2]:
+        put(ledger, digest)
+    seen = []
+    for name in ("register_assessment", "assessment_status"):
+        def wrapper(*, _real=getattr(ledger, name), _name=name, **kwargs):
+            seen.append((_name, callable(kwargs["now"])))
+            return _real(**kwargs)
+        monkeypatch.setattr(ledger, name, wrapper)
+    real_client = httpx.AsyncClient
+    ok = httpx.Response(200, json={"choices": [{"message": {"content": "Synthetic output"}}]})
+    monkeypatch.setattr(runtime.httpx, "AsyncClient",
+                        lambda **kwargs: real_client(transport=httpx.MockTransport(lambda req: ok), **kwargs))
+    asyncio.run(runtime.vertical_intelligence_invoke("finance", request(runtime), SCOPE))
+    assert {name for name, _ in seen} == {"register_assessment", "assessment_status"}
+    assert all(is_clock for _, is_clock in seen), seen
+
+
+
+def test_concurrent_identical_plans_never_poison_their_own_assessment(runtime, ledger, monkeypatch):
+    # A plan's basis is deterministic, so identical plans share one assessment.
+    # Just before this plan's registration takes the store lock, a second
+    # identical plan runs to completion. A caller that read the clock before
+    # the lock would now present an older time than the committed last check,
+    # latch ASSESSMENT_CLOCK_REGRESSED and 409 this plan for the rest of the
+    # session. A clock read inside the transaction comes after the racer's.
+    for digest in DIGESTS[:2]:
+        put(ledger, digest)
+    ticks, tick_lock = itertools.count(1), threading.Lock()
+    def clock():
+        with tick_lock:
+            return CLOCK + next(ticks) / 1e6
+    monkeypatch.setattr(runtime, "time", SimpleNamespace(time=clock))
+    payload = request(runtime)
+    assert runtime.build_intelligence_plan("finance", payload, SCOPE)["decision"] == "READY_FOR_INFERENCE"
+    racer = {}
+
+    def race():
+        try:
+            racer["decision"] = runtime.build_intelligence_plan("finance", payload, SCOPE)["decision"]
+        except HTTPException as error:
+            racer["decision"] = error.status_code
+
+    class RacingLock:
+        def __init__(self, inner):
+            self.inner = inner
+        def __enter__(self):
+            if "thread" not in racer and sys._getframe(1).f_code.co_name == "register_assessment":
+                racer["thread"] = threading.Thread(target=race)
+                racer["thread"].start()
+                racer["thread"].join(timeout=30)
+            return self.inner.__enter__()
+        def __exit__(self, *exc):
+            return self.inner.__exit__(*exc)
+
+    monkeypatch.setattr(ledger, "_lock", RacingLock(ledger._lock))
+    try:
+        first = runtime.build_intelligence_plan("finance", payload, SCOPE)["decision"]
+    except HTTPException as error:
+        first = error.status_code
+    assert (first, racer["decision"]) == ("READY_FOR_INFERENCE", "READY_FOR_INFERENCE")
+    assert runtime.build_intelligence_plan("finance", payload, SCOPE)["decision"] == "READY_FOR_INFERENCE"

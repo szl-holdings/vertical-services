@@ -35,6 +35,7 @@ from .connector_specs import CONNECTORS
 from .evidence import HEX64, resolve_evidence
 from .operational import STORE, vertical_readiness
 from .profiles import ALIASES, VERTICALS
+from .replay_store import EvidenceNotFound
 
 class _RedactedValidationRoute(APIRoute):
     """Keep rejected payloads out of public errors, including invalid Unicode."""
@@ -56,6 +57,45 @@ frontier = APIRouter(tags=["frontier-command"], route_class=_RedactedValidationR
 
 AXIS_ID = re.compile(r"^[a-z][a-z0-9_.-]{1,63}$")
 ACTION_ID = re.compile(r"^[a-z][a-z0-9_.:-]{1,63}$", re.IGNORECASE)
+
+
+class EvidenceWithdrawalRequest(StrictModel):
+    evidence_sha256: list[str] = Field(min_length=1, max_length=64)
+
+    @field_validator("evidence_sha256")
+    @classmethod
+    def validate_digests(cls, value):
+        if any(HEX64.fullmatch(digest) is None for digest in value):
+            raise ValueError("invalid evidence digest")
+        return sorted(set(value))
+
+
+@frontier.post("/api/verticals/{vertical}/evidence/withdraw")
+def withdraw_evidence(vertical: str, request: EvidenceWithdrawalRequest, session: SessionScope):
+    """Withdraw only this caller's evidence use, never a source-wide retraction."""
+    canonical = canonical_vertical(vertical)
+    try:
+        return STORE.withdraw_payloads(vertical=canonical, session_scope=session,
+                                       payload_digests=request.evidence_sha256, now=time.time)
+    except EvidenceNotFound:
+        raise HTTPException(404, "evidence not found in this session") from None
+    except (OSError, RuntimeError, sqlite3.Error):
+        raise HTTPException(503, "evidence replay unavailable") from None
+
+
+@frontier.get("/api/verticals/{vertical}/evidence/assessments/{assessment_id}")
+def evidence_assessment(vertical: str, assessment_id: str, session: SessionScope):
+    canonical = canonical_vertical(vertical)
+    if HEX64.fullmatch(assessment_id) is None:
+        raise HTTPException(404, "assessment not found")
+    try:
+        result = STORE.assessment_status(vertical=canonical, session_scope=session,
+                                         assessment_id=assessment_id, now=time.time, connectors=CONNECTORS)
+    except (OSError, RuntimeError, sqlite3.Error):
+        raise HTTPException(503, "evidence replay unavailable") from None
+    if result is None:
+        raise HTTPException(404, "assessment not found")
+    return {**result, "durability": STORE.durability}
 
 
 class HatunEvaluateRequest(StrictModel):
@@ -266,13 +306,25 @@ def hatun_evaluate(
         ensure_ascii=False,
         allow_nan=False,
     )
+    assessment_id = hashlib.sha256(canonical_basis.encode("utf-8")).hexdigest()
+    replay = {"state": "NOT_TRACKED", "original_decision": decision}
+    if decision == "REVIEW":
+        try:
+            replay = STORE.register_assessment(
+                vertical=canonical, session_scope=session, assessment_id=assessment_id,
+                kind="hatun-review", snapshot=snapshot, now=time.time)
+        except (OSError, RuntimeError, sqlite3.Error):
+            raise HTTPException(503, "evidence replay unavailable") from None
+        if replay["state"] != "CURRENT":
+            raise HTTPException(409, "evidence changed during assessment")
     return {
         **basis,
         "lambda_advisory": rollup,
         "receipt": {
             "schema": "szl.hatun-review-receipt/v2",
             "algorithm": "SHA-256",
-            "basis_sha256": hashlib.sha256(canonical_basis.encode("utf-8")).hexdigest(),
+            "basis_sha256": assessment_id,
+            "evidence_replay": replay,
             "signature_claimed": False,
             "session_token_recorded": False,
             "raw_evidence_references_recorded": False,
