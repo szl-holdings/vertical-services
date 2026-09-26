@@ -52,3 +52,32 @@ jobs:
             sleep 1
           done
           python tools/verify_finance_engine.py --base-url http://127.0.0.1:7861
+
+  guard-teeth-gate:
+    # Cheap, unconditional: proves the mutation harness still classifies correctly
+    # and that every guard in tools/guard_teeth.json still matches the source
+    # exactly once, so a refactor cannot leave the manifest silently stale.
+    # The full mutation run is .github/workflows/guard-teeth.yml (path-filtered).
+    name: Guard-teeth self-test and manifest staleness gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+      - name: Install runtime and test dependencies
+        run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt -r requirements-test.txt
+      - name: Self-test the guard-teeth harness
+        run: python tools/guard_teeth.py --self-test
+      - name: Check every guard still matches its source exactly once
+        run: python tools/guard_teeth.py --dry-run

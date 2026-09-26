@@ -1,0 +1,83 @@
+name: Guard teeth
+
+# Full mutation receipt for tools/guard_teeth.json: every declared guard is
+# removed in a temporary copy and must be KILLED by its listed tests, with the
+# killing test reproduced alone on the mutant and on the unmutated copy.
+# Exit 1 = a guard SURVIVED, 2 = MANIFEST_STALE / MUTANT_INVALID / a kill that
+# did not reproduce, 3 = red baseline; all fail the job.  The unconditional
+# self-test and staleness gate (--self-test, --dry-run) runs in ci.yml.
+
+"on":
+  pull_request:
+    paths:
+      - deploy/szl_verticals/evidence.py
+      - deploy/szl_verticals/store.py
+      - deploy/szl_verticals/replay_store.py
+      - deploy/szl_verticals/frontier.py
+      - deploy/szl_verticals/intelligence.py
+      - tests/*evidence*
+      - tests/*hatun*
+      - tests/*intelligence_evidence*
+      - tools/guard_teeth.*
+      - requirements.txt
+      - requirements-test.txt
+      - .github/workflows/guard-teeth.yml
+  push:
+    branches: [main]
+    paths:
+      - deploy/szl_verticals/evidence.py
+      - deploy/szl_verticals/store.py
+      - deploy/szl_verticals/replay_store.py
+      - deploy/szl_verticals/frontier.py
+      - deploy/szl_verticals/intelligence.py
+      - tests/*evidence*
+      - tests/*hatun*
+      - tests/*intelligence_evidence*
+      - tools/guard_teeth.*
+      - requirements.txt
+      - requirements-test.txt
+      - .github/workflows/guard-teeth.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guard-teeth-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutation-receipt:
+    name: Guard-teeth mutation receipt
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+      - name: Install runtime and test dependencies
+        run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt -r requirements-test.txt
+      - name: Remove every guard and require its tests to kill it
+        env:
+          SENTRA_SIGNING_KEY: ci-contract-key-not-used-in-production
+          SZL_SOURCE_REVISION: ${{ github.sha }}
+          SZL_STATE_PATH: /tmp/szl-vertical-services-guard-teeth.sqlite3
+        run: python tools/guard_teeth.py --jobs 2 --json-out guard-teeth-receipt.json
+      - name: Upload guard-teeth receipt
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: guard-teeth-receipt
+          path: guard-teeth-receipt.json
+          if-no-files-found: warn
+          retention-days: 30
