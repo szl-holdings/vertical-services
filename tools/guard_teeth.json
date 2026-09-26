@@ -22,7 +22,8 @@
   "Before pytest, each mutated module is imported in a fresh interpreter with the copy's import root on sys.path (deploy/szl_verticals/x.py -> szl_verticals.x). If the unmutated module imports cleanly but the mutant does not, the guard is MUTANT_INVALID, never KILLED.",
   "KILLED requires pytest exit 1 and a test-level FAILED node id whose failure is not NameError/ImportError/ModuleNotFoundError/UnboundLocalError, and the kill must reproduce: the first killing node id, re-run alone, fails 2/2 on the mutant and passes 3/3 on the unmutated copy (otherwise UNPROVEN_ERROR). kill_kind records 'assertion' or 'exception:<Type>'; exception kills are listed separately in the receipt. Collection errors are MUTANT_INVALID; setup-only errors are UNPROVEN_ERROR; sqlite 'database is locked' is ENVIRONMENT_FAULT.",
   "Only git-tracked files of the copied dirs are copied (untracked files are listed in the receipt), so the baseline is the tracked tree, not another agent's scratch files.",
-  "CI: ci.yml runs --self-test and --dry-run (every find exactly once, every listed test file present) on every pull request; .github/workflows/guard-teeth.yml runs the full manifest and uploads the receipt when a guarded module, a guarded test file, the requirements, or tools/guard_teeth.* change."
+  "CI: ci.yml runs --self-test and --dry-run (every find exactly once, every listed test file present) on every pull request; .github/workflows/guard-teeth.yml runs the full manifest and uploads the receipt when a guarded module, a guarded test file, the requirements, or tools/guard_teeth.* change.",
+  "tests/test_evidence_replay_oracle.py (a stateful differential oracle of the store latch) is listed LAST for the evidence/store/replay_store guards, so the earlier, more specific killer still fires first under -x; it adds teeth, it does not replace them."
  ],
  "guards": [
   {
@@ -35,7 +36,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -48,7 +50,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -61,7 +64,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -74,7 +78,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -87,7 +92,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -100,7 +106,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -113,7 +120,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -126,7 +134,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -139,7 +148,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -152,7 +162,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -334,7 +345,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -347,7 +359,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -360,7 +373,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -412,7 +426,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -425,7 +440,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -438,7 +454,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
@@ -451,7 +468,8 @@
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
     "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
+    "tests/test_evidence_resolution.py",
+    "tests/test_evidence_replay_oracle.py"
    ]
   },
   {
