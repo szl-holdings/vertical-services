@@ -13,6 +13,11 @@ from types import SimpleNamespace
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+# store.py imports ``szl_verticals.replay_store`` absolutely, so deploy/ must be
+# importable even when this file runs on its own (same setup as the sibling modules).
+DEPLOY = ROOT / "deploy"
+if str(DEPLOY) not in sys.path:
+    sys.path.insert(0, str(DEPLOY))
 
 
 def load_module(name, path):
