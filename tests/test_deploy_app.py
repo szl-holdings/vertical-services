@@ -50,6 +50,8 @@ class VerticalServicesContractTests(unittest.TestCase):
         health = self.client.get("/healthz")
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.json()["engines"], list(self.module.ENGINES))
+        self.assertEqual(health.json()["status"], "ok")
+        self.assertEqual(health.json()["truth_label"], "MEASURED")
         self.assertFalse(health.json()["compatibility_routes"]["/vessels"]["canonical"] != "/killinchu")
         build = self.client.get("/api/build-info")
         self.assertEqual(build.status_code, 200)
@@ -130,14 +132,28 @@ class VerticalServicesContractTests(unittest.TestCase):
             self.assertEqual(build["source_revision"], "UNAVAILABLE")
 
             health = self.client.get("/healthz")
+            health_body = health.json()
             self.assertEqual(health.status_code, 200)
-            self.assertFalse(health.json()["ok"])
-            self.assertEqual(health.json()["source_revision"], "UNAVAILABLE")
+            self.assertFalse(health_body["ok"])
+            self.assertEqual(health_body["status"], "source-unavailable")
+            self.assertEqual(health_body["source_revision"], "UNAVAILABLE")
+            self.assertEqual(health_body["truth_label"], "UNAVAILABLE")
+            self.assertNotEqual(health_body["truth_label"], "MEASURED")
+
+            landing = self.client.get("/")
+            self.assertEqual(landing.status_code, 200)
+            self.assertIn("UNAVAILABLE Python runtime contract", landing.text)
+            self.assertNotIn("<strong>LIVE</strong>", landing.text)
+            self.assertNotIn("<strong>REACHABLE</strong> Python runtime contract", landing.text)
+            self.assertNotIn("<strong>MEASURED</strong>", landing.text)
 
             readiness = self.client.get("/readyz")
+            ready_body = readiness.json()
             self.assertEqual(readiness.status_code, 503)
-            self.assertFalse(readiness.json()["ready"])
-            self.assertEqual(readiness.json()["source_revision"], "UNAVAILABLE")
+            self.assertFalse(ready_body["ready"])
+            self.assertEqual(ready_body["source_revision"], "UNAVAILABLE")
+            self.assertEqual(ready_body["truth_label"], "UNAVAILABLE")
+            self.assertNotEqual(ready_body["truth_label"], "MEASURED")
 
     def test_present_malformed_revision_bindings_fail_closed(self):
         import szl_verticals.core as core

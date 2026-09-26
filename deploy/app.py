@@ -168,13 +168,21 @@ CATALOG = {
 }
 
 
-@app.get("/healthz")
-def root_health() -> dict:
-    build = _build_info()
-    source_ready = (
+def _source_ready(build: dict) -> bool:
+    return (
         build["build"]["state"] == "OBSERVED"
         and build["source_binding"]["bindings_agree"] is True
     )
+
+
+def _health_truth_label(source_ready: bool) -> str:
+    return "MEASURED" if source_ready else "UNAVAILABLE"
+
+
+@app.get("/healthz")
+def root_health() -> dict:
+    build = _build_info()
+    source_ready = _source_ready(build)
     return {
         "ok": source_ready,
         "status": "ok" if source_ready else "source-unavailable",
@@ -215,7 +223,7 @@ def root_health() -> dict:
         "caller_supplied_model_endpoints_allowed": False,
         "hatun_can_authorize": False,
         "effectors_enabled": False,
-        "truth_label": "MEASURED",
+        "truth_label": _health_truth_label(source_ready),
         "source": SOURCE_REPOSITORY,
         **{field: build[field] for field in RUNTIME_SOURCE_IDENTITY_FIELDS},
     }
@@ -225,11 +233,7 @@ def root_health() -> dict:
 def readiness() -> JSONResponse:
     verticals = {engine: vertical_readiness(engine) for engine in ENGINES}
     build = _build_info()
-    ready = (
-        all(item["ready"] for item in verticals.values())
-        and build["build"]["state"] == "OBSERVED"
-        and build["source_binding"]["bindings_agree"] is True
-    )
+    ready = all(item["ready"] for item in verticals.values()) and _source_ready(build)
     payload = {
         "ready": ready,
         "service": "szl-vertical-services",
@@ -248,7 +252,7 @@ def readiness() -> JSONResponse:
         "store": STORE.status(),
         "intelligence_plan_ready": True,
         "inference_requires_operator_model_binding": True,
-        "truth_label": "MEASURED",
+        "truth_label": _health_truth_label(ready),
     }
     return JSONResponse(payload, status_code=200 if ready else 503)
 
@@ -354,9 +358,12 @@ def _landing_page() -> str:
             <a href="/{engine}/healthz">Health</a>
             <a href="/api/verticals/{engine}/formulas">Math</a></div></article>"""
         )
-    revision = _build_info()["build"]["revision"]
+    build = _build_info()
+    revision = build["build"]["revision"]
     revision_short = revision[:12] if revision != "UNAVAILABLE" else revision
     store = STORE.status()
+    source_ready = _source_ready(build)
+    contract_chip = "<strong>REACHABLE</strong>" if source_ready else "UNAVAILABLE"
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>SZL Vertical Services</title><style>
@@ -374,7 +381,7 @@ h1{{font-size:clamp(48px,9vw,104px);line-height:.88;letter-spacing:-.055em;margi
 @media(pointer:coarse){{a{{min-height:48px}}}}@media(prefers-reduced-motion:reduce){{*,*::before,*::after{{scroll-behavior:auto!important;animation:none!important;transition:none!important}}}}
 </style></head><body><main class="shell"><div class="top"><div class="brand">SZL / VERTICAL SERVICES V{VERSION}</div><a href="/docs">OpenAPI</a></div>
 <h1>Six engines. One second brain. One governed intelligence fabric.</h1><p class="lede">Real vertical calculations, official-source connectors, Living Anatomy, formula bindings, source identity, governed memory, Hatun review, model routing, kernel gates, and receipts—without fabricated feeds or silent authority.</p>
-<div class="proof"><span class="pill"><strong>REACHABLE</strong> Python runtime contract</span><span class="pill">source {html.escape(revision_short)}</span><span class="pill">store {html.escape(store['durability'])}</span><span class="pill">3 model routes</span><span class="pill">6 kernel contracts</span><span class="pill">effectors disabled</span></div>
+<div class="proof"><span class="pill">{contract_chip} Python runtime contract</span><span class="pill">source {html.escape(revision_short)}</span><span class="pill">store {html.escape(store['durability'])}</span><span class="pill">3 model routes</span><span class="pill">6 kernel contracts</span><span class="pill">effectors disabled</span></div>
 <section class="grid">{''.join(cards)}</section><section class="boundary"><strong>Operational boundary:</strong> official-source connectors are fixed and bounded. Connector observations are hash-addressed and stored under a hashed session scope. Model invocation remains unavailable until an operator binds a fixed allowlisted endpoint, credential, protocol, and exact declared revision. Hatun can recommend review or abstention only. NOAA AIS is historical official planning data—not represented as a live vessel feed. Trading, legal advice, cyber effectors, person-level prospecting, and unattended consequential actions remain disabled.</section>
 <footer class="mono">{SOURCE_REPOSITORY} · VERSION {VERSION} · <a href="/api/build-info">BUILD INFO</a> · <a href="/readyz">READINESS</a> · <a href="/api/intelligence">INTELLIGENCE CATALOG</a></footer></main></body></html>"""
 
