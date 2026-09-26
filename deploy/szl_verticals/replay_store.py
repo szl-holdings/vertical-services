@@ -95,6 +95,30 @@ def _stored_reasons(text: Any) -> list[dict[str, Any]]:
         raise StoredAssessmentInvalid("malformed stored assessment")
     return reasons
 
+_ASSESSMENT_KINDS = frozenset(("intelligence-plan", "hatun-review"))
+
+def _stored_assessment_row(row: Any) -> list[dict[str, Any]]:
+    """Shape-check a whole stored assessment row and return its stored reasons.
+
+    The JSON columns already fail as StoredAssessmentInvalid. The scalar
+    columns must fail the same way: a corrupt ``last_checked_at`` otherwise
+    escapes registration as a TypeError (HTTP 500) while status reports 503, and
+    a corrupt ``invalidated`` skips the dependency check and reads as CURRENT.
+    Every write keeps ``invalidated`` equal to "reasons are non-empty", so a
+    row that breaks that is malformed too, never a reason to clear the latch.
+    """
+    reasons = _stored_reasons(row["reasons_json"])
+    snapshot = row["snapshot_sha256"]
+    invalidated = row["invalidated"]
+    if (row["kind"] not in _ASSESSMENT_KINDS
+            or not isinstance(snapshot, str) or re.fullmatch(r"[0-9a-f]{64}", snapshot) is None
+            or not _valid_clock_value(row["assessed_at"])
+            or not _valid_clock_value(row["last_checked_at"])
+            or type(invalidated) is not int or invalidated not in (0, 1)
+            or bool(invalidated) != bool(reasons)):
+        raise StoredAssessmentInvalid("malformed stored assessment")
+    return reasons
+
 def _digest(value: str) -> None:
     if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
         raise ValueError("invalid digest")
@@ -238,7 +262,7 @@ class ReplayStoreMixin:
         ).fetchone()
         if row is None:
             return None
-        changes = _stored_reasons(row["reasons_json"])
+        changes = _stored_assessment_row(row)
         if not row["invalidated"]:
             changes = self._dependency_changes(connection, vertical, session_scope,
                                                _stored_dependencies(row["dependencies_json"]), now)
