@@ -295,6 +295,8 @@ def catalog() -> dict:
             "connectors": "/api/verticals/{vertical}/connectors",
             "second_brain": "/api/verticals/{vertical}/second-brain",
             "hatun_review": "/api/verticals/{vertical}/hatun/evaluate",
+            "evidence_withdraw": "/api/verticals/{vertical}/evidence/withdraw",
+            "evidence_assessment": "/api/verticals/{vertical}/evidence/assessments/{assessment_id}",
             "readiness": "/api/verticals/{vertical}/readyz",
             "fetch": "/api/verticals/{vertical}/connectors/{connector_id}/fetch",
         },
