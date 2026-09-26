@@ -27,6 +27,23 @@ Collection errors (pytest exit 2, file-level ERROR ids) are MUTANT_INVALID;
 exit 1 with only setup ERRORs or no parsed failing id is UNPROVEN_ERROR.
 Neither counts as a kill.
 
+A kill must also REPRODUCE.  The first killing node id is re-run ALONE,
+--confirm-mutant-runs times (default 2) on the mutant, each run a genuine
+failure of that test, and then -- after the unmutated bytes are restored in
+the same copy -- --confirm-baseline-runs times (default 3) on the baseline,
+each run a pass.  A kill that does not reproduce (an order-dependent or flaky
+killer) is UNPROVEN_ERROR, never KILLED; ``kill_stable`` and
+``kill_confirmation`` record what happened.  Every kill also records
+``kill_kind``: ``assertion`` when the test asserted the property (assert,
+AssertionError, pytest.fail, pytest.raises "DID NOT RAISE") or
+``exception:<Type>`` when the test crashed with an uncaught exception.
+Exception kills still count, but they are totalled and listed separately so
+a reviewer can see which guards are proven only by a crash.
+
+--dry-run (read only, no tests) checks that every find still occurs exactly
+once, every mutant still compiles and every listed test file exists; it is
+the cheap staleness gate CI runs on every pull request.
+
 The unmutated baseline always runs first; a red baseline exits 3.
 
 Verdict ALL_GUARDS_KILLED means every guard in the manifest was run and
@@ -47,6 +64,7 @@ import concurrent.futures
 import datetime as _dt
 import difflib
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -57,7 +75,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Callable
 
 RECEIPT_SCHEMA = "szl.guard-teeth-receipt/v1"
 MANIFEST_SCHEMA = "szl.guard-teeth-manifest/v1"
@@ -83,9 +101,20 @@ ALL_STATUSES = (KILLED, SURVIVED, STALE, INVALID, UNPROVEN, ENV_FAULT, NO_TESTS,
 # Host faults that make tests fail for reasons unrelated to the mutant.  Measured on
 # 2026-09-25: with C: at 0 bytes free, two mutants "failed" with
 # "database or disk is full" / "assessment store unavailable"; those are not kills.
-ENV_FAULT_RE = re.compile(r"database or disk is full|No space left on device|ENOSPC|"
+# SQLite "database is locked" is lock contention on the host, not a missing guard
+# (#48's known limits measured it at 1/6480 under contention).
+ENV_FAULT_RE = re.compile(r"database or disk is full|database is locked|No space left on device|ENOSPC|"
                           r"not enough space on the disk|disk quota exceeded|MemoryError", re.I)
 DEFAULT_MIN_FREE_MB = 1024
+# A kill is re-run alone this many times on the mutant (each must fail) and on the
+# unmutated copy (each must pass) before it counts.
+DEFAULT_CONFIRM_MUTANT_RUNS = 2
+DEFAULT_CONFIRM_BASELINE_RUNS = 3
+# Short-summary heads that mean the test ASSERTED the property: a bare `assert ...`
+# (pytest's rewritten message), AssertionError, and pytest's own `Failed`
+# (pytest.fail / pytest.raises "DID NOT RAISE").  Anything else is a crash.
+ASSERTION_HEADS = ("AssertionError", "Failed")
+EXC_NAME_RE = re.compile(r"[A-Za-z_][\w.]*")
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -383,6 +412,65 @@ def classify(result: dict[str, Any]) -> tuple[str, list[str], str]:
     return KILLED, [n["id"] for n in genuine], "test-level assertion/behaviour failure"
 
 
+def kill_kind(reason: str) -> str:
+    """'assertion' when the killing test asserted the property, 'exception:<Type>'
+    when it crashed with an uncaught exception, 'unknown' when pytest gave no
+    parseable reason."""
+    text = reason.strip()
+    if text == "assert" or text.startswith("assert "):
+        return "assertion"
+    head = text.split(":", 1)[0].strip()
+    if not head or not EXC_NAME_RE.fullmatch(head):
+        return "unknown"
+    name = head.split(".")[-1]
+    return "assertion" if name in ASSERTION_HEADS else f"exception:{name}"
+
+
+def confirm_kill(node: str, rerun: Callable[[str], dict[str, Any]], restore: Callable[[], bool],
+                 mutant_runs: int, baseline_runs: int) -> dict[str, Any]:
+    """Reproduce a kill with the killing node id ALONE: `mutant_runs` runs on the
+    mutant (each must be a genuine failure of that node, as classify() defines
+    it), then `restore()` puts the unmutated bytes back and `baseline_runs` runs
+    must each pass.  Stops at the first run that breaks the rule."""
+    runs: list[dict[str, Any]] = []
+    out: dict[str, Any] = {"node": node, "mutant_runs_required": mutant_runs, "mutant_failed": 0,
+                           "baseline_runs_required": baseline_runs, "baseline_passed": 0,
+                           "stable": False, "environment_fault": False, "runs": runs, "detail": ""}
+    for i in range(1, mutant_runs + 1):
+        res = rerun(node)
+        status, failing, _ = classify(res)
+        runs.append({"on": "mutant", "status": status, "exit_code": res["exit_code"],
+                     "seconds": res.get("seconds"), "pytest_summary": parse_summary(res["output"])})
+        if status != KILLED or node not in failing:
+            out["environment_fault"] = status == ENV_FAULT
+            runs[-1]["output_tail"] = tail(res["output"], 15)
+            out["detail"] = (f"mutant rerun {i}/{mutant_runs} of {node} alone was {status}, "
+                             "not a failure of that test")
+            return out
+        out["mutant_failed"] += 1
+    if not restore():
+        out["detail"] = "the unmutated file could not be restored for the baseline reruns"
+        return out
+    for i in range(1, baseline_runs + 1):
+        res = rerun(node)
+        summary = parse_summary(res["output"])
+        passed = (res["exit_code"] == 0 and not res["timed_out"] and summary.get("passed", 0) >= 1
+                  and not summary.get("failed") and not summary.get("errors"))
+        runs.append({"on": "baseline", "status": "PASSED" if passed else "NOT_PASSED",
+                     "exit_code": res["exit_code"], "seconds": res.get("seconds"), "pytest_summary": summary})
+        if not passed:
+            out["environment_fault"] = bool(ENV_FAULT_RE.search(res["output"]))
+            runs[-1]["output_tail"] = tail(res["output"], 15)
+            out["detail"] = (f"baseline rerun {i}/{baseline_runs} of {node} alone did not pass "
+                             f"(exit {res['exit_code']}, {summary or 'no summary'})")
+            return out
+        out["baseline_passed"] += 1
+    out["stable"] = True
+    out["detail"] = (f"failed {mutant_runs}/{mutant_runs} alone on the mutant, "
+                     f"passed {baseline_runs}/{baseline_runs} alone on the unmutated copy")
+    return out
+
+
 def free_mb(path: str) -> int:
     try:
         return int(shutil.disk_usage(path).free // (1024 * 1024))
@@ -402,6 +490,8 @@ def run_guard(guard: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
                               "tests": guard["tests"]}
     try:
         copy_tree(ctx["repo"], work, ctx["copy"], ctx["files"])
+        target = work / guard["file"]
+        original = target.read_bytes() if target.is_file() else b""
         facts = mutate(work, guard)
         record.update({k: v for k, v in facts.items() if k != "file"})
         if "status" in facts:
@@ -422,19 +512,43 @@ def run_guard(guard: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
                                       "reason": f"baseline import probe {baseline_probe.get('state')}"}
         result = run_pytest(ctx["python"], work, guard["tests"], env, ctx["timeout"])
         status, failing, detail = classify(result)
+        record.update({"exit_code": result["exit_code"], "pytest_seconds": result["seconds"],
+                       "pytest_summary": parse_summary(result["output"])})
+        if status == KILLED:
+            reasons = {n["id"]: n["reason"] for n in parse_nodes(result["output"]) if n["kind"] == "FAILED"}
+            record["kill_reasons"] = [reasons.get(t, "")[:240] for t in failing]
+            kind = kill_kind(reasons.get(failing[0], ""))
+            reruns = itertools.count(1)
+
+            def rerun(node: str) -> dict[str, Any]:
+                fresh = child_env(ctx["head"], work / f"state-confirm-{next(reruns)}.sqlite3")
+                return run_pytest(ctx["python"], work, [node], fresh, ctx["timeout"])
+
+            def restore() -> bool:
+                target.write_bytes(original)
+                return sha256_bytes(target.read_bytes()) == record.get("file_sha256_before")
+
+            confirmation = confirm_kill(failing[0], rerun, restore, ctx["confirm_mutant_runs"],
+                                        ctx["confirm_baseline_runs"])
+            record["kill_confirmation"] = confirmation
+            record["kill_stable"] = confirmation["stable"]
+            if confirmation["stable"]:
+                record["kill_kind"] = kind
+                detail = f"test-level failure ({kind}); {failing[0]} {confirmation['detail']}"
+            else:
+                confirmation["first_run_kill_kind"] = kind
+                record["unconfirmed_killing_tests"] = failing
+                status = ENV_FAULT if confirmation["environment_fault"] else UNPROVEN
+                failing, detail = [], f"kill did not reproduce: {confirmation['detail']}"
         after_mb = free_mb(ctx["tmp_root"])
         record.update({"free_mb_before": before_mb, "free_mb_after": after_mb})
         if status in (KILLED, UNPROVEN, INVALID) and 0 <= after_mb < ctx["min_free_mb"]:
             status, failing, detail = ENV_FAULT, [], (f"free disk fell to {after_mb} MB during the run "
                                                       f"(< {ctx['min_free_mb']} MB); failure not attributable")
+            record.pop("kill_kind", None)
         record.update({"status": status, "killing_tests": failing if status == KILLED else [],
-                       "exit_code": result["exit_code"], "pytest_seconds": result["seconds"],
-                       "pytest_summary": parse_summary(result["output"]), "detail": detail})
-        if status == KILLED:
-            record["kill_kind"] = "test_failure"
-            record["kill_reasons"] = [n["reason"][:240] for n in parse_nodes(result["output"])
-                                      if n["id"] in failing]
-        else:
+                       "detail": detail})
+        if status != KILLED:
             record["output_tail"] = tail(result["output"])
         return record
     except Exception as exc:  # harness fault: never reported as a kill
@@ -524,7 +638,11 @@ def python_version(python: str) -> str | None:
 def execute(repo: Path, manifest_path: Path, python: str, only: list[str] | None, jobs: int,
             timeout: float, keep: bool, log=print, include_untracked: bool = False,
             probe_imports: bool | None = None,
-            min_free_mb: int = DEFAULT_MIN_FREE_MB) -> tuple[int, dict[str, Any]]:
+            min_free_mb: int = DEFAULT_MIN_FREE_MB,
+            confirm_mutant_runs: int = DEFAULT_CONFIRM_MUTANT_RUNS,
+            confirm_baseline_runs: int = DEFAULT_CONFIRM_BASELINE_RUNS) -> tuple[int, dict[str, Any]]:
+    if confirm_mutant_runs < 1 or confirm_baseline_runs < 1:
+        raise ValueError("a kill must be reproduced at least once on the mutant and once on the baseline")
     manifest = load_manifest(manifest_path)
     guards = manifest["guards"]
     if only:
@@ -549,7 +667,8 @@ def execute(repo: Path, manifest_path: Path, python: str, only: list[str] | None
     ctx = {"repo": repo, "python": python, "head": head, "copy": copy, "files": copy_files,
            "timeout": timeout, "keep": keep, "tmp_root": tmp_root, "probe_imports": probe_imports,
            "import_roots": list(manifest.get("import_roots") or DEFAULT_IMPORT_ROOTS), "baseline_imports": {},
-           "min_free_mb": min_free_mb}
+           "min_free_mb": min_free_mb, "confirm_mutant_runs": confirm_mutant_runs,
+           "confirm_baseline_runs": confirm_baseline_runs}
     watched = [g["file"] for g in guards]
     scope_label, scope_files = fingerprint_scope(repo, copy, watched, git_ok)
     fingerprint_before = worktree_fingerprint(repo, scope_files)
@@ -573,7 +692,16 @@ def execute(repo: Path, manifest_path: Path, python: str, only: list[str] | None
                    "import_probe": {"enabled": probe_imports, "import_roots": ctx["import_roots"]},
                    "kill_rule": ("pytest exit 1 AND >=1 test-level FAILED node id whose failure is not "
                                  "NameError/ImportError/ModuleNotFoundError/UnboundLocalError; mutants that "
-                                 "fail to import (baseline imports OK) or cause collection errors are MUTANT_INVALID"),
+                                 "fail to import (baseline imports OK) or cause collection errors are MUTANT_INVALID; "
+                                 "the first killing node id must then fail alone on the mutant and pass alone on the "
+                                 "unmutated copy every time (kill_confirmation), otherwise UNPROVEN_ERROR"),
+                   "kill_confirmation": {"mutant_runs": confirm_mutant_runs,
+                                         "baseline_runs": confirm_baseline_runs,
+                                         "command": "<python> -m pytest -q -p no:cacheprovider -x -rfE "
+                                                    "--basetemp=<tmp> <killing node id>",
+                                         "state": "fresh SZL_STATE_PATH per rerun, same temp copy"},
+                   "kill_kinds": ("assertion = assert / AssertionError / pytest.fail / pytest.raises DID NOT "
+                                  "RAISE; exception:<Type> = the killing test crashed with an uncaught exception"),
                    "jobs": jobs, "timeout_seconds": timeout, "min_free_mb": min_free_mb,
                    "free_mb_at_start": free_mb(tmp_root)},
         "manifest": {"path": str(manifest_path), "sha256": sha256_bytes(manifest_path.read_bytes()),
@@ -612,31 +740,50 @@ def execute(repo: Path, manifest_path: Path, python: str, only: list[str] | None
         receipt["worktree_untouched"] = _untouched()
         return 3, receipt
 
+    def _line(r: dict[str, Any]) -> str:
+        what = r.get("killing_tests", [])[:1] + ([f"[{r['kill_kind']}]"] if r.get("kill_kind") else [])
+        if r["status"] != KILLED and r.get("kill_confirmation"):
+            what.append(r["detail"])
+        return f"[guard-teeth] {r['status']:<15} {r['id']}  ({r['seconds']}s) {' '.join(what)}"
+
     results: dict[str, dict[str, Any]] = {}
     if jobs <= 1:
         for g in guards:
             results[g["id"]] = run_guard(g, ctx)
-            r = results[g["id"]]
-            log(f"[guard-teeth] {r['status']:<15} {g['id']}  ({r['seconds']}s) {', '.join(r.get('killing_tests', [])[:1])}")
+            log(_line(results[g["id"]]))
     else:
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
             futures = {pool.submit(run_guard, g, ctx): g["id"] for g in guards}
             for fut in concurrent.futures.as_completed(futures):
                 r = fut.result()
                 results[r["id"]] = r
-                log(f"[guard-teeth] {r['status']:<15} {r['id']}  ({r['seconds']}s) {', '.join(r.get('killing_tests', [])[:1])}")
+                log(_line(r))
     ordered = [results[g["id"]] for g in guards]
     receipt["guards"] = ordered
     totals: dict[str, int] = {"guards": len(ordered)}
     for status in ALL_STATUSES:
         totals[status.lower()] = sum(1 for r in ordered if r["status"] == status)
+    killed = [r for r in ordered if r["status"] == KILLED]
+    totals["killed_by_assertion"] = sum(1 for r in killed if r.get("kill_kind") == "assertion")
+    totals["killed_by_exception"] = sum(1 for r in killed if str(r.get("kill_kind")).startswith("exception:"))
+    totals["killed_kind_unknown"] = len(killed) - totals["killed_by_assertion"] - totals["killed_by_exception"]
+    totals["kills_not_reproduced"] = sum(1 for r in ordered if r.get("kill_stable") is False)
     totals["temp_dirs_left_behind"] = sum(1 for r in ordered if r.get("temp_cleaned") is False)
     receipt["totals"] = totals
+    # Kills where the test crashed instead of asserting the property: still kills,
+    # listed so a reviewer can decide whether the test should assert it directly.
+    receipt["exception_kills"] = [{"id": r["id"], "kill_kind": r["kill_kind"],
+                                   "killing_test": r["killing_tests"][0],
+                                   "reason": (r.get("kill_reasons") or [""])[0]}
+                                  for r in killed if str(r.get("kill_kind")).startswith("exception:")]
+    for item in receipt["exception_kills"]:
+        log(f"[guard-teeth] exception kill (test crashed, did not assert): {item['id']} "
+            f"{item['kill_kind']} via {item['killing_test']}")
     receipt["worktree_untouched"] = _untouched()
     if not receipt["worktree_untouched"]:
         receipt["verdict"] = "HARNESS_ERROR_WORKTREE_CHANGED"
         return 2, receipt
-    proven = all(r["status"] == KILLED and r.get("kill_kind") == "test_failure"
+    proven = all(r["status"] == KILLED and r.get("kill_stable") is True
                  and any("::" in t for t in r.get("killing_tests", [])) for r in ordered)
     if totals["environment_fault"]:
         receipt["environment_fault_ids"] = [r["id"] for r in ordered if r["status"] == ENV_FAULT]
@@ -652,10 +799,14 @@ def execute(repo: Path, manifest_path: Path, python: str, only: list[str] | None
     return 2, receipt
 
 
-def dry_run(repo: Path, manifest_path: Path, only: list[str] | None) -> int:
-    """Check every find/replace against the working tree without running tests (read only)."""
+def check_manifest(repo: Path, manifest_path: Path, only: list[str] | None) -> list[dict[str, Any]]:
+    """Read-only staleness check of every selected guard: the find occurs exactly
+    once, the mutant changes and compiles, and every listed test file exists."""
     manifest = load_manifest(manifest_path)
-    bad = 0
+    unknown = sorted(set(only or []) - {g["id"] for g in manifest["guards"]})
+    if unknown:
+        raise ValueError(f"unknown guard id(s): {', '.join(unknown)}")
+    rows: list[dict[str, Any]] = []
     with tempfile.TemporaryDirectory(prefix="szl-guardteeth-dry-") as tmp:
         root = Path(tmp)
         for g in manifest["guards"]:
@@ -667,11 +818,27 @@ def dry_run(repo: Path, manifest_path: Path, only: list[str] | None) -> int:
             if src.is_file():
                 shutil.copy2(src, dst)
             facts = mutate(root, g)
-            status = facts.get("status", "READY")
-            bad += status != "READY"
-            print(f"{status:<15} {g['id']}  occurrences={facts.get('find_occurrences')} {facts.get('detail', '')}")
+            status, detail = facts.get("status", "READY"), facts.get("detail", "")
+            missing = sorted({t.split("::", 1)[0] for t in g["tests"]
+                              if not (repo / t.split("::", 1)[0]).is_file()})
+            if missing:
+                status = status if status != "READY" else STALE
+                detail = "; ".join(x for x in (detail, f"listed test file(s) missing: {', '.join(missing)}") if x)
+            rows.append({"id": g["id"], "status": status, "occurrences": facts.get("find_occurrences"),
+                         "detail": detail})
             if dst.is_file():
                 dst.unlink()
+    return rows
+
+
+def dry_run(repo: Path, manifest_path: Path, only: list[str] | None) -> int:
+    """Check every guard against the working tree without running tests (read only)."""
+    rows = check_manifest(repo, manifest_path, only)
+    for row in rows:
+        print(f"{row['status']:<15} {row['id']}  occurrences={row['occurrences']} {row['detail']}")
+    bad = sum(1 for row in rows if row["status"] != "READY")
+    print(f"[guard-teeth] dry-run: {len(rows) - bad}/{len(rows)} guard(s) READY; {bad} stale or invalid "
+          f"(exit {2 if bad else 0})")
     return 2 if bad else 0
 
 
@@ -687,13 +854,23 @@ SELFTEST_SRC = (
     "    if value > 10:\r\n"
     "        value = 10\r\n"
     "    return value\r\n"
+    "\r\n"
+    "\r\n"
+    "def scale(value):\r\n"
+    "    return value * 2\r\n"
+    "\r\n"
+    "\r\n"
+    "def weight(record):\r\n"
+    "    if 'weight' not in record:\r\n"
+    "        return 0\r\n"
+    "    return record['weight']\r\n"
 )
 SELFTEST_TEST = (
     "import sys\n"
     "from pathlib import Path\n"
     "import pytest\n"
     "sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'deploy'))\n"
-    "from guarded import admit, clamp\n"
+    "from guarded import admit, clamp, scale, weight\n"
     "\n"
     "def test_admit_rejects_negative():\n"
     "    with pytest.raises(ValueError):\n"
@@ -710,15 +887,30 @@ SELFTEST_TEST = (
     "\n"
     "def test_untracked_marker_not_copied():\n"
     "    assert not (Path(__file__).resolve().parents[1] / 'deploy' / 'untracked_marker.txt').exists()\n"
+    "\n"
+    "_ORDER = []\n"
+    "\n"
+    "def test_order_a_primes():\n"
+    "    _ORDER.append('a')\n"
+    "\n"
+    "def test_order_b_only_checks_after_a():\n"
+    "    if _ORDER:  # order-dependent: vacuous when this test runs alone\n"
+    "        assert scale(2) == 4\n"
+    "\n"
+    "def test_weight_defaults_to_zero():\n"
+    "    assert weight({}) == 0\n"
 )
 
 
 def self_test(python: str) -> int:
-    """Prove the harness on a synthetic repo: one guard KILLED, one SURVIVED,
-    stale and duplicate finds MANIFEST_STALE, non-compiling / import-breaking /
-    name-binding mutants MUTANT_INVALID (never KILLED, never ALL_GUARDS_KILLED),
-    untracked files excluded from the copy, a red baseline exit 3, and the
-    source tree untouched."""
+    """Prove the harness on a synthetic repo: one guard KILLED by an assertion and
+    one by a crash (reproduced alone on mutant and baseline, the crash listed as
+    an exception kill), one SURVIVED, an order-dependent kill that does not
+    reproduce alone UNPROVEN_ERROR, stale and duplicate finds MANIFEST_STALE,
+    non-compiling / import-breaking / name-binding mutants MUTANT_INVALID
+    (never KILLED, never ALL_GUARDS_KILLED), untracked files excluded from the
+    copy, a missing test file stale in --dry-run, a red baseline exit 3, and
+    the source tree untouched."""
     checks: list[tuple[str, bool]] = []
     quiet = lambda *_: None  # noqa: E731
     with tempfile.TemporaryDirectory(prefix="szl-guardteeth-selftest-", ignore_cleanup_errors=True) as tmp:
@@ -759,6 +951,12 @@ def self_test(python: str) -> int:
                  "find": "raise ValueError('negative evidence weight')",
                  "replace": "raise ValueErr('negative evidence weight')",
                  "why": "imports but NameError at call time", "tests": tests},
+                {"id": "flaky.order_dependent_kill", "file": "deploy/guarded.py",
+                 "find": "    return value * 2\n", "replace": "    return value * 3\n",
+                 "why": "only an order-dependent test notices; it passes alone on the mutant", "tests": tests},
+                {"id": "weight.crash_kill", "file": "deploy/guarded.py",
+                 "find": "    if 'weight' not in record:\n        return 0\n", "replace": "",
+                 "why": "the killing test crashes with KeyError instead of asserting", "tests": tests},
             ],
         }
         mpath = Path(tmp) / "manifest.json"
@@ -782,8 +980,33 @@ def self_test(python: str) -> int:
                        and status["invalid.import_name"].get("killing_tests") == []))
         checks.append(("module NameError mutant invalid, not killed", st("invalid.module_nameerror") == INVALID))
         checks.append(("runtime NameError mutant invalid, not killed", st("invalid.runtime_nameerror") == INVALID))
-        checks.append(("totals.killed counts only real kills", receipt["totals"].get("killed") == 1
-                       and receipt["totals"].get("mutant_invalid") == 4))
+        checks.append(("totals.killed counts only real, reproduced kills", receipt["totals"].get("killed") == 2
+                       and receipt["totals"].get("mutant_invalid") == 4
+                       and receipt["totals"].get("unproven_error") == 1
+                       and receipt["totals"].get("kills_not_reproduced") == 1))
+        admit_rec = status.get("admit.rejects_negative", {})
+        admit_conf = admit_rec.get("kill_confirmation", {})
+        checks.append(("assertion kill reproduced alone: fails 2/2 on mutant, passes 3/3 on baseline",
+                       admit_rec.get("kill_stable") is True and admit_rec.get("kill_kind") == "assertion"
+                       and admit_conf.get("node") == "tests/test_guarded.py::test_admit_rejects_negative"
+                       and admit_conf.get("mutant_failed") == 2 and admit_conf.get("baseline_passed") == 3
+                       and [r["on"] for r in admit_conf.get("runs", [])] == ["mutant"] * 2 + ["baseline"] * 3))
+        flaky_rec = status.get("flaky.order_dependent_kill", {})
+        checks.append(("order-dependent kill that passes alone on the mutant is UNPROVEN_ERROR, not KILLED",
+                       st("flaky.order_dependent_kill") == UNPROVEN and flaky_rec.get("kill_stable") is False
+                       and flaky_rec.get("killing_tests") == [] and "kill_kind" not in flaky_rec
+                       and flaky_rec.get("unconfirmed_killing_tests")
+                       == ["tests/test_guarded.py::test_order_b_only_checks_after_a"]
+                       and flaky_rec.get("kill_confirmation", {}).get("mutant_failed") == 0
+                       and flaky_rec.get("kill_confirmation", {}).get("baseline_passed") == 0))
+        crash_rec = status.get("weight.crash_kill", {})
+        checks.append(("crash kill counted, kind exception:KeyError, listed apart from assertion kills",
+                       st("weight.crash_kill") == KILLED and crash_rec.get("kill_stable") is True
+                       and crash_rec.get("kill_kind") == "exception:KeyError"
+                       and receipt["totals"].get("killed_by_exception") == 1
+                       and receipt["totals"].get("killed_by_assertion") == 1
+                       and receipt["totals"].get("killed_kind_unknown") == 0
+                       and [e["id"] for e in receipt.get("exception_kills", [])] == ["weight.crash_kill"]))
         checks.append(("CRLF file matched", status.get("admit.rejects_negative", {}).get("eol") == "CRLF"))
         checks.append(("sha changed", status.get("admit.rejects_negative", {}).get("file_sha256_before")
                        != status.get("admit.rejects_negative", {}).get("file_sha256_after")))
@@ -800,10 +1023,16 @@ def self_test(python: str) -> int:
                        and all(g.get("temp_cleaned") for g in receipt["guards"])))
         checks.append(("honesty fields", receipt["honesty"] == "MEASURED" and receipt["signature_claimed"] is False))
         code_only, receipt_only = execute(repo, mpath, python, ["admit.rejects_negative"], 1, 120.0, False,
-                                          log=quiet, min_free_mb=0)
+                                          log=quiet, min_free_mb=0, confirm_mutant_runs=1,
+                                          confirm_baseline_runs=1)
         checks.append(("--only subset exits 0 but never claims the whole manifest",
                        code_only == 0 and receipt_only["totals"]["killed"] == 1
                        and receipt_only["verdict"] == "SELECTED_GUARDS_KILLED"))
+        code_fl, receipt_fl = execute(repo, mpath, python, ["flaky.order_dependent_kill"], 1, 120.0, False,
+                                      log=quiet, min_free_mb=0)
+        checks.append(("a kill that does not reproduce never yields a KILLED verdict",
+                       code_fl == 2 and receipt_fl["verdict"] == "MANIFEST_OR_HARNESS_PROBLEM"
+                       and receipt_fl["totals"]["killed"] == 0))
         code_bad, receipt_bad = execute(repo, mpath, python, ["invalid.import_name", "invalid.module_nameerror"],
                                         1, 120.0, False, log=quiet, min_free_mb=0)
         checks.append(("import-breaking mutants never yield ALL_GUARDS_KILLED",
@@ -829,6 +1058,66 @@ def self_test(python: str) -> int:
         checks.append(("classify: disk-full output is ENVIRONMENT_FAULT, not KILLED",
                        classify(fake(1, "FAILED tests/t.py::test_a - sqlite3.OperationalError: database or disk "
                                         "is full\n1 failed"))[0] == ENV_FAULT))
+        checks.append(("classify: sqlite 'database is locked' is ENVIRONMENT_FAULT, not KILLED",
+                       classify(fake(1, "FAILED tests/t.py::test_a - sqlite3.OperationalError: database is "
+                                        "locked\n1 failed"))[0] == ENV_FAULT))
+        checks.append(("kill_kind: assertion vs exception:<Type>",
+                       [kill_kind(r) for r in ("assert 6 == 4", "AssertionError: no",
+                                               "Failed: DID NOT RAISE <class 'ValueError'>", "KeyError: 'state'",
+                                               "fastapi.exceptions.HTTPException: 409: stale", "")]
+                       == ["assertion", "assertion", "assertion", "exception:KeyError",
+                           "exception:HTTPException", "unknown"]))
+        node = "tests/t.py::test_a"
+        fail_out = {"timed_out": False, "exit_code": 1, "seconds": 0.1,
+                    "output": f"FAILED {node} - AssertionError: no\n1 failed in 0.1s"}
+        pass_out = {"timed_out": False, "exit_code": 0, "seconds": 0.1, "output": "1 passed in 0.1s"}
+
+        def scripted(*outs: dict[str, Any]) -> Callable[[str], dict[str, Any]]:
+            queue = list(outs)
+            return lambda _node: queue.pop(0)
+        restored: list[bool] = []
+
+        def restore_ok() -> bool:
+            restored.append(True)
+            return True
+        ok = confirm_kill(node, scripted(fail_out, fail_out, pass_out, pass_out, pass_out), restore_ok, 2, 3)
+        checks.append(("confirm_kill: 2/2 mutant failures + 3/3 baseline passes is stable",
+                       ok["stable"] is True and ok["mutant_failed"] == 2 and ok["baseline_passed"] == 3
+                       and restored == [True]))
+        restored.clear()
+        once = confirm_kill(node, scripted(fail_out, pass_out), restore_ok, 2, 3)
+        checks.append(("confirm_kill: mutant rerun that passes is unstable; baseline never run",
+                       once["stable"] is False and once["mutant_failed"] == 1 and restored == []
+                       and [r["on"] for r in once["runs"]] == ["mutant", "mutant"]))
+        red_base = confirm_kill(node, scripted(fail_out, fail_out, pass_out, fail_out), restore_ok, 2, 3)
+        checks.append(("confirm_kill: killer failing alone on the baseline is unstable",
+                       red_base["stable"] is False and red_base["baseline_passed"] == 1
+                       and "baseline rerun 2/3" in red_base["detail"]))
+        binding = {"timed_out": False, "exit_code": 1, "seconds": 0.1,
+                   "output": f"FAILED {node} - NameError: name 'x' is not defined\n1 failed"}
+        checks.append(("confirm_kill: a rerun dying of NameError is not a reproduced kill",
+                       confirm_kill(node, scripted(binding), restore_ok, 2, 3)["stable"] is False))
+        other = {"timed_out": False, "exit_code": 1, "seconds": 0.1,
+                 "output": "FAILED tests/t.py::test_other - AssertionError: no\n1 failed"}
+        checks.append(("confirm_kill: a different test failing is not a reproduced kill",
+                       confirm_kill(node, scripted(other), restore_ok, 2, 3)["stable"] is False))
+        locked = {"timed_out": False, "exit_code": 1, "seconds": 0.1,
+                  "output": f"FAILED {node} - sqlite3.OperationalError: database is locked\n1 failed"}
+        env_conf = confirm_kill(node, scripted(fail_out, locked), restore_ok, 2, 3)
+        checks.append(("confirm_kill: host fault in a rerun is flagged as environment_fault",
+                       env_conf["stable"] is False and env_conf["environment_fault"] is True))
+        checks.append(("confirm_kill: an unrestorable file is unstable",
+                       confirm_kill(node, scripted(fail_out, fail_out), lambda: False, 2, 3)["stable"] is False))
+        dry_manifest = json.loads(mpath.read_text(encoding="utf-8"))
+        dry_manifest["guards"][0]["tests"] = tests + ["tests/test_renamed_away.py"]
+        dry_path = Path(tmp) / "manifest-dry.json"
+        dry_path.write_text(json.dumps(dry_manifest), encoding="utf-8")
+        dry = {r["id"]: r for r in check_manifest(repo, dry_path, None)}
+        checks.append(("dry-run: a listed test file that no longer exists is MANIFEST_STALE",
+                       dry["admit.rejects_negative"]["status"] == STALE
+                       and "tests/test_renamed_away.py" in dry["admit.rejects_negative"]["detail"]
+                       and dry["clamp.upper_bound"]["status"] == "READY"
+                       and dry["stale.absent"]["status"] == STALE))
         code_disk, receipt_disk = execute(repo, mpath, python, ["admit.rejects_negative"], 1, 120.0, False,
                                           log=quiet, min_free_mb=10 ** 12)
         checks.append(("low free disk gate: ENVIRONMENT_FAULT, never ALL_GUARDS_KILLED",
@@ -865,7 +1154,13 @@ def main(argv: list[str] | None = None) -> int:
                         help="refuse to run a guard (ENVIRONMENT_FAULT) below this much free temp disk")
     parser.add_argument("--no-import-probe", action="store_true",
                         help="skip the pre-pytest import probe (collection errors still count as MUTANT_INVALID)")
+    parser.add_argument("--confirm-mutant-runs", type=int, default=DEFAULT_CONFIRM_MUTANT_RUNS,
+                        help="times the killing test is re-run alone on the mutant; each must fail (min 1)")
+    parser.add_argument("--confirm-baseline-runs", type=int, default=DEFAULT_CONFIRM_BASELINE_RUNS,
+                        help="times the killing test is re-run alone on the unmutated copy; each must pass (min 1)")
     args = parser.parse_args(argv)
+    if args.confirm_mutant_runs < 1 or args.confirm_baseline_runs < 1:
+        parser.error("--confirm-mutant-runs and --confirm-baseline-runs must be at least 1")
     only = [x for item in (args.only or []) for x in item.split(",") if x] or None
     if args.self_test:
         return self_test(args.python)
@@ -877,7 +1172,8 @@ def main(argv: list[str] | None = None) -> int:
                             log=lambda msg: print(msg, file=sys.stderr, flush=True),
                             include_untracked=args.include_untracked,
                             probe_imports=False if args.no_import_probe else None,
-                            min_free_mb=args.min_free_mb)
+                            min_free_mb=args.min_free_mb, confirm_mutant_runs=args.confirm_mutant_runs,
+                            confirm_baseline_runs=args.confirm_baseline_runs)
     blob = json.dumps(receipt, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
     if args.json_out:
         Path(args.json_out).write_text(blob, encoding="utf-8", newline="\n")
