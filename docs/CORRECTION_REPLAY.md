@@ -50,6 +50,12 @@ keeps it equal to the mounted routes.
 
 Every `detail` below is the exact response text. Session-header and
 unknown-vertical errors are the same as on the other session-scoped routes.
+Before any POST handler runs, the app-wide request-body bounds in
+`deploy/szl_verticals/http_bounds.py` can reject the request with 400, 408, 413
+or 422 in their own `{"ok": false, "error": ..., "code": ...}` shape, for
+example for a body over 128 KiB or for a body sent as `application/json` that
+is not valid JSON or repeats an object key. Those responses apply to every POST
+route and are not repeated in the tables.
 
 `POST /api/verticals/{vertical}/evidence/withdraw`
 
@@ -97,16 +103,17 @@ responds.
 | 409 | `evidence changed during provider invocation; output withheld` | After the provider responds, the re-resolved snapshot differs or the evidence has expired. The generated output is discarded. |
 | 503 | `evidence replay unavailable` | Either assessment check could not be read. |
 
-These are in addition to the invoke codes that predate #48:
-503 `{"error": "INFERENCE_NOT_READY", ...}`, 503
-`evidence expired before provider dispatch`, and the 502 provider errors. A 409
-after dispatch cannot retract content already sent to the provider.
+The invoke responses that predate #48 are unchanged, including 503
+`{"error": "INFERENCE_NOT_READY", ...}`, 503
+`evidence expired before provider dispatch` and the 502 provider errors. A 409
+or 503 after dispatch cannot retract content already sent to the provider.
 
 ### What 503 means
 
 `evidence replay unavailable` means the store could not answer. The causes are
-an unavailable or locked SQLite ledger, a malformed stored assessment row, a
-failing clock (see [Clock contract](#clock-contract)), current evidence
+an unavailable or locked SQLite ledger, a stored assessment whose
+`dependencies_json` or `reasons_json` cannot be parsed or has the wrong shape,
+a failing clock (see [Clock contract](#clock-contract)), current evidence
 resolution returning `UNAVAILABLE`, or a registration that hit the per-scope
 capacity or an identity conflict. The response is always exactly this text, and
 no database detail is exposed.
@@ -114,7 +121,8 @@ no database detail is exposed.
 A 503 never changes stored state. The store transaction is not committed, so no
 withdrawal, invalidation or `last_checked_at` update is recorded, and the
 condition is never reported as 404 or `CURRENT`. Retry once the fault clears.
-A malformed stored row keeps returning 503 until the row is repaired.
+Requests that need a malformed stored assessment keep returning 503 until it is
+repaired.
 
 ## Clock contract
 
@@ -132,8 +140,8 @@ This section describes `main` as of #48.
   non-negative `int` or `float` (NaN, infinity, a negative value or a boolean,
   for example), is a store fault. The route returns 503
   `evidence replay unavailable` and nothing is written.
-- `last_checked_at` never moves backwards. If a sampled time is earlier than
-  the stored value, the read adds
+- `last_checked_at` never moves backwards. If a registration or status check
+  samples a time earlier than the assessment's stored `last_checked_at`, it adds
   `{"payload_sha256": null, "reason": "ASSESSMENT_CLOCK_REGRESSED"}` and the
   assessment becomes `REVALIDATION_REQUIRED`. Like every invalidation, this is
   terminal: a later correct clock does not restore `CURRENT`. Generate a new
@@ -172,8 +180,8 @@ SQLite transactions serialize registration, withdrawals and observation writes.
 Changing a recorded payload's selected receipt or normalized summary latches
 invalidation during `put`, including change-then-restore writes. Status reads
 also detect expiry, missing/tampered rows, clock regression and current
-connector-policy disagreement. Temporary unavailable storage is an error (503),
-not an empty/current result and not a permanent proof of invalidity.
+connector-policy disagreement. Temporary unavailable storage is an error, not
+an empty/current result and not a permanent proof of invalidity.
 
 Withdrawals survive repeat observation of identical payload bytes. Connector
 cache reads inspect the latest query result first, so withdrawing it cannot
