@@ -8,9 +8,10 @@ from collections import defaultdict, deque
 from typing import Any, Deque, Dict, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import Field
 
-from .core import STATE_LOCK, SessionScope, StrictModel
+from .core import STATE_LOCK, SessionScope, StrictModel, engine_health
 from .counsel_review import counsel_review
 
 # ----------------------------- counsel ------------------------------------
@@ -55,19 +56,18 @@ def _chain(session: str, step: str, payload: str) -> dict[str, Any]:
 
 
 @counsel.get("/healthz")
-def counsel_health() -> dict[str, Any]:
+def counsel_health() -> JSONResponse:
     with STATE_LOCK:
         sessions = len(MATTERS)
         matters = sum(len(items) for items in MATTERS.values())
         receipts = sum(len(items) for items in RECEIPT_CHAIN.values())
-    return {
-        "status": "ok",
+    return engine_health({
         "service": "counsel",
         "matters": matters,
         "receipt_chain": receipts,
         "state": "SESSION_ISOLATED_PROCESS_MEMORY",
         "active_sessions": sessions,
-    }
+    })
 
 
 @counsel.post("/v1/matters")

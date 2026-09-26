@@ -8,9 +8,10 @@ from collections import defaultdict, deque
 from typing import Any, Deque, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import Field
 
-from .core import STATE_LOCK, SessionScope, StrictModel
+from .core import STATE_LOCK, SessionScope, StrictModel, engine_health
 
 # ----------------------------- finance ------------------------------------
 finance = APIRouter(prefix="/finance", tags=["finance"])
@@ -26,11 +27,11 @@ class Observation(StrictModel):
 
 
 @finance.get("/healthz")
-def finance_health() -> dict[str, Any]:
+def finance_health() -> JSONResponse:
     with STATE_LOCK:
         sessions = len(SERIES)
         count = sum(len(series) for series in SERIES.values())
-    return {"status": "ok", "service": "finance", "symbols": count, "active_sessions": sessions, "state": "SESSION_ISOLATED_PROCESS_MEMORY"}
+    return engine_health({"service": "finance", "symbols": count, "active_sessions": sessions, "state": "SESSION_ISOLATED_PROCESS_MEMORY"})
 
 
 @finance.post("/v1/observations")

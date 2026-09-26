@@ -7,9 +7,10 @@ from collections import defaultdict, deque
 from typing import Any, Deque, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import Field
 
-from .core import STATE_LOCK, SessionScope, StrictModel
+from .core import STATE_LOCK, SessionScope, StrictModel, engine_health
 
 # ----------------------------- vessels ------------------------------------
 vessels = APIRouter(prefix="/vessels", tags=["vessels"])
@@ -38,19 +39,18 @@ def _haversine_nm(a: tuple[float, float], b: tuple[float, float]) -> float:
 
 
 @vessels.get("/healthz")
-def vessels_health() -> dict[str, Any]:
+def vessels_health() -> JSONResponse:
     with STATE_LOCK:
         sessions = len(TRACKS)
         count = sum(len(tracks) for tracks in TRACKS.values())
-    return {
-        "status": "ok",
+    return engine_health({
         "service": "vessels",
         "tracked": count,
         "state": "SESSION_ISOLATED_PROCESS_MEMORY",
         "active_sessions": sessions,
         "public_surface": "SZLHOLDINGS/killinchu",
         "consolidated": True,
-    }
+    })
 
 
 @vessels.post("/v1/positions")

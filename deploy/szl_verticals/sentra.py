@@ -11,9 +11,10 @@ from collections import defaultdict, deque
 from typing import Any, Deque, Dict, List, Literal
 
 from fastapi import APIRouter, Query
+from fastapi.responses import JSONResponse
 from pydantic import Field
 
-from .core import STATE_LOCK, SessionScope, StrictModel
+from .core import STATE_LOCK, SessionScope, StrictModel, engine_health
 
 # ----------------------------- sentra -------------------------------------
 sentra = APIRouter(prefix="/sentra", tags=["sentra"])
@@ -76,15 +77,14 @@ def _sentra_receipt(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @sentra.get("/healthz")
-def sentra_health() -> dict[str, Any]:
-    return {
-        "status": "ok",
+def sentra_health() -> JSONResponse:
+    return engine_health({
         "service": "sentra",
         "signing_key_source": SENTRA_KEY_SOURCE,
         "gates": len(GATES) + 1,
         "state": "SESSION_ISOLATED_PROCESS_MEMORY",
         "active_sessions": len(VERDICTS),
-    }
+    })
 
 
 @sentra.post("/v1/evaluate")

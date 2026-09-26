@@ -58,7 +58,8 @@ def test_root_healthz_source_unavailable_is_not_measured():
     with patch("szl_verticals.core._revision_observation", return_value=observation):
         response = client.get("/healthz")
     body = response.json()
-    assert response.status_code == 200
+    # Fail closed in the HTTP status too, so status-code probes see it.
+    assert response.status_code == 503
     assert body["ok"] is False
     assert body["status"] == "source-unavailable"
     assert body["truth_label"] == "UNAVAILABLE"

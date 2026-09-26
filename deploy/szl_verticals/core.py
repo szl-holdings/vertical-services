@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import Depends, Header, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 VERSION = "2.2.0"
@@ -123,6 +124,35 @@ def build_info() -> dict[str, Any]:
         "receipt_minted": False,
         "truth_label": "MEASURED",
     }
+
+
+def source_bound(build: Mapping[str, Any]) -> bool:
+    """True only when exactly one well-formed source binding is observed."""
+    return (
+        build["build"]["state"] == "OBSERVED"
+        and build["source_binding"]["bindings_agree"] is True
+    )
+
+
+def engine_health(fields: Mapping[str, Any]) -> JSONResponse:
+    """Per-engine health that fails closed in the HTTP status, not only the body.
+
+    Every engine is served by this one process, so an engine is healthy only
+    while the process serves one observed, agreeing source binding, the same
+    rule root ``/healthz`` applies. Otherwise the route answers 503 with the
+    same body shape, so status-code probes (``curl -f``, container
+    HEALTHCHECK, uptime monitors) see the failure the body reports.
+    """
+    build = build_info()
+    ok = source_bound(build)
+    body = {
+        "ok": ok,
+        "status": "ok" if ok else "source-unavailable",
+        **fields,
+        "build": build["build"],
+        "truth_label": "MEASURED" if ok else "UNAVAILABLE",
+    }
+    return JSONResponse(body, status_code=200 if ok else 503)
 
 
 class StrictModel(BaseModel):

@@ -40,15 +40,17 @@ jobs:
           )
           for path in "${paths[@]}"; do
             url="${BASE}${path}"
+            # A 2xx proves reachability only. Health routes answer 503 when the
+            # runtime source is unbound, so curl -f fails on that as well.
             if curl -fsS --max-time 30 --retry 2 --retry-delay 10 "$url" > /dev/null; then
-              echo "LIVE  $url"
+              echo "REACHABLE  $url"
             else
-              echo "DOWN  $url"
+              echo "FAILED  $url"
               FAILED=1
             fi
           done
           if [ "$FAILED" -ne 0 ]; then
-            echo "::error::One or more vertical-services identity or health endpoints are down"
+            echo "::error::One or more vertical-services identity or health endpoints are unreachable or unhealthy"
             exit 1
           fi
           EXPECTED_REVISION="$(python tools/resolve_deployable_revision.py)"

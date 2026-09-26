@@ -10,8 +10,9 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Query
+from fastapi.responses import JSONResponse
 
-from .core import SessionScope
+from .core import SessionScope, engine_health
 from .sentra import EvaluateRequest, sentra_evaluate
 from .vessels import Position, TRACKS, fleet_risk, vessel_risk, vessels_ingest
 
@@ -19,10 +20,9 @@ killinchu = APIRouter(prefix="/killinchu", tags=["killinchu"])
 
 
 @killinchu.get("/healthz")
-def killinchu_health() -> dict[str, Any]:
+def killinchu_health() -> JSONResponse:
     tracked = sum(len(tracks) for tracks in TRACKS.values())
-    return {
-        "status": "ok",
+    return engine_health({
         "service": "killinchu",
         "domain": "DEFENSE_AND_MARITIME",
         "organs": {
@@ -45,8 +45,7 @@ def killinchu_health() -> dict[str, Any]:
             "independent_vertical": False,
         },
         "effectors_enabled": False,
-        "truth_label": "MEASURED",
-    }
+    })
 
 
 @killinchu.post("/v1/defense/evaluate")

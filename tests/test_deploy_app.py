@@ -133,7 +133,7 @@ class VerticalServicesContractTests(unittest.TestCase):
 
             health = self.client.get("/healthz")
             health_body = health.json()
-            self.assertEqual(health.status_code, 200)
+            self.assertEqual(health.status_code, 503)
             self.assertFalse(health_body["ok"])
             self.assertEqual(health_body["status"], "source-unavailable")
             self.assertEqual(health_body["source_revision"], "UNAVAILABLE")

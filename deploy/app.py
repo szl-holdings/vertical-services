@@ -26,6 +26,7 @@ from szl_verticals.core import (
     SOURCE_REPOSITORY,
     VERSION,
     build_info as _build_info,
+    source_bound as _source_ready,
 )
 from szl_verticals.counsel import counsel
 from szl_verticals.finance import finance
@@ -168,22 +169,23 @@ CATALOG = {
 }
 
 
-def _source_ready(build: dict) -> bool:
-    return (
-        build["build"]["state"] == "OBSERVED"
-        and build["source_binding"]["bindings_agree"] is True
-    )
-
-
 def _health_truth_label(source_ready: bool) -> str:
     return "MEASURED" if source_ready else "UNAVAILABLE"
 
 
 @app.get("/healthz")
-def root_health() -> dict:
+def root_health() -> JSONResponse:
+    """Process health that fails closed in the HTTP status as well as the body.
+
+    A runtime that is not serving one observed, agreeing source binding answers
+    503 with the same body (``ok: false``), so status-code probes such as
+    ``curl -f``, the container HEALTHCHECK, and the uptime monitor see the same
+    failure the body reports. Per-engine ``/{engine}/healthz`` routes follow
+    the same rule through ``engine_health``.
+    """
     build = _build_info()
     source_ready = _source_ready(build)
-    return {
+    body = {
         "ok": source_ready,
         "status": "ok" if source_ready else "source-unavailable",
         "service": "szl-vertical-services",
@@ -227,6 +229,7 @@ def root_health() -> dict:
         "source": SOURCE_REPOSITORY,
         **{field: build[field] for field in RUNTIME_SOURCE_IDENTITY_FIELDS},
     }
+    return JSONResponse(body, status_code=200 if source_ready else 503)
 
 
 @app.get("/readyz")

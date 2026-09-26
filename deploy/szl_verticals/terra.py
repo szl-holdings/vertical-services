@@ -8,9 +8,10 @@ from collections import defaultdict
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import Field
 
-from .core import STATE_LOCK, SessionScope, StrictModel
+from .core import STATE_LOCK, SessionScope, StrictModel, engine_health
 
 # ----------------------------- terra --------------------------------------
 terra = APIRouter(prefix="/terra", tags=["terra"])
@@ -26,11 +27,11 @@ class Listing(StrictModel):
 
 
 @terra.get("/healthz")
-def terra_health() -> dict[str, Any]:
+def terra_health() -> JSONResponse:
     with STATE_LOCK:
         sessions = len(LISTINGS)
         count = sum(len(listings) for listings in LISTINGS.values())
-    return {"status": "ok", "service": "terra", "listings": count, "active_sessions": sessions, "state": "SESSION_ISOLATED_PROCESS_MEMORY"}
+    return engine_health({"service": "terra", "listings": count, "active_sessions": sessions, "state": "SESSION_ISOLATED_PROCESS_MEMORY"})
 
 
 @terra.post("/v1/listings")

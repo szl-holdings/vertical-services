@@ -7,9 +7,10 @@ from collections import defaultdict, deque
 from typing import Any, Deque, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import Field
 
-from .core import STATE_LOCK, SessionScope, StrictModel
+from .core import STATE_LOCK, SessionScope, StrictModel, engine_health
 
 # ----------------------------- lyte ---------------------------------------
 lyte = APIRouter(prefix="/lyte", tags=["lyte"])
@@ -25,11 +26,11 @@ class Metric(StrictModel):
 
 
 @lyte.get("/healthz")
-def lyte_health() -> dict[str, Any]:
+def lyte_health() -> JSONResponse:
     with STATE_LOCK:
         sessions = len(STREAMS)
         count = sum(len(streams) for streams in STREAMS.values())
-    return {"status": "ok", "service": "lyte", "streams": count, "active_sessions": sessions, "state": "SESSION_ISOLATED_PROCESS_MEMORY"}
+    return engine_health({"service": "lyte", "streams": count, "active_sessions": sessions, "state": "SESSION_ISOLATED_PROCESS_MEMORY"})
 
 
 @lyte.post("/v1/metrics")
