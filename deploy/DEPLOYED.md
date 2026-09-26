@@ -18,7 +18,7 @@ Do not treat this file as a live occupancy receipt. `/api/build-info` is the can
 
 ## Publish paths
 
-Both writers commit through the same pinned controller: `.github/scripts/hf_deploy_from_dockerfile.py` from `szl-holdings/.github` at `c889276e51e7d954c4bba8b216f86fc7577721fa`. It derives the Space file set from the `deploy/Dockerfile` COPY sources, refuses a revision that is not the current default-branch tip, and commits with the message `deploy(hf): sync szl-holdings/vertical-services@<sha> derived COPY set`. Both writers produce the same message, so a Space commit alone does not show which one wrote it. The writer's workflow run and its artifacts do.
+Both writers commit through the same pinned controller: `.github/scripts/hf_deploy_from_dockerfile.py` from `szl-holdings/.github` at `c889276e51e7d954c4bba8b216f86fc7577721fa`. It derives the Space file set from the `deploy/Dockerfile` COPY sources. Both writers run it with `--require-default-branch-tip`, so it refuses a revision that is not the current default-branch tip. It commits with the message `deploy(hf): sync szl-holdings/vertical-services@<sha> derived COPY set`. Both writers produce the same message, so a Space commit alone does not show which one wrote it. The writer's workflow run and its artifacts do.
 
 ### 1. `.github/workflows/hf-space.yml` in this repository
 

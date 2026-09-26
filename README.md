@@ -58,11 +58,11 @@ Every vertical exposes the same governed surfaces:
 
 A Hatun `REVIEW` and a `READY_FOR_INFERENCE` intelligence plan register a
 replay assessment before they return a receipt, and invocation re-checks it
-before and after provider dispatch. The 404, 409 and 503 responses, the replay clock contract and the
-`withdrawn` flag are specified in
+before and after provider dispatch. The 404, 409 and 503 responses, the replay
+clock contract and the `withdrawn` flag are specified in
 [`docs/CORRECTION_REPLAY.md`](https://github.com/szl-holdings/vertical-services/blob/main/docs/CORRECTION_REPLAY.md).
-The complete machine-readable route list is `operational_fabric` in
-`/api/catalog`.
+The machine-readable list of every per-vertical route, including the plan,
+invoke, Hatun and HTML surfaces, is `operational_fabric` in `/api/catalog`.
 
 The nine organs are **Sense → Normalize → Context → Formula → Policy → Decide →
 Verify → Remember → Receipt**. Every observation carries a source URL, fetch
@@ -150,7 +150,7 @@ compiles and runs all deterministic tests, validates each vertical in a six-way
 parallel matrix, and builds and smokes the Docker image.
 
 It publishes only after a push to `main` (or a manual dispatch on `main`), and
-only when a Hugging Face write token is available to this repository. Without a
+only when a Hugging Face token secret is available to this repository. Without a
 token, it records a `DELEGATED` receipt, publishes nothing, and names the a11oy
 `hf-sync.yml` `publish-vertical-flagships` job as the writer. That job runs only
 on a manual, plan-gated dispatch in `szl-holdings/a11oy`.
