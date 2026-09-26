@@ -101,7 +101,7 @@ def test_scope_mismatched_internal_snapshot_fails_closed(runtime, ledger):
         runtime.build_intelligence_plan("finance", request(runtime), SCOPE, _evidence=snapshot)
 
 
-def test_provider_consumes_exact_planned_snapshot_despite_later_db_change(runtime, ledger, monkeypatch):
+def test_provider_consumes_exact_planned_snapshot_when_basis_is_unchanged(runtime, ledger, monkeypatch):
     original = [put(ledger, digest, summary={"finding": "original"}) for digest in DIGESTS[:2]]
     payload = request(runtime)
     expected = runtime.build_intelligence_plan("finance", payload, SCOPE)
@@ -122,9 +122,6 @@ def test_provider_consumes_exact_planned_snapshot_despite_later_db_change(runtim
     def client_factory(**kwargs):
         assert kwargs["trust_env"] is False
         assert kwargs["follow_redirects"] is False
-        # Mutate after the actual invoke has frozen its plan; it must not reread.
-        for receipt in original:
-            ledger.put(receipt, {"finding": "changed after planning"})
         return real_client(transport=httpx.MockTransport(response), **kwargs)
     monkeypatch.setattr(runtime.httpx, "AsyncClient", client_factory)
     result = asyncio.run(runtime.vertical_intelligence_invoke("finance", payload, SCOPE))
@@ -134,6 +131,48 @@ def test_provider_consumes_exact_planned_snapshot_despite_later_db_change(runtim
     assert result["model_revision_evidence"] == "OPERATOR_DECLARED"
     assert result["effectors_enabled"] is False
     assert result["evidence_fresh_at_response"] is True
+
+
+@pytest.mark.parametrize("change", ["summary", "withdrawal", "change-then-restore"])
+def test_changed_basis_before_dispatch_prevents_network(runtime, ledger, monkeypatch, change):
+    original = [put(ledger, digest, summary={"finding": "original"}) for digest in DIGESTS[:2]]
+    real_client = httpx.AsyncClient
+    seen = []
+    def response(req):
+        seen.append(req)
+        raise AssertionError("obsolete evidence must not leave the process")
+    def factory(**kwargs):
+        if change in {"summary", "change-then-restore"}:
+            ledger.put(original[0], {"finding": "changed after planning"})
+            if change == "change-then-restore":
+                ledger.put(original[0], {"finding": "original"})
+        else:
+            ledger.withdraw_payloads(vertical="finance", session_scope=SCOPE,
+                                     payload_digests=DIGESTS[:1], now=CLOCK)
+        return real_client(transport=httpx.MockTransport(response), **kwargs)
+    monkeypatch.setattr(runtime.httpx, "AsyncClient", factory)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(runtime.vertical_intelligence_invoke("finance", request(runtime), SCOPE))
+    assert error.value.status_code == 409
+    assert not seen
+
+
+def test_withdrawal_during_provider_call_withholds_output(runtime, ledger, monkeypatch):
+    for digest in DIGESTS[:2]:
+        put(ledger, digest)
+    real_client = httpx.AsyncClient
+    seen = []
+    def response(req):
+        seen.append(req)
+        ledger.withdraw_payloads(vertical="finance", session_scope=SCOPE,
+                                 payload_digests=DIGESTS[:1], now=CLOCK)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "WITHHOLD_THIS"}}]})
+    monkeypatch.setattr(runtime.httpx, "AsyncClient",
+                        lambda **kwargs: real_client(transport=httpx.MockTransport(response), **kwargs))
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(runtime.vertical_intelligence_invoke("finance", request(runtime), SCOPE))
+    assert error.value.status_code == 409 and len(seen) == 1
+    assert "WITHHOLD_THIS" not in str(error.value.detail)
 
 
 def test_expiry_before_dispatch_prevents_network(runtime, ledger, monkeypatch):
