@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 DEPLOY = Path(__file__).resolve().parents[1] / "deploy"
 sys.path.insert(0, str(DEPLOY))
@@ -42,7 +43,26 @@ def test_root_healthz():
     }
     assert "vessels" not in body["engines"]
     assert body["compatibility_routes"]["/vessels"]["canonical"] == "/killinchu"
+    assert body["ok"] is True
     assert body["truth_label"] == "MEASURED"
+
+
+def test_root_healthz_source_unavailable_is_not_measured():
+    observation = {
+        "state": "MISMATCH",
+        "revision": "a" * 40,
+        "bindings_agree": False,
+        "evidence_sources": ["env"],
+        "invalid_sources": [],
+    }
+    with patch("szl_verticals.core._revision_observation", return_value=observation):
+        response = client.get("/healthz")
+    body = response.json()
+    assert response.status_code == 200
+    assert body["ok"] is False
+    assert body["status"] == "source-unavailable"
+    assert body["truth_label"] == "UNAVAILABLE"
+    assert body["truth_label"] != "MEASURED"
 
 
 def test_sentra_allow_path():
