@@ -128,14 +128,15 @@ repaired.
 
 This section describes `main` as of #48.
 
-- The replay clock is read inside the store transaction, never before it. The
-  routes pass the zero-argument clock `time.time`. `register_assessment`,
-  `assessment_status` and `withdraw_payloads` call it only after they take the
-  store's process lock and open `BEGIN IMMEDIATE`. As a result, writes to an
-  assessment's `last_checked_at` follow transaction order, and two concurrent
-  status reads of unchanged evidence cannot record a false regression. The
-  store also accepts a plain finite, non-negative number for a fixed or
-  replayed clock.
+- The replay clock is read inside the store transaction, never before it.
+  `register_assessment`, `assessment_status` and `withdraw_payloads` sample it
+  only after they take the store's process lock and open `BEGIN IMMEDIATE`. As
+  a result, writes to an assessment's `last_checked_at` follow transaction
+  order, and two concurrent status reads of unchanged evidence cannot record a
+  false regression.
+- Where the clock comes from: as of #48 each route passes the zero-argument
+  clock `time.time` as `now`, and the store also accepts a plain finite,
+  non-negative number for a fixed or replayed clock.
 - A clock that raises, or that returns anything other than a finite,
   non-negative `int` or `float` (NaN, infinity, a negative value or a boolean,
   for example), is a store fault. The route returns 503
