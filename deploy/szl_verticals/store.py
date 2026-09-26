@@ -151,7 +151,11 @@ class ObservationStore(ReplayStoreMixin):
             rows = connection.execute(
                 """
                 SELECT receipt_id, connector_id, observed_at, source_url, http_status,
-                       payload_sha256, truth_label, state, summary_json
+                       payload_sha256, truth_label, state, summary_json,
+                       EXISTS (SELECT 1 FROM evidence_withdrawals w
+                         WHERE w.vertical=connector_observations.vertical
+                           AND w.session_scope=connector_observations.session_scope
+                           AND w.payload_sha256=connector_observations.payload_sha256) AS withdrawn
                 FROM connector_observations
                 WHERE vertical=? AND session_scope=?
                 ORDER BY observed_at DESC LIMIT ?
@@ -161,6 +165,9 @@ class ObservationStore(ReplayStoreMixin):
         output: list[dict[str, Any]] = []
         for row in rows:
             item = dict(row)
+            # Memory keeps the caller's own history but never presents a
+            # withdrawn payload as plain OBSERVED evidence.
+            item["withdrawn"] = bool(item["withdrawn"])
             item["summary"] = json.loads(item.pop("summary_json"))
             output.append(item)
         return output

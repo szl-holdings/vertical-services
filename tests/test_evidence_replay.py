@@ -3,11 +3,13 @@ using real SQLite and mounted HTTP routes. Not estate qualification."""
 from __future__ import annotations
 
 import importlib
+import itertools
 import json
 import os
 import sqlite3
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -277,3 +279,135 @@ def test_invalid_withdrawals_rejected_without_echo(context, digests):
         content=json.dumps({"evidence_sha256": digests}), headers={"Content-Type": "application/json"})
     assert result.status_code == 422 and result.json() == {"detail": "invalid request"}
 
+
+def test_status_reads_racing_the_clock_never_latch_a_false_regression(context, monkeypatch):
+    # Two readers of one unchanged assessment. The first reader's clock call lets a
+    # later reader run to completion first. A store that samples the clock before
+    # taking its lock would record the later time, then see the first reader's
+    # earlier time as ASSESSMENT_CLOCK_REGRESSED and latch it forever.
+    db, client = context
+    seed(db)
+    old = assessment(context)
+    ticks = itertools.count(1)
+    tick_lock = threading.Lock()
+    racer = {}
+
+    def clock():
+        with tick_lock:
+            value = NOW + next(ticks) / 1000
+        if "thread" not in racer:
+            racer["thread"] = threading.Thread(
+                target=lambda: racer.setdefault("body", status(client, old).json()))
+            racer["thread"].start()
+            # A correct store holds its lock here, so the racer must wait.
+            racer["thread"].join(timeout=0.5)
+        return value
+
+    monkeypatch.setattr(fr, "time", SimpleNamespace(time=clock))
+    first = status(client, old).json()
+    racer["thread"].join(timeout=10)
+    assert first["state"] == "CURRENT", first["changed_dependencies"]
+    assert racer["body"]["state"] == "CURRENT", racer["body"]["changed_dependencies"]
+    assert status(client, old).json()["state"] == "CURRENT"
+
+
+def test_store_reads_a_callable_clock_inside_its_write_transaction(context):
+    db = context[0]
+    seed(db)
+    old = assessment(context)
+    seen = []
+
+    def clock():
+        probe = sqlite3.connect(db.path, timeout=0)
+        try:
+            probe.execute("BEGIN IMMEDIATE")
+            probe.rollback()
+            seen.append("unlocked")
+        except sqlite3.OperationalError:
+            seen.append("locked")
+        finally:
+            probe.close()
+        return NOW
+
+    seed(db, digest="a" * 64)
+    snapshot = fr.resolve_evidence(db, vertical="finance", session_scope=SCOPE,
+                                   digests=["a" * 64], connectors=fr.CONNECTORS, now=NOW)
+    assert db.register_assessment(vertical="finance", session_scope=SCOPE, assessment_id="c" * 64,
+                                  kind="hatun-review", snapshot=snapshot, now=clock)["state"] == "CURRENT"
+    assert db.assessment_status(vertical="finance", session_scope=SCOPE, assessment_id=old,
+                                now=clock, connectors=fr.CONNECTORS)["state"] == "CURRENT"
+    db.withdraw_payloads(vertical="finance", session_scope=SCOPE, payload_digests=[PAYLOAD], now=clock)
+    assert seen == ["locked", "locked", "locked"]
+
+
+def test_mixed_missing_withdrawal_is_atomic_when_the_missing_digest_sorts_last(context):
+    # PAYLOAD ("d" * 64) sorts before "f" * 64, so a store that wrote as it
+    # validated would commit PAYLOAD's withdrawal before reaching the missing one.
+    seed(context[0])
+    old = assessment(context)
+    assert PAYLOAD < "f" * 64
+    assert withdraw(context[1], [PAYLOAD, "f" * 64]).status_code == 404
+    assert status(context[1], old).json()["state"] == "CURRENT"
+    assert post(context)["decision"] == "REVIEW"
+
+
+def test_hatun_review_refuses_a_registration_that_is_not_current(context, monkeypatch):
+    db, client = context
+    seed(db)
+    monkeypatch.setattr(db, "register_assessment", lambda **kwargs: {
+        "state": "REVALIDATION_REQUIRED", "original_decision": "REVIEW"})
+    result = client.post("/api/verticals/puriq/hatun/evaluate", json={
+        "intent": "review fixture", "requested_action": "market.review",
+        "axes": {"evidence": .99, "freshness": .99}, "evidence_sha256": [PAYLOAD]})
+    assert result.status_code == 409
+    assert result.json() == {"detail": "evidence changed during assessment"}
+
+
+@pytest.mark.parametrize("stored", [
+    '[{"payload_sha256":"' + "d" * 64 + '"',   # truncated JSON that still names the digest
+    '[{"payload_sha256":"' + "d" * 64 + '"}]',  # valid JSON missing required keys
+])
+def test_malformed_stored_assessment_is_unavailable_not_missing(context, stored):
+    # A corrupt dependency row is a store fault (503). It must never read as
+    # "evidence not found" (404) nor escape as an unhandled 500.
+    db, client = context
+    seed(db)
+    assessment(context)
+    with sqlite3.connect(db.path) as connection:
+        connection.execute("UPDATE evidence_assessments SET dependencies_json=?", (stored,))
+    result = withdraw(client)
+    assert result.status_code == 503
+    assert result.json() == {"detail": "evidence replay unavailable"}
+
+
+def test_second_brain_memory_marks_withdrawn_payloads(context):
+    db, client = context
+    seed(db)
+    seed(db, digest="a" * 64)
+    assert withdraw(client).status_code == 200
+    rows = {row["payload_sha256"]: row for row in db.recent(vertical="finance", session_scope=SCOPE)}
+    assert rows[PAYLOAD]["withdrawn"] is True
+    assert rows["a" * 64]["withdrawn"] is False
+
+
+def test_hatun_hands_the_store_a_clock_not_a_pre_read_value(context, monkeypatch):
+    db = context[0]
+    seed(db)
+    seen, real = [], db.register_assessment
+    def spy(**kwargs):
+        seen.append(callable(kwargs["now"]))
+        return real(**kwargs)
+    monkeypatch.setattr(db, "register_assessment", spy)
+    assert post(context)["decision"] == "REVIEW"
+    assert seen == [True]
+
+
+def test_a_failing_clock_is_unavailable_not_a_server_error(context, monkeypatch):
+    seed(context[0])
+    old = assessment(context)
+    def broken():
+        raise ZeroDivisionError("clock fault")
+    monkeypatch.setattr(fr, "time", SimpleNamespace(time=broken))
+    result = status(context[1], old)
+    assert result.status_code == 503
+    assert result.json() == {"detail": "evidence replay unavailable"}

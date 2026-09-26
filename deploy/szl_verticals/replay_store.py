@@ -35,11 +35,65 @@ def _json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"),
                       ensure_ascii=False, allow_nan=False)
 
-def _validate_scope(vertical: str, session_scope: str, now: float) -> None:
+class EvidenceNotFound(LookupError):
+    """Requested evidence is absent from, or foreign to, the caller's session scope."""
+
+def _valid_clock_value(now: Any) -> bool:
+    return type(now) in (int, float) and math.isfinite(now) and now >= 0
+
+def _validate_scope(vertical: str, session_scope: str, now: Any) -> None:
     if (not isinstance(vertical, str) or not 1 <= len(vertical) <= 64
             or not isinstance(session_scope, str) or not 1 <= len(session_scope) <= 256
-            or type(now) not in (int, float) or not math.isfinite(now) or now < 0):
+            or not (callable(now) or _valid_clock_value(now))):
         raise ValueError("invalid assessment scope or clock")
+
+def _sample_clock(now: Any) -> float:
+    """Read the clock inside the write transaction.
+
+    Callers pass a zero-argument clock such as ``time.time`` so the value is
+    taken after the process lock and BEGIN IMMEDIATE. A value read before the
+    lock can be older than a concurrent reader's ``last_checked_at`` and would
+    permanently latch ASSESSMENT_CLOCK_REGRESSED on unchanged evidence. A plain
+    number is still accepted for fixed or replayed clocks. A clock that fails
+    makes the store unavailable; it is never a server error.
+    """
+    try:
+        value = now() if callable(now) else now
+    except Exception as exc:
+        raise RuntimeError("assessment clock unavailable") from exc
+    if not _valid_clock_value(value):
+        raise RuntimeError("assessment clock unavailable")
+    return value
+
+class StoredAssessmentInvalid(RuntimeError):
+    """A stored assessment row is malformed, so replay is unavailable for it."""
+
+_DEPENDENCY_KEYS = frozenset(("payload_sha256", "receipt_id", "summary_sha256", "observed_at", "expires_at"))
+
+def _stored_json(text: Any) -> Any:
+    try:
+        return json.loads(text, object_pairs_hook=_unique_object)
+    except (TypeError, ValueError, UnicodeError, RecursionError) as exc:
+        raise StoredAssessmentInvalid("malformed stored assessment") from exc
+
+def _stored_dependencies(text: Any) -> list[dict[str, Any]]:
+    """Parse and shape-check stored dependencies; a malformed row is unavailable, not a crash."""
+    dependencies = _stored_json(text)
+    if not isinstance(dependencies, list) or not dependencies:
+        raise StoredAssessmentInvalid("malformed stored assessment")
+    for dep in dependencies:
+        if (not isinstance(dep, dict) or set(dep) != _DEPENDENCY_KEYS
+                or any(not isinstance(dep[key], str) or re.fullmatch(r"[0-9a-f]{64}", dep[key]) is None
+                       for key in ("payload_sha256", "receipt_id", "summary_sha256"))
+                or not _valid_clock_value(dep["observed_at"]) or not _valid_clock_value(dep["expires_at"])):
+            raise StoredAssessmentInvalid("malformed stored assessment")
+    return dependencies
+
+def _stored_reasons(text: Any) -> list[dict[str, Any]]:
+    reasons = _stored_json(text)
+    if not isinstance(reasons, list) or any(not isinstance(item, dict) for item in reasons):
+        raise StoredAssessmentInvalid("malformed stored assessment")
+    return reasons
 
 def _digest(value: str) -> None:
     if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
@@ -64,8 +118,10 @@ class ReplayStoreMixin:
             (vertical, session_scope, '"payload_sha256":"' + digest + '"'),
         ).fetchall()
         for row in rows:
-            dependencies = [d for d in json.loads(row["dependencies_json"])
+            dependencies = [d for d in _stored_dependencies(row["dependencies_json"])
                             if d["payload_sha256"] == digest]
+            if not dependencies:
+                raise StoredAssessmentInvalid("malformed stored assessment")
             changes = self._dependency_changes(connection, vertical, session_scope,
                                                dependencies, dependencies[0]["observed_at"])
             if changes:
@@ -149,6 +205,7 @@ class ReplayStoreMixin:
         try:
             with self._lock, closing(self._connect()) as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                now = _sample_clock(now)
                 existing = connection.execute(
                     "SELECT * FROM evidence_assessments WHERE vertical=? AND session_scope=? AND assessment_id=?",
                     (vertical, session_scope, assessment_id),
@@ -181,15 +238,15 @@ class ReplayStoreMixin:
         ).fetchone()
         if row is None:
             return None
-        changes = json.loads(row["reasons_json"])
+        changes = _stored_reasons(row["reasons_json"])
         if not row["invalidated"]:
             changes = self._dependency_changes(connection, vertical, session_scope,
-                                               json.loads(row["dependencies_json"]), now)
+                                               _stored_dependencies(row["dependencies_json"]), now)
             if now < row["last_checked_at"]:
                 changes.append({"payload_sha256": None, "reason": "ASSESSMENT_CLOCK_REGRESSED"})
             if not changes and connectors is not None:
                 from .evidence import resolve_evidence
-                dependencies = json.loads(row["dependencies_json"])
+                dependencies = _stored_dependencies(row["dependencies_json"])
                 current = resolve_evidence(
                     self, vertical=vertical, session_scope=session_scope,
                     digests=[dep["payload_sha256"] for dep in dependencies],
@@ -214,6 +271,7 @@ class ReplayStoreMixin:
         try:
             with self._lock, closing(self._connect()) as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                now = _sample_clock(now)
                 result = self._check_assessment(connection, vertical, session_scope, assessment_id, now, connectors)
                 connection.commit()
                 return result
@@ -231,12 +289,13 @@ class ReplayStoreMixin:
         try:
             with self._lock, closing(self._connect()) as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                now = _sample_clock(now)
                 for digest in sorted(set(payload_digests)):
                     if connection.execute(
                         "SELECT 1 FROM connector_observations WHERE vertical=? AND session_scope=? AND payload_sha256=? LIMIT 1",
                         (vertical, session_scope, digest),
                     ).fetchone() is None:
-                        raise LookupError("evidence not found in this session")
+                        raise EvidenceNotFound("evidence not found in this session")
                 for digest in sorted(set(payload_digests)):
                     connection.execute(
                         "INSERT OR IGNORE INTO evidence_withdrawals VALUES (?, ?, ?, ?)",

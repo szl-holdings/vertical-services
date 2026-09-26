@@ -35,6 +35,7 @@ from .connector_specs import CONNECTORS
 from .evidence import HEX64, resolve_evidence
 from .operational import STORE, vertical_readiness
 from .profiles import ALIASES, VERTICALS
+from .replay_store import EvidenceNotFound
 
 class _RedactedValidationRoute(APIRoute):
     """Keep rejected payloads out of public errors, including invalid Unicode."""
@@ -75,8 +76,8 @@ def withdraw_evidence(vertical: str, request: EvidenceWithdrawalRequest, session
     canonical = canonical_vertical(vertical)
     try:
         return STORE.withdraw_payloads(vertical=canonical, session_scope=session,
-                                       payload_digests=request.evidence_sha256, now=time.time())
-    except LookupError:
+                                       payload_digests=request.evidence_sha256, now=time.time)
+    except EvidenceNotFound:
         raise HTTPException(404, "evidence not found in this session") from None
     except (OSError, RuntimeError, sqlite3.Error):
         raise HTTPException(503, "evidence replay unavailable") from None
@@ -89,7 +90,7 @@ def evidence_assessment(vertical: str, assessment_id: str, session: SessionScope
         raise HTTPException(404, "assessment not found")
     try:
         result = STORE.assessment_status(vertical=canonical, session_scope=session,
-                                         assessment_id=assessment_id, now=time.time(), connectors=CONNECTORS)
+                                         assessment_id=assessment_id, now=time.time, connectors=CONNECTORS)
     except (OSError, RuntimeError, sqlite3.Error):
         raise HTTPException(503, "evidence replay unavailable") from None
     if result is None:
@@ -311,7 +312,7 @@ def hatun_evaluate(
         try:
             replay = STORE.register_assessment(
                 vertical=canonical, session_scope=session, assessment_id=assessment_id,
-                kind="hatun-review", snapshot=snapshot, now=assessed_at)
+                kind="hatun-review", snapshot=snapshot, now=time.time)
         except (OSError, RuntimeError, sqlite3.Error):
             raise HTTPException(503, "evidence replay unavailable") from None
         if replay["state"] != "CURRENT":

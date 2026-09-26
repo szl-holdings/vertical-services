@@ -615,7 +615,7 @@ def build_intelligence_plan(
         try:
             replay = STORE.register_assessment(
                 vertical=canonical, session_scope=session_scope, assessment_id=basis_sha256,
-                kind="intelligence-plan", snapshot=evidence, now=time.time())
+                kind="intelligence-plan", snapshot=evidence, now=time.time)
         except (OSError, RuntimeError):
             raise HTTPException(503, "evidence replay unavailable") from None
         if replay["state"] != "CURRENT":
@@ -679,7 +679,7 @@ async def _invoke_provider(
     def require_current_assessment():
         try:
             status = STORE.assessment_status(vertical=canonical, session_scope=session_scope,
-                                             assessment_id=assessment_id, now=time.time(), connectors=CONNECTORS)
+                                             assessment_id=assessment_id, now=time.time, connectors=CONNECTORS)
         except (OSError, RuntimeError):
             raise HTTPException(503, "evidence replay unavailable") from None
         if status is None or status["state"] != "CURRENT":
