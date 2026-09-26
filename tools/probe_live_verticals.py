@@ -111,7 +111,36 @@ def main() -> int:
             "User-Agent": "SZL-Live-Frontier-Probe/3.0",
         },
     ) as client:
-        for vertical, connector, parameters in PROBES:
+        vertical_readiness: dict[str, Any] = {}
+
+        def record_readiness(vertical: str) -> None:
+            response = request_with_retry(
+                client,
+                "GET",
+                f"{base}/api/verticals/{vertical}/readyz",
+            )
+            if response.status_code != 200:
+                failures.append(f"{vertical}: readiness HTTP {response.status_code}")
+                vertical_readiness[vertical] = {
+                    "http_status": response.status_code,
+                    "body_excerpt": response.text[:500],
+                }
+                return
+            body = response.json()
+            vertical_readiness[vertical] = {
+                "http_status": response.status_code,
+                "ready": body.get("ready"),
+                "status": body.get("status"),
+                "live_data": body.get("live_data"),
+                "build": body.get("build"),
+                "lambda_advisory": body.get("lambda_advisory"),
+            }
+            if body.get("ready") is not True:
+                failures.append(f"{vertical}: readiness is not true")
+            if not body.get("live_data", {}).get("observed_in_scope"):
+                failures.append(f"{vertical}: live observation not visible")
+
+        for index, (vertical, connector, parameters) in enumerate(PROBES):
             path = f"/api/verticals/{vertical}/connectors/{connector}/fetch"
             response = request_with_retry(
                 client,
@@ -159,37 +188,12 @@ def main() -> int:
                             f"{connector}: person-level prospecting boundary missing"
                         )
             report["probes"].append(item)
-
-        canonical_verticals = tuple(
-            dict.fromkeys(vertical for vertical, _, _ in PROBES)
-        )
-        vertical_readiness: dict[str, Any] = {}
-        for vertical in canonical_verticals:
-            response = request_with_retry(
-                client,
-                "GET",
-                f"{base}/api/verticals/{vertical}/readyz",
-            )
-            if response.status_code != 200:
-                failures.append(f"{vertical}: readiness HTTP {response.status_code}")
-                vertical_readiness[vertical] = {
-                    "http_status": response.status_code,
-                    "body_excerpt": response.text[:500],
-                }
-                continue
-            body = response.json()
-            vertical_readiness[vertical] = {
-                "http_status": response.status_code,
-                "ready": body.get("ready"),
-                "status": body.get("status"),
-                "live_data": body.get("live_data"),
-                "build": body.get("build"),
-                "lambda_advisory": body.get("lambda_advisory"),
-            }
-            if body.get("ready") is not True:
-                failures.append(f"{vertical}: readiness is not true")
-            if not body.get("live_data", {}).get("observed_in_scope"):
-                failures.append(f"{vertical}: live observation not visible")
+            # live_data counts only unexpired, non-withdrawn observations, so
+            # read each vertical's readiness right after its own last fetch.
+            # Lyte's only connector is fresh for 120 s; read after every other
+            # source, it could already have expired on a slow run.
+            if index + 1 == len(PROBES) or PROBES[index + 1][0] != vertical:
+                record_readiness(vertical)
 
         for alias, (canonical, title, motif) in EXPERIENCES.items():
             path = f"/experience/{alias}"

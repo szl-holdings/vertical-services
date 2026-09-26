@@ -215,6 +215,13 @@ class ObservationStore(ReplayStoreMixin):
             raise RuntimeError("evidence store unavailable") from exc
 
     def counts(self, *, vertical: str, session_scope: str | None = None) -> dict[str, int]:
+        """Count only observations that are current evidence right now.
+
+        Readiness reports ``observed_in_scope`` from these counts, so a row
+        counts only when it is OBSERVED, inside its own freshness window, and
+        not withdrawn by its own session. This is the same rule ``cached()``
+        applies; a withdrawn or expired row is history, not a live observation.
+        """
         if self.error:
             return {"observations": 0, "connectors_observed": 0}
         where = "vertical=?"
@@ -223,13 +230,20 @@ class ObservationStore(ReplayStoreMixin):
             where += " AND session_scope=?"
             params.append(session_scope)
         with self._lock, closing(self._connect()) as connection:
+            now = time.time()
             row = connection.execute(
                 f"""
                 SELECT COUNT(*) AS observations,
                        COUNT(DISTINCT connector_id) AS connectors_observed
-                FROM connector_observations WHERE {where} AND state='OBSERVED'
+                FROM connector_observations
+                WHERE {where} AND state='OBSERVED'
+                  AND observed_at <= ? AND ? < expires_at
+                  AND NOT EXISTS (SELECT 1 FROM evidence_withdrawals w
+                    WHERE w.vertical=connector_observations.vertical
+                      AND w.session_scope=connector_observations.session_scope
+                      AND w.payload_sha256=connector_observations.payload_sha256)
                 """,
-                params,
+                [*params, now, now],
             ).fetchone()
         return {
             "observations": int(row["observations"]),
