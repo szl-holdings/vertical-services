@@ -37,10 +37,17 @@ def request_body(**changes):
             "evidence_sha256": [PAYLOAD], **changes}
 
 
+def route_clock():
+    # The store owns its clock. Production gives the route and the store the same
+    # time.time; tests give the store the route module's (monkeypatched) clock so
+    # both still read one virtual time, and moving fr.time moves the store too.
+    return fr.time.time()
+
+
 @pytest.fixture
 def context(monkeypatch, tmp_path):
     monkeypatch.setenv("SZL_STATE_PATH", str(tmp_path / "ledger.sqlite3"))
-    db = ObservationStore()
+    db = ObservationStore(clock=route_clock)
     if db.error:
         raise RuntimeError("test SQLite ledger initialization failed")
     monkeypatch.setattr(fr, "STORE", db)

@@ -21,7 +21,7 @@ DEPLOY = ROOT / "deploy"
 if str(DEPLOY) not in sys.path:
     sys.path.insert(0, str(DEPLOY))
 
-from test_hatun_evidence_admission import context, seed, post, PAYLOAD, SCOPE, NOW, TOKEN, fr
+from test_hatun_evidence_admission import context, seed, post, route_clock, PAYLOAD, SCOPE, NOW, TOKEN, fr
 
 
 class ReplayMixinContract(unittest.TestCase):
@@ -57,7 +57,7 @@ class ReplayMixinContract(unittest.TestCase):
         old = os.environ.get("SZL_STATE_PATH")
         os.environ["SZL_STATE_PATH"] = path
         try:
-            store = ObservationStore()
+            store = ObservationStore(clock=lambda: 2.0)
             store.put(receipt, {"k": "v"})
             self.assertIsNotNone(store.cached(
                 vertical="counsel", connector_id="unit",
@@ -65,7 +65,7 @@ class ReplayMixinContract(unittest.TestCase):
             ))
             store.withdraw_payloads(
                 vertical="counsel", session_scope="s1",
-                payload_digests=[digest], now=2.0,
+                payload_digests=[digest],
             )
             self.assertIsNone(store.cached(
                 vertical="counsel", connector_id="unit",
@@ -124,7 +124,7 @@ def test_withdrawal_persists_after_restart_and_refetch(context, monkeypatch):
     receipt = seed(db)
     old = assessment(context)
     assert withdraw(client).json() == withdraw(client).json()
-    restarted = type(db)()
+    restarted = type(db)(clock=route_clock)
     monkeypatch.setattr(fr, "STORE", restarted)
     restarted.put(receipt, {"fixture_text": "refetched same bytes"})
     assert status(client, old).json()["state"] == "REVALIDATION_REQUIRED"
@@ -311,7 +311,10 @@ def test_status_reads_racing_the_clock_never_latch_a_false_regression(context, m
     assert status(client, old).json()["state"] == "CURRENT"
 
 
-def test_store_reads_a_callable_clock_inside_its_write_transaction(context):
+def test_store_samples_its_clock_inside_its_write_transaction(context, monkeypatch):
+    # Cross-process ordering: when the store reads its clock, another connection
+    # must already be unable to begin a write, so no other process can commit a
+    # later last_checked_at between this read and this commit.
     db = context[0]
     seed(db)
     old = assessment(context)
@@ -332,11 +335,12 @@ def test_store_reads_a_callable_clock_inside_its_write_transaction(context):
     seed(db, digest="a" * 64)
     snapshot = fr.resolve_evidence(db, vertical="finance", session_scope=SCOPE,
                                    digests=["a" * 64], connectors=fr.CONNECTORS, now=NOW)
+    monkeypatch.setattr(fr, "time", SimpleNamespace(time=clock))
     assert db.register_assessment(vertical="finance", session_scope=SCOPE, assessment_id="c" * 64,
-                                  kind="hatun-review", snapshot=snapshot, now=clock)["state"] == "CURRENT"
+                                  kind="hatun-review", snapshot=snapshot)["state"] == "CURRENT"
     assert db.assessment_status(vertical="finance", session_scope=SCOPE, assessment_id=old,
-                                now=clock, connectors=fr.CONNECTORS)["state"] == "CURRENT"
-    db.withdraw_payloads(vertical="finance", session_scope=SCOPE, payload_digests=[PAYLOAD], now=clock)
+                                connectors=fr.CONNECTORS)["state"] == "CURRENT"
+    db.withdraw_payloads(vertical="finance", session_scope=SCOPE, payload_digests=[PAYLOAD])
     assert seen == ["locked", "locked", "locked"]
 
 
@@ -388,18 +392,6 @@ def test_second_brain_memory_marks_withdrawn_payloads(context):
     rows = {row["payload_sha256"]: row for row in db.recent(vertical="finance", session_scope=SCOPE)}
     assert rows[PAYLOAD]["withdrawn"] is True
     assert rows["a" * 64]["withdrawn"] is False
-
-
-def test_hatun_hands_the_store_a_clock_not_a_pre_read_value(context, monkeypatch):
-    db = context[0]
-    seed(db)
-    seen, real = [], db.register_assessment
-    def spy(**kwargs):
-        seen.append(callable(kwargs["now"]))
-        return real(**kwargs)
-    monkeypatch.setattr(db, "register_assessment", spy)
-    assert post(context)["decision"] == "REVIEW"
-    assert seen == [True]
 
 
 def test_a_failing_clock_is_unavailable_not_a_server_error(context, monkeypatch):

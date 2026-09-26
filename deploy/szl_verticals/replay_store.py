@@ -11,7 +11,7 @@ import json
 import math
 import re
 import sqlite3
-from contextlib import closing
+from contextlib import closing, contextmanager
 from typing import Any
 
 REPLAY_SCHEMA = """
@@ -41,24 +41,15 @@ class EvidenceNotFound(LookupError):
 def _valid_clock_value(now: Any) -> bool:
     return type(now) in (int, float) and math.isfinite(now) and now >= 0
 
-def _validate_scope(vertical: str, session_scope: str, now: Any) -> None:
+def _validate_scope(vertical: str, session_scope: str) -> None:
     if (not isinstance(vertical, str) or not 1 <= len(vertical) <= 64
-            or not isinstance(session_scope, str) or not 1 <= len(session_scope) <= 256
-            or not (callable(now) or _valid_clock_value(now))):
-        raise ValueError("invalid assessment scope or clock")
+            or not isinstance(session_scope, str) or not 1 <= len(session_scope) <= 256):
+        raise ValueError("invalid assessment scope")
 
-def _sample_clock(now: Any) -> float:
-    """Read the clock inside the write transaction.
-
-    Callers pass a zero-argument clock such as ``time.time`` so the value is
-    taken after the process lock and BEGIN IMMEDIATE. A value read before the
-    lock can be older than a concurrent reader's ``last_checked_at`` and would
-    permanently latch ASSESSMENT_CLOCK_REGRESSED on unchanged evidence. A plain
-    number is still accepted for fixed or replayed clocks. A clock that fails
-    makes the store unavailable; it is never a server error.
-    """
+def _sample_clock(clock: Any) -> float:
+    """Call the store's own clock; a failing or invalid clock is unavailable, not a 500."""
     try:
-        value = now() if callable(now) else now
+        value = clock()
     except Exception as exc:
         raise RuntimeError("assessment clock unavailable") from exc
     if not _valid_clock_value(value):
@@ -108,7 +99,27 @@ def _unique_object(pairs):
     return result
 
 class ReplayStoreMixin:
-    """Uses ObservationStore's connection and process lock; no second ledger."""
+    """Uses ObservationStore's connection, process lock and clock; no second ledger."""
+
+    @contextmanager
+    def _transaction(self):
+        """Yield ``(connection, now)`` for one replay write transaction, then commit.
+
+        This is the only place the assessment clock is read. It is sampled after
+        the process lock and BEGIN IMMEDIATE, so no other thread or process can
+        commit a later ``last_checked_at`` between this read and this commit. A
+        time read before the lock could be older than a concurrent reader's check
+        and would permanently latch ASSESSMENT_CLOCK_REGRESSED on unchanged
+        evidence, so callers cannot pass a time in at all. Leaving the block by
+        an exception closes the connection without committing.
+        """
+        if self.error:
+            raise RuntimeError("assessment store unavailable")
+        with self._lock, closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            now = _sample_clock(self._clock)
+            yield connection, now
+            connection.commit()
 
     def _invalidate_changed_payload(self, connection, vertical, session_scope, digest):
         rows = connection.execute(
@@ -190,8 +201,8 @@ class ReplayStoreMixin:
             "automatic_replay": False,
         }
 
-    def register_assessment(self, *, vertical, session_scope, assessment_id, kind, snapshot, now):
-        _validate_scope(vertical, session_scope, now)
+    def register_assessment(self, *, vertical, session_scope, assessment_id, kind, snapshot):
+        _validate_scope(vertical, session_scope)
         _digest(assessment_id)
         if (kind not in {"intelligence-plan", "hatun-review"}
                 or not snapshot.matches_scope(vertical, session_scope, snapshot.requested_digests)
@@ -200,12 +211,8 @@ class ReplayStoreMixin:
         deps = [{key: record[key] for key in (
             "payload_sha256", "receipt_id", "summary_sha256", "observed_at", "expires_at")}
             for record in json.loads(snapshot.records_json)]
-        if self.error:
-            raise RuntimeError("assessment store unavailable")
         try:
-            with self._lock, closing(self._connect()) as connection:
-                connection.execute("BEGIN IMMEDIATE")
-                now = _sample_clock(now)
+            with self._transaction() as (connection, now):
                 existing = connection.execute(
                     "SELECT * FROM evidence_assessments WHERE vertical=? AND session_scope=? AND assessment_id=?",
                     (vertical, session_scope, assessment_id),
@@ -225,9 +232,7 @@ class ReplayStoreMixin:
                         (vertical, session_scope, assessment_id, kind,
                          snapshot.snapshot_sha256, _json(deps), now, now),
                     )
-                result = self._check_assessment(connection, vertical, session_scope, assessment_id, now)
-                connection.commit()
-                return result
+                return self._check_assessment(connection, vertical, session_scope, assessment_id, now)
         except (OSError, sqlite3.Error) as exc:
             raise RuntimeError("assessment store unavailable") from exc
 
@@ -263,33 +268,23 @@ class ReplayStoreMixin:
         )
         return self._assessment_result(row, changes, now)
 
-    def assessment_status(self, *, vertical, session_scope, assessment_id, now, connectors):
-        _validate_scope(vertical, session_scope, now)
+    def assessment_status(self, *, vertical, session_scope, assessment_id, connectors):
+        _validate_scope(vertical, session_scope)
         _digest(assessment_id)
-        if self.error:
-            raise RuntimeError("assessment store unavailable")
         try:
-            with self._lock, closing(self._connect()) as connection:
-                connection.execute("BEGIN IMMEDIATE")
-                now = _sample_clock(now)
-                result = self._check_assessment(connection, vertical, session_scope, assessment_id, now, connectors)
-                connection.commit()
-                return result
+            with self._transaction() as (connection, now):
+                return self._check_assessment(connection, vertical, session_scope, assessment_id, now, connectors)
         except (OSError, sqlite3.Error, ValueError, TypeError, KeyError) as exc:
             raise RuntimeError("assessment store unavailable") from exc
 
-    def withdraw_payloads(self, *, vertical, session_scope, payload_digests, now):
-        _validate_scope(vertical, session_scope, now)
+    def withdraw_payloads(self, *, vertical, session_scope, payload_digests):
+        _validate_scope(vertical, session_scope)
         if not isinstance(payload_digests, (list, tuple)) or not 1 <= len(payload_digests) <= 64:
             raise ValueError("withdrawal requires 1 to 64 digests")
         for digest in payload_digests:
             _digest(digest)
-        if self.error:
-            raise RuntimeError("assessment store unavailable")
         try:
-            with self._lock, closing(self._connect()) as connection:
-                connection.execute("BEGIN IMMEDIATE")
-                now = _sample_clock(now)
+            with self._transaction() as (connection, now):
                 for digest in sorted(set(payload_digests)):
                     if connection.execute(
                         "SELECT 1 FROM connector_observations WHERE vertical=? AND session_scope=? AND payload_sha256=? LIMIT 1",
@@ -302,7 +297,6 @@ class ReplayStoreMixin:
                         (vertical, session_scope, digest, now),
                     )
                     self._invalidate_changed_payload(connection, vertical, session_scope, digest)
-                connection.commit()
                 return {"state": "WITHDRAWN", "distinct_payloads": len(set(payload_digests)),
                         "scope": "CALLER_SESSION_AND_CANONICAL_VERTICAL",
                         "source_retracted_globally": False, "automatic_replay": False}
