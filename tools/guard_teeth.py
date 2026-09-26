@@ -35,8 +35,9 @@ each run a pass.  A kill that does not reproduce (an order-dependent or flaky
 killer) is UNPROVEN_ERROR, never KILLED; ``kill_stable`` and
 ``kill_confirmation`` record what happened.  Every kill also records
 ``kill_kind``: ``assertion`` when the test asserted the property (assert,
-AssertionError, pytest.fail, pytest.raises "DID NOT RAISE") or
-``exception:<Type>`` when the test crashed with an uncaught exception.
+AssertionError, pytest.fail, pytest.raises "DID NOT RAISE") in the first run
+and in every mutant rerun, or ``exception:<Type>`` when any of those runs
+crashed with an uncaught exception.
 Exception kills still count, but they are totalled and listed separately so
 a reviewer can see which guards are proven only by a crash.
 
@@ -426,6 +427,16 @@ def kill_kind(reason: str) -> str:
     return "assertion" if name in ASSERTION_HEADS else f"exception:{name}"
 
 
+def combined_kill_kind(kinds: list[str]) -> str:
+    """A kill is an assertion kill only if every run of it asserted; otherwise the
+    first crash (or 'unknown') it showed is reported."""
+    for prefix in ("exception:", "unknown"):
+        found = next((k for k in kinds if k.startswith(prefix)), None)
+        if found:
+            return found
+    return "assertion" if kinds else "unknown"
+
+
 def confirm_kill(node: str, rerun: Callable[[str], dict[str, Any]], restore: Callable[[], bool],
                  mutant_runs: int, baseline_runs: int) -> dict[str, Any]:
     """Reproduce a kill with the killing node id ALONE: `mutant_runs` runs on the
@@ -447,6 +458,9 @@ def confirm_kill(node: str, rerun: Callable[[str], dict[str, Any]], restore: Cal
             out["detail"] = (f"mutant rerun {i}/{mutant_runs} of {node} alone was {status}, "
                              "not a failure of that test")
             return out
+        reason = next((n["reason"] for n in parse_nodes(res["output"])
+                       if n["kind"] == "FAILED" and n["id"] == node), "")
+        runs[-1]["kill_kind"] = kill_kind(reason)
         out["mutant_failed"] += 1
     if not restore():
         out["detail"] = "the unmutated file could not be restored for the baseline reruns"
@@ -533,6 +547,8 @@ def run_guard(guard: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
             record["kill_confirmation"] = confirmation
             record["kill_stable"] = confirmation["stable"]
             if confirmation["stable"]:
+                kind = combined_kill_kind([kind] + [r["kill_kind"] for r in confirmation["runs"]
+                                                    if r["on"] == "mutant"])
                 record["kill_kind"] = kind
                 detail = f"test-level failure ({kind}); {failing[0]} {confirmation['detail']}"
             else:
@@ -1083,7 +1099,18 @@ def self_test(python: str) -> int:
         ok = confirm_kill(node, scripted(fail_out, fail_out, pass_out, pass_out, pass_out), restore_ok, 2, 3)
         checks.append(("confirm_kill: 2/2 mutant failures + 3/3 baseline passes is stable",
                        ok["stable"] is True and ok["mutant_failed"] == 2 and ok["baseline_passed"] == 3
-                       and restored == [True]))
+                       and restored == [True]
+                       and [r.get("kill_kind") for r in ok["runs"]] == ["assertion", "assertion", None, None, None]))
+        crash_out = {"timed_out": False, "exit_code": 1, "seconds": 0.1,
+                     "output": f"FAILED {node} - KeyError: 'state'\n1 failed in 0.1s"}
+        mixed = confirm_kill(node, scripted(fail_out, crash_out, pass_out, pass_out, pass_out), restore_ok, 2, 3)
+        checks.append(("kill_kind: an assertion kill that crashes on a rerun is reported as the crash",
+                       mixed["stable"] is True
+                       and combined_kill_kind(["assertion"] + [r["kill_kind"] for r in mixed["runs"]
+                                                               if r["on"] == "mutant"]) == "exception:KeyError"
+                       and combined_kill_kind(["assertion", "assertion", "assertion"]) == "assertion"
+                       and combined_kill_kind(["assertion", "unknown"]) == "unknown"
+                       and combined_kill_kind([]) == "unknown"))
         restored.clear()
         once = confirm_kill(node, scripted(fail_out, pass_out), restore_ok, 2, 3)
         checks.append(("confirm_kill: mutant rerun that passes is unstable; baseline never run",
