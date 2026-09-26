@@ -8,6 +8,7 @@ No network access.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -20,7 +21,13 @@ if str(ROOT / "deploy") not in sys.path:
     sys.path.insert(0, str(ROOT / "deploy"))
 
 from szl_verticals.connector_specs import CONNECTORS  # noqa: E402
-from tools import probe_live_verticals as probe  # noqa: E402
+
+# Load the probe by path so this file also runs on its own from any directory,
+# not only when the repository root happens to be the working directory.
+_SPEC = importlib.util.spec_from_file_location(
+    "probe_live_verticals_under_test", ROOT / "tools" / "probe_live_verticals.py")
+probe = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(probe)
 
 FETCH_SECONDS = 30.0
 
