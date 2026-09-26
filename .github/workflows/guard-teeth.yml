@@ -42,9 +42,11 @@ name: Guard teeth
 permissions:
   contents: read
 
+# A newer push to the same pull request supersedes the older run; every main
+# commit keeps its own receipt.
 concurrency:
   group: guard-teeth-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   mutation-receipt:
