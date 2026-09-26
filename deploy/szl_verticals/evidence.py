@@ -60,6 +60,13 @@ def _finite_number(value: Any) -> bool:
         return False
 
 
+def _row_withdrawn(row: Mapping[str, Any]) -> bool:
+    try:
+        return bool(row["withdrawn"])
+    except (KeyError, IndexError, TypeError):
+        return False
+
+
 @dataclass(frozen=True)
 class EvidenceSnapshot:
     """Only immutable serialized bytes are retained; no live DB row alias."""
@@ -125,9 +132,10 @@ def resolve_evidence(
 ) -> EvidenceSnapshot:
     """Resolve only exact requested records in one bounded ledger snapshot.
 
-    A missing, wrong-scope, future, expired, or invalid reference has the same
-    public unresolved result. No lookup in another tenant or vertical occurs.
-    Repeated observations of one payload never count as independent evidence.
+    A missing, wrong-scope, future, expired, invalid, or withdrawn reference
+    has the same public unresolved result. No lookup in another tenant or
+    vertical occurs. Repeated observations of one payload never count as
+    independent evidence.
     """
     if (isinstance(digests, (str, bytes)) or len(digests) > 64
             or any(not isinstance(item, str) or HEX64.fullmatch(item) is None for item in digests)):
@@ -162,6 +170,8 @@ def resolve_evidence(
                     or row["vertical"] != vertical or row["session_scope"] != session_scope):
                 raise ValueError("unexpected or duplicate scoped row")
             seen.add(payload_digest)
+            if _row_withdrawn(row):
+                raise ValueError("withdrawn connector record")
             if (spec is None or spec.vertical != vertical or row["state"] != "OBSERVED"
                     or row["truth_label"] != "REPORTED" or type(row["http_status"]) is not int
                     or not 200 <= row["http_status"] < 300):
