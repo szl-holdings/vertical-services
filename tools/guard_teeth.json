@@ -1,0 +1,470 @@
+{
+ "schema": "szl.guard-teeth-manifest/v1",
+ "repo": "szl-holdings/vertical-services",
+ "slice": "evidence-admission / correction replay (Wave A)",
+ "copy": [
+  "deploy",
+  "services",
+  "tools",
+  "tests",
+  "contracts"
+ ],
+ "import_roots": [
+  "deploy",
+  "services"
+ ],
+ "import_probe": true,
+ "notes": [
+  "find/replace are LF-normalised; the harness maps them to CRLF when the target file uses CRLF (Windows autocrlf checkouts).",
+  "Each find must occur exactly once in its file, otherwise the guard is MANIFEST_STALE; guards are never silently skipped.",
+  "A SURVIVED guard is a finding: no listed test fails when that guard is removed.",
+  "contracts/ is copied because deploy/app.py loads contracts/fashion-lineage.v1.json at import; without it the baseline is BASELINE_RED (measured).",
+  "Before pytest, each mutated module is imported in a fresh interpreter with the copy's import root on sys.path (deploy/szl_verticals/x.py -> szl_verticals.x). If the unmutated module imports cleanly but the mutant does not, the guard is MUTANT_INVALID, never KILLED.",
+  "KILLED requires pytest exit 1 and a test-level FAILED node id whose failure is not NameError/ImportError/ModuleNotFoundError/UnboundLocalError. Collection errors are MUTANT_INVALID; setup-only errors are UNPROVEN_ERROR.",
+  "Only git-tracked files of the copied dirs are copied (untracked files are listed in the receipt), so the baseline is the tracked tree, not another agent's scratch files."
+ ],
+ "guards": [
+  {
+   "id": "evidence.resolve_rejects_withdrawn",
+   "file": "deploy/szl_verticals/evidence.py",
+   "find": "            if _row_withdrawn(row):\n                raise ValueError(\"withdrawn connector record\")\n",
+   "replace": "",
+   "why": "Without it resolve_evidence admits a row the caller withdrew; Hatun would REVIEW and intelligence would plan READY_FOR_INFERENCE on withdrawn evidence.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "store.cached_filters_withdrawn",
+   "file": "deploy/szl_verticals/store.py",
+   "find": "        if (row is None or row[\"withdrawn\"] or row[\"state\"] != \"OBSERVED\"",
+   "replace": "        if (row is None or row[\"state\"] != \"OBSERVED\"",
+   "why": "Without it the connector cache keeps serving a withdrawn payload, so a withdrawn observation is silently resurrected on the next cached read.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "store.resolve_rows_report_withdrawn",
+   "file": "deploy/szl_verticals/store.py",
+   "find": "                               truth_label, state,\n                               EXISTS (SELECT 1 FROM evidence_withdrawals w\n                                 WHERE w.vertical=connector_observations.vertical\n                                   AND w.session_scope=connector_observations.session_scope\n                                   AND w.payload_sha256=connector_observations.payload_sha256) AS withdrawn,\n",
+   "replace": "                               truth_label, state,\n                               0 AS withdrawn,\n",
+   "why": "Without the EXISTS join resolve_payloads always reports withdrawn=0, so evidence.resolve_evidence can never see the withdrawal bit it checks.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "store.put_invalidates_assessments",
+   "file": "deploy/szl_verticals/store.py",
+   "find": "            self._invalidate_changed_payload(connection, receipt[\"vertical\"],\n                                             receipt[\"session_scope\"], receipt[\"payload_sha256\"])\n",
+   "replace": "",
+   "why": "Without the invalidate-on-put call, change-then-restore of a payload between status reads leaves the old assessment CURRENT (no monotonic latch).",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "replay_store.invalidate_latch_writes",
+   "file": "deploy/szl_verticals/replay_store.py",
+   "find": "            if changes:\n                connection.execute(\n                    \"\"\"UPDATE evidence_assessments SET invalidated=1, reasons_json=?",
+   "replace": "            if False:\n                connection.execute(\n                    \"\"\"UPDATE evidence_assessments SET invalidated=1, reasons_json=?",
+   "why": "Without the latch write in _invalidate_changed_payload a transient change that is later restored is forgotten; the call in store.put becomes a no-op.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "replay_store.invalidated_is_terminal",
+   "file": "deploy/szl_verticals/replay_store.py",
+   "find": "        if not row[\"invalidated\"]:\n            changes = self._dependency_changes(",
+   "replace": "        if True:\n            changes = self._dependency_changes(",
+   "why": "Without the latch check an invalidated assessment is recomputed on every read and can flip back to CURRENT after the evidence is restored or the clock moves.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "replay_store.withdrawn_reason",
+   "file": "deploy/szl_verticals/replay_store.py",
+   "find": "            if withdrawn:\n                reason = \"EVIDENCE_WITHDRAWN\"",
+   "replace": "            if False:\n                reason = \"EVIDENCE_WITHDRAWN\"",
+   "why": "Without it _dependency_changes ignores the withdrawals table; a withdrawn payload whose row still exists is only caught indirectly (if at all) and the explanation is lost.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "replay_store.clock_regression_terminal",
+   "file": "deploy/szl_verticals/replay_store.py",
+   "find": "            if now < row[\"last_checked_at\"]:\n                changes.append({\"payload_sha256\": None, \"reason\": \"ASSESSMENT_CLOCK_REGRESSED\"})\n",
+   "replace": "",
+   "why": "Without it a clock rollback to a time where the evidence still looks fresh keeps an assessment CURRENT instead of making it terminally REVALIDATION_REQUIRED.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "replay_store.withdraw_scoped_existence",
+   "file": "deploy/szl_verticals/replay_store.py",
+   "find": "                        \"SELECT 1 FROM connector_observations WHERE vertical=? AND session_scope=? AND payload_sha256=? LIMIT 1\",\n                        (vertical, session_scope, digest),\n",
+   "replace": "                        \"SELECT 1 FROM connector_observations WHERE vertical=? AND payload_sha256=? LIMIT 1\",\n                        (vertical, digest),\n",
+   "why": "Without the session_scope predicate a foreign session's digest is found (200) while a missing one is 404: an existence oracle across sessions.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "replay_store.withdraw_atomic_mixed_missing",
+   "file": "deploy/szl_verticals/replay_store.py",
+   "find": "                for digest in sorted(set(payload_digests)):\n                    if connection.execute(\n                        \"SELECT 1 FROM connector_observations WHERE vertical=? AND session_scope=? AND payload_sha256=? LIMIT 1\",\n                        (vertical, session_scope, digest),\n                    ).fetchone() is None:\n                        raise EvidenceNotFound(\"evidence not found in this session\")\n                for digest in sorted(set(payload_digests)):\n                    connection.execute(\n",
+   "replace": "                for digest in sorted(set(payload_digests)):\n                    if connection.execute(\n                        \"SELECT 1 FROM connector_observations WHERE vertical=? AND session_scope=? AND payload_sha256=? LIMIT 1\",\n                        (vertical, session_scope, digest),\n                    ).fetchone() is None:\n                        connection.commit()\n                        raise EvidenceNotFound(\"evidence not found in this session\")\n                    connection.execute(\n",
+   "why": "Without validate-all-before-write, a request mixing present and missing digests commits withdrawals for digests processed before the missing one, then returns 404: a partial, unreported withdrawal.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "frontier.withdraw_route_404",
+   "file": "deploy/szl_verticals/frontier.py",
+   "find": "    except EvidenceNotFound:\n        raise HTTPException(404, \"evidence not found in this session\") from None",
+   "replace": "    except EvidenceNotFound:\n        return {\"state\": \"WITHDRAWN\"}",
+   "why": "Without it missing or foreign digests get a 200 WITHDRAWN body although nothing was withdrawn.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "frontier.hatun_409_on_non_current_registration",
+   "file": "deploy/szl_verticals/frontier.py",
+   "find": "        if replay[\"state\"] != \"CURRENT\":\n            raise HTTPException(409, \"evidence changed during assessment\")",
+   "replace": "        if False:\n            raise HTTPException(409, \"evidence changed during assessment\")",
+   "why": "Without it Hatun returns decision REVIEW with a receipt whose evidence_replay state is REVALIDATION_REQUIRED when evidence changes between resolution and registration.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "intelligence.plan_registers_assessment",
+   "file": "deploy/szl_verticals/intelligence.py",
+   "find": "    if basis[\"decision\"] == \"READY_FOR_INFERENCE\":\n        try:\n            replay = STORE.register_assessment(",
+   "replace": "    if False:\n        try:\n            replay = STORE.register_assessment(",
+   "why": "Without registration no READY_FOR_INFERENCE plan is tracked, so later currency checks have nothing to latch against.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "intelligence.plan_409_on_non_current_registration",
+   "file": "deploy/szl_verticals/intelligence.py",
+   "find": "        if replay[\"state\"] != \"CURRENT\":\n            raise HTTPException(409, \"evidence changed during assessment\")",
+   "replace": "        if False:\n            raise HTTPException(409, \"evidence changed during assessment\")",
+   "why": "Without it build_intelligence_plan returns READY_FOR_INFERENCE with a non-CURRENT registered assessment when evidence changes between resolution and registration.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "intelligence.require_current_checks_state",
+   "file": "deploy/szl_verticals/intelligence.py",
+   "find": "        if status is None or status[\"state\"] != \"CURRENT\":\n            raise HTTPException(409, \"evidence assessment requires revalidation\")",
+   "replace": "        if status is None:\n            raise HTTPException(409, \"evidence assessment requires revalidation\")",
+   "why": "Without the state check require_current_assessment() accepts REVALIDATION_REQUIRED, neutralising both the pre-dispatch and post-response assessment gates at once.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "intelligence.pre_dispatch_require_current",
+   "file": "deploy/szl_verticals/intelligence.py",
+   "find": "                raise HTTPException(503, \"evidence expired before provider dispatch\")\n            require_current_assessment()\n",
+   "replace": "                raise HTTPException(503, \"evidence expired before provider dispatch\")\n",
+   "why": "Without the pre-dispatch assessment check, evidence that was changed and restored after planning (latched invalid) still leaves the process to the provider.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "intelligence.pre_dispatch_snapshot_reresolve",
+   "file": "deploy/szl_verticals/intelligence.py",
+   "find": "            current = _resolve_plan_evidence(canonical, request, session_scope)\n            if current.snapshot_sha256 != evidence.snapshot_sha256:\n                raise HTTPException(409, \"evidence changed before provider dispatch\")\n",
+   "replace": "",
+   "why": "Without the pre-dispatch re-resolution the provider is sent the planned snapshot even if the live admission of that evidence changed before dispatch.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "intelligence.post_response_require_current",
+   "file": "deploy/szl_verticals/intelligence.py",
+   "find": "        ) from exc\n\n    require_current_assessment()\n    current = _resolve_plan_evidence(canonical, request, session_scope)\n",
+   "replace": "        ) from exc\n\n    current = _resolve_plan_evidence(canonical, request, session_scope)\n",
+   "why": "Without the post-response assessment check, output generated while the assessment was invalidated (e.g. change-then-restore during the call) is returned.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "intelligence.post_response_snapshot_reresolve",
+   "file": "deploy/szl_verticals/intelligence.py",
+   "find": "    current = _resolve_plan_evidence(canonical, request, session_scope)\n    if current.snapshot_sha256 != evidence.snapshot_sha256 or not evidence.fresh_at(time.time()):\n",
+   "replace": "    if not evidence.fresh_at(time.time()):\n",
+   "why": "Without the post-response re-resolution, output is returned even if the evidence admission changed during the provider call.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "intelligence.post_response_freshness",
+   "file": "deploy/szl_verticals/intelligence.py",
+   "find": "    if current.snapshot_sha256 != evidence.snapshot_sha256 or not evidence.fresh_at(time.time()):\n",
+   "replace": "    if current.snapshot_sha256 != evidence.snapshot_sha256:\n",
+   "why": "Without it output is returned for evidence that expired while the provider was generating.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "frontier.hatun_registers_assessment_on_review",
+   "file": "deploy/szl_verticals/frontier.py",
+   "find": "    if decision == \"REVIEW\":\n        try:\n            replay = STORE.register_assessment(",
+   "replace": "    if False:\n        try:\n            replay = STORE.register_assessment(",
+   "why": "Without it a Hatun REVIEW is never registered for replay, so a later withdrawal or evidence change cannot invalidate it and GET /evidence/assessments/{id} has nothing to report (the mirror of intelligence.plan_registers_assessment).",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "frontier.assessment_route_404_on_unknown",
+   "file": "deploy/szl_verticals/frontier.py",
+   "find": "    if result is None:\n        raise HTTPException(404, \"assessment not found\")\n",
+   "replace": "    if result is None:\n        result = {\"state\": \"CURRENT\"}\n",
+   "why": "Without it an unknown or foreign-scope assessment id is reported as CURRENT instead of 404, leaking existence across sessions and re-qualifying assessments that were never registered in this scope.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "frontier.withdraw_request_hex64_validation",
+   "file": "deploy/szl_verticals/frontier.py",
+   "find": "        if any(HEX64.fullmatch(digest) is None for digest in value):\n            raise ValueError(\"invalid evidence digest\")\n",
+   "replace": "        if False:\n            raise ValueError(\"invalid evidence digest\")\n",
+   "why": "Without it malformed digests reach the store (404/503 instead of a redacted 422), and caller-supplied junk is processed as evidence identifiers.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "replay_store.status_clock_inside_transaction",
+   "file": "deploy/szl_verticals/replay_store.py",
+   "find": "                connection.execute(\"BEGIN IMMEDIATE\")\n                now = _sample_clock(now)\n                result = self._check_assessment(connection, vertical, session_scope, assessment_id, now, connectors)",
+   "replace": "                now = _sample_clock(now)\n                connection.execute(\"BEGIN IMMEDIATE\")\n                result = self._check_assessment(connection, vertical, session_scope, assessment_id, now, connectors)",
+   "why": "Reading the clock before BEGIN IMMEDIATE lets another process's reader commit a later last_checked_at first; this read then latches ASSESSMENT_CLOCK_REGRESSED on unchanged evidence.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "replay_store.register_clock_inside_transaction",
+   "file": "deploy/szl_verticals/replay_store.py",
+   "find": "                connection.execute(\"BEGIN IMMEDIATE\")\n                now = _sample_clock(now)\n                existing = connection.execute(",
+   "replace": "                now = _sample_clock(now)\n                connection.execute(\"BEGIN IMMEDIATE\")\n                existing = connection.execute(",
+   "why": "Same race on registration: an identical deterministic intelligence plan registered concurrently could latch its own assessment as clock-regressed and 409 forever.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "replay_store.withdraw_clock_inside_transaction",
+   "file": "deploy/szl_verticals/replay_store.py",
+   "find": "                connection.execute(\"BEGIN IMMEDIATE\")\n                now = _sample_clock(now)\n                for digest in sorted(set(payload_digests)):",
+   "replace": "                now = _sample_clock(now)\n                connection.execute(\"BEGIN IMMEDIATE\")\n                for digest in sorted(set(payload_digests)):",
+   "why": "withdrawn_at must be read inside the write transaction so withdrawal times are ordered with the checks that observe them.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "frontier.status_route_passes_clock",
+   "file": "deploy/szl_verticals/frontier.py",
+   "find": "assessment_id=assessment_id, now=time.time, connectors=CONNECTORS)",
+   "replace": "assessment_id=assessment_id, now=time.time(), connectors=CONNECTORS)",
+   "why": "A time read in the route before the store lock is the confirmed P1: racing status polls permanently invalidate an unchanged Hatun REVIEW.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "intelligence.plan_passes_clock",
+   "file": "deploy/szl_verticals/intelligence.py",
+   "find": "kind=\"intelligence-plan\", snapshot=evidence, now=time.time)",
+   "replace": "kind=\"intelligence-plan\", snapshot=evidence, now=time.time())",
+   "why": "Plans have a deterministic basis, so one poisoned registration 409s every later identical plan in that session.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "intelligence.dispatch_passes_clock",
+   "file": "deploy/szl_verticals/intelligence.py",
+   "find": "assessment_id=assessment_id, now=time.time, connectors=CONNECTORS)",
+   "replace": "assessment_id=assessment_id, now=time.time(), connectors=CONNECTORS)",
+   "why": "A status poll overlapping an in-flight invoke would withhold valid model output with a false clock-regression 409.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "store.recent_marks_withdrawn",
+   "file": "deploy/szl_verticals/store.py",
+   "find": "            item[\"withdrawn\"] = bool(item[\"withdrawn\"])\n",
+   "replace": "            item[\"withdrawn\"] = False\n",
+   "why": "Second-brain memory would present a withdrawn payload as plain OBSERVED evidence.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "replay_store.stored_json_parse_is_unavailable",
+   "file": "deploy/szl_verticals/replay_store.py",
+   "find": "    try:\n        return json.loads(text, object_pairs_hook=_unique_object)\n    except (TypeError, ValueError, UnicodeError, RecursionError) as exc:\n        raise StoredAssessmentInvalid(\"malformed stored assessment\") from exc",
+   "replace": "    return json.loads(text, object_pairs_hook=_unique_object)",
+   "why": "A malformed stored assessment would escape plan/invoke/withdraw as a raw JSONDecodeError (500) instead of the documented 503.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "replay_store.stored_dependencies_shape_checked",
+   "file": "deploy/szl_verticals/replay_store.py",
+   "find": "                or not _valid_clock_value(dep[\"observed_at\"]) or not _valid_clock_value(dep[\"expires_at\"])):\n            raise StoredAssessmentInvalid(\"malformed stored assessment\")",
+   "replace": "                or not _valid_clock_value(dep[\"observed_at\"]) or not _valid_clock_value(dep[\"expires_at\"])):\n            pass",
+   "why": "A stored dependency missing keys would raise KeyError deep in replay: a 500, or a false 404 'evidence not found' if a LookupError handler saw it.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "replay_store.clock_faults_are_unavailable",
+   "file": "deploy/szl_verticals/replay_store.py",
+   "find": "    try:\n        value = now() if callable(now) else now\n    except Exception as exc:\n        raise RuntimeError(\"assessment clock unavailable\") from exc",
+   "replace": "    value = now() if callable(now) else now",
+   "why": "A failing clock would surface as an unhandled server error instead of 503 'evidence replay unavailable'.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  },
+  {
+   "id": "frontier.hatun_passes_clock",
+   "file": "deploy/szl_verticals/frontier.py",
+   "find": "kind=\"hatun-review\", snapshot=snapshot, now=time.time)",
+   "replace": "kind=\"hatun-review\", snapshot=snapshot, now=assessed_at)",
+   "why": "A pre-read registration time could predate a status poll of the same id and latch ASSESSMENT_CLOCK_REGRESSED on re-registration.",
+   "tests": [
+    "tests/test_evidence_replay.py",
+    "tests/test_hatun_evidence_admission.py",
+    "tests/test_intelligence_evidence_admission.py",
+    "tests/test_evidence_resolution.py"
+   ]
+  }
+ ]
+}
