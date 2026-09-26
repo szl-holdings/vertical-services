@@ -20,6 +20,8 @@ One immutable snapshot from the existing resolver is bound into the receipt thro
 
 Only REVIEW and ABSTAIN are possible. Caller axes remain advisory/caller-reported, not authenticated measurements. Normalized-axis collisions are rejected. Rejected frontier requests remain HTTP 422 but no longer echo invalid Unicode, raw input, handles or credentials in error bodies. This redaction does not suppress validation or claim to implement a transport byte/time limit.
 
+Since #48, a `REVIEW` is registered as a correction-replay assessment before the receipt is returned, and `receipt.evidence_replay` records its state. If that registration is not `CURRENT`, the route returns 409 `evidence changed during assessment` instead of a receipt. If the replay store cannot register it, the route returns 503 `evidence replay unavailable`. An `ABSTAIN` is not registered (`NOT_TRACKED`). Withdrawal, assessment status reads, every status code and the replay clock contract are specified in [CORRECTION_REPLAY.md](CORRECTION_REPLAY.md).
+
 ## Verification
 
 35 new route-and-real-SQLite regressions passed locally on CPython 3.13.5, both normal and optimized execution with pytest assertion rewriting. Exact original core, frontier, resolver and store source blobs were verified before editing. The local harness used the actual route, validators, hashed-session dependency, immutable resolver and SQLite implementation; ancillary readiness, connector specification and formula summary were synthetic. It was not a full deployment application test. The shipped tests import the real deployment app in native CI; no local harness or stubs are shipped.

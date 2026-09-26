@@ -48,8 +48,21 @@ Every vertical exposes the same governed surfaces:
 - `/api/verticals/{vertical}/formulas` — named math and implementation bindings;
 - `/api/verticals/{vertical}/connectors` — fixed official-source connector catalog;
 - `/api/verticals/{vertical}/second-brain` — session-scoped observation memory;
+  each observation carries `withdrawn` (`true` once this session withdrew it);
 - `/api/verticals/{vertical}/readyz` — exact readiness requirements and evidence;
-- `/api/verticals/{vertical}/connectors/{connector}/fetch` — bounded live observation.
+- `/api/verticals/{vertical}/connectors/{connector}/fetch` — bounded live observation;
+- `POST /api/verticals/{vertical}/evidence/withdraw` — withdraw exact payload
+  digests from this session's use (not a source-wide retraction);
+- `GET /api/verticals/{vertical}/evidence/assessments/{assessment_id}` — whether a
+  plan or Hatun review is still `CURRENT` or now `REVALIDATION_REQUIRED`.
+
+A Hatun `REVIEW` and a `READY_FOR_INFERENCE` intelligence plan register a
+replay assessment before they return a receipt, and invocation re-checks it
+before and after provider dispatch. The 404, 409 and 503 responses, the replay clock contract and the
+`withdrawn` flag are specified in
+[`docs/CORRECTION_REPLAY.md`](https://github.com/szl-holdings/vertical-services/blob/main/docs/CORRECTION_REPLAY.md).
+The complete machine-readable route list is `operational_fabric` in
+`/api/catalog`.
 
 The nine organs are **Sense → Normalize → Context → Formula → Policy → Decide →
 Verify → Remember → Receipt**. Every observation carries a source URL, fetch
@@ -132,16 +145,17 @@ business engines, Vessels consolidation, Living Anatomy, formula bindings,
 session isolation, official-source normalization, caching, response hashing,
 credential failure, and arbitrary-URL rejection.
 
-`.github/workflows/hf-space.yml` then:
+On every pull request to `main` and every `main` push, `.github/workflows/hf-space.yml`
+compiles and runs all deterministic tests, validates each vertical in a six-way
+parallel matrix, and builds and smokes the Docker image.
 
-1. compiles and runs all deterministic tests;
-2. validates each vertical in a six-way parallel matrix;
-3. builds and smokes the Docker image;
-4. preserves or creates the write-only Sentra/Killinchu signing key;
-5. publishes the exact protected-main revision to
-   `SZLHOLDINGS/vertical-services`;
-6. restarts the Space and attests the source-bound runtime; and
-7. exercises every required official source through the deployed service,
-   uploading a secret-free live connector receipt.
+It publishes only after a push to `main` (or a manual dispatch on `main`), and
+only when a Hugging Face write token is available to this repository. Without a
+token, it records a `DELEGATED` receipt, publishes nothing, and names the a11oy
+`hf-sync.yml` `publish-vertical-flagships` job as the writer. That job runs only
+on a manual, plan-gated dispatch in `szl-holdings/a11oy`.
+[`deploy/DEPLOYED.md`](https://github.com/szl-holdings/vertical-services/blob/main/deploy/DEPLOYED.md)
+describes both paths. A green workflow run is not a deployment receipt. The
+running Space's `/api/build-info` is.
 
 Public runtime: `SZLHOLDINGS/vertical-services`.
