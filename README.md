@@ -111,8 +111,11 @@ plan supplies durable storage.
 ## Live contract
 
 - `/` — responsive user, developer, operator, and investor front door
-- `/healthz` — liveness, canonical engine catalog, and state modes
-- `/readyz` — fail-closed estate readiness
+- `/healthz` — source-bound health, canonical engine catalog, and state modes;
+  HTTP 503 with `ok: false` when the source binding is not observed, and each
+  `/{engine}/healthz` follows the same rule
+- `/readyz` — fail-closed estate readiness; `live_data` counts only unexpired
+  observations that the observing session has not withdrawn
 - `/api/build-info` — exact source/runtime identity with `build.state=OBSERVED`
 - `/api/source` — compatibility route for the same source/runtime identity
 - `/.well-known/szl-source.json` — well-known route for the same identity
