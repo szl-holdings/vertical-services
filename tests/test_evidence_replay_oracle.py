@@ -24,9 +24,9 @@ digest):
 
 Status reads mutate the latch, so the per-step comparison of the latch reads
 the two documented persisted tables with a plain SELECT (no public read-only
-accessor exists); every other comparison uses public store methods. Time is
-injected the same way the existing tests do it: an explicit ``now`` for the
-assessment API and a monkeypatched ``time`` module for ``cached()``.
+accessor exists); every other comparison uses public store methods. Both the
+store's own clock (read inside its replay transaction) and a monkeypatched
+``time`` module for ``cached()`` read the model clock.
 
 On divergence the failure prints the seed and a greedily shrunk op trace.
 Source tests only: this does not establish production admission or runtime
@@ -304,13 +304,13 @@ def apply_store(op: tuple, model: Model, store: ObservationStore, clock: list):
     elif kind == "withdraw":
         try:
             store.withdraw_payloads(vertical=vertical, session_scope=session,
-                                    payload_digests=list(op[2]), now=now)
+                                    payload_digests=list(op[2]))
             got = "WITHDRAWN"
         except LookupError:
             got = "NOT_FOUND"
         expect(got == want, f"withdraw result store={got} model={want}")
     elif kind == "restart":
-        store = ObservationStore()
+        store = ObservationStore(clock=lambda: clock[0])
         expect(store.error is None, f"restart failed: {store.error}")
     elif kind == "register":
         snapshot = resolve_evidence(store, vertical=vertical, session_scope=session,
@@ -321,14 +321,14 @@ def apply_store(op: tuple, model: Model, store: ObservationStore, clock: list):
         try:
             result = store.register_assessment(vertical=vertical, session_scope=session,
                                                assessment_id=op[1], kind=op[3],
-                                               snapshot=snapshot, now=now)
+                                               snapshot=snapshot)
             got = (result["state"], result["changed_dependencies"])
         except ValueError:
             got = None
         expect(got == want, f"register store={got} model={want}")
     elif kind == "status":
         result = store.assessment_status(vertical=vertical, session_scope=session,
-                                         assessment_id=op[1], now=now, connectors=CONNECTORS)
+                                         assessment_id=op[1], connectors=CONNECTORS)
         got = None if result is None else (result["state"], result["changed_dependencies"])
         expect(got == want, f"status store={got} model={want}")
         if result is not None:
@@ -380,7 +380,7 @@ def run(tmp_path: Path, monkeypatch, *, seed: int, ops=None, tag: str = "run"):
     monkeypatch.setenv("SZL_STATE_PATH", str(db_path))
     model, clock = Model(), [START]
     monkeypatch.setattr(store_module, "time", SimpleNamespace(time=lambda: clock[0]))
-    store = ObservationStore()
+    store = ObservationStore(clock=lambda: clock[0])
     assert store.error is None, store.error
     rng, trace = random.Random(seed), []
     count = STEPS if ops is None else len(ops)

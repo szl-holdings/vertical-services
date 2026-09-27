@@ -76,7 +76,7 @@ def withdraw_evidence(vertical: str, request: EvidenceWithdrawalRequest, session
     canonical = canonical_vertical(vertical)
     try:
         return STORE.withdraw_payloads(vertical=canonical, session_scope=session,
-                                       payload_digests=request.evidence_sha256, now=time.time)
+                                       payload_digests=request.evidence_sha256)
     except EvidenceNotFound:
         raise HTTPException(404, "evidence not found in this session") from None
     except (OSError, RuntimeError, sqlite3.Error):
@@ -90,7 +90,7 @@ def evidence_assessment(vertical: str, assessment_id: str, session: SessionScope
         raise HTTPException(404, "assessment not found")
     try:
         result = STORE.assessment_status(vertical=canonical, session_scope=session,
-                                         assessment_id=assessment_id, now=time.time, connectors=CONNECTORS)
+                                         assessment_id=assessment_id, connectors=CONNECTORS)
     except (OSError, RuntimeError, sqlite3.Error):
         raise HTTPException(503, "evidence replay unavailable") from None
     if result is None:
@@ -312,7 +312,7 @@ def hatun_evaluate(
         try:
             replay = STORE.register_assessment(
                 vertical=canonical, session_scope=session, assessment_id=assessment_id,
-                kind="hatun-review", snapshot=snapshot, now=time.time)
+                kind="hatun-review", snapshot=snapshot)
         except (OSError, RuntimeError, sqlite3.Error):
             raise HTTPException(503, "evidence replay unavailable") from None
         if replay["state"] != "CURRENT":

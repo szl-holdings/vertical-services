@@ -56,6 +56,13 @@ also detect expiry, missing/tampered rows, clock regression and current
 connector-policy disagreement. Temporary unavailable storage is an error, not
 an empty/current result and not a permanent proof of invalidity.
 
+The store owns the clock for registration, status checks and withdrawals and
+reads it once per replay transaction, after its process lock and SQLite
+`BEGIN IMMEDIATE`. Callers cannot pass a time in, so a concurrent status poll
+cannot commit a later check between another request's clock read and its use
+and latch a false `ASSESSMENT_CLOCK_REGRESSED`. A failing clock makes replay
+unavailable (503), never a server error.
+
 Withdrawals survive repeat observation of identical payload bytes. Connector
 cache reads inspect the latest query result first, so withdrawing it cannot
 silently resurrect an older cached answer. A new source payload can qualify

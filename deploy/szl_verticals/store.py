@@ -9,7 +9,7 @@ import threading
 import time
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from szl_verticals.replay_store import REPLAY_SCHEMA, ReplayStoreMixin
 
@@ -18,9 +18,16 @@ class ObservationStore(ReplayStoreMixin):
 
     The default path is an ephemeral file. A persistent claim is emitted only
     when the operator explicitly sets SZL_STATE_DURABILITY=persistent.
+
+    The store owns the clock that times evidence assessments and withdrawals.
+    It is read only inside the replay write transaction; callers cannot pass
+    a time in. Tests inject a deterministic clock here.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, clock: Callable[[], float] = time.time) -> None:
+        if not callable(clock):
+            raise TypeError("clock must be a zero-argument callable")
+        self._clock = clock
         configured = os.environ.get("SZL_STATE_PATH", "").strip()
         self.path = Path(configured or "/tmp/szl-vertical-services.sqlite3")
         self.durability = (

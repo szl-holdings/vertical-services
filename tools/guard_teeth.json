@@ -324,11 +324,11 @@
    ]
   },
   {
-   "id": "replay_store.status_clock_inside_transaction",
+   "id": "replay_store.transaction_clock_inside_process_lock",
    "file": "deploy/szl_verticals/replay_store.py",
-   "find": "                connection.execute(\"BEGIN IMMEDIATE\")\n                now = _sample_clock(now)\n                result = self._check_assessment(connection, vertical, session_scope, assessment_id, now, connectors)",
-   "replace": "                now = _sample_clock(now)\n                connection.execute(\"BEGIN IMMEDIATE\")\n                result = self._check_assessment(connection, vertical, session_scope, assessment_id, now, connectors)",
-   "why": "Reading the clock before BEGIN IMMEDIATE lets another process's reader commit a later last_checked_at first; this read then latches ASSESSMENT_CLOCK_REGRESSED on unchanged evidence.",
+   "find": "        with self._lock, closing(self._connect()) as connection:\n            connection.execute(\"BEGIN IMMEDIATE\")\n            now = _sample_clock(self._clock)\n",
+   "replace": "        now = _sample_clock(self._clock)\n        with self._lock, closing(self._connect()) as connection:\n            connection.execute(\"BEGIN IMMEDIATE\")\n",
+   "why": "Every replay write (register, status, withdraw) reads the store's clock in _transaction. Read before the process lock, a concurrent status poll or identical plan can commit a later last_checked_at first; this transaction then latches ASSESSMENT_CLOCK_REGRESSED on unchanged evidence, and a poll overlapping an invoke withholds valid output with a 409.",
    "tests": [
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
@@ -337,63 +337,11 @@
    ]
   },
   {
-   "id": "replay_store.register_clock_inside_transaction",
+   "id": "replay_store.transaction_clock_after_begin_immediate",
    "file": "deploy/szl_verticals/replay_store.py",
-   "find": "                connection.execute(\"BEGIN IMMEDIATE\")\n                now = _sample_clock(now)\n                existing = connection.execute(",
-   "replace": "                now = _sample_clock(now)\n                connection.execute(\"BEGIN IMMEDIATE\")\n                existing = connection.execute(",
-   "why": "Same race on registration: an identical deterministic intelligence plan registered concurrently could latch its own assessment as clock-regressed and 409 forever.",
-   "tests": [
-    "tests/test_evidence_replay.py",
-    "tests/test_hatun_evidence_admission.py",
-    "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
-   ]
-  },
-  {
-   "id": "replay_store.withdraw_clock_inside_transaction",
-   "file": "deploy/szl_verticals/replay_store.py",
-   "find": "                connection.execute(\"BEGIN IMMEDIATE\")\n                now = _sample_clock(now)\n                for digest in sorted(set(payload_digests)):",
-   "replace": "                now = _sample_clock(now)\n                connection.execute(\"BEGIN IMMEDIATE\")\n                for digest in sorted(set(payload_digests)):",
-   "why": "withdrawn_at must be read inside the write transaction so withdrawal times are ordered with the checks that observe them.",
-   "tests": [
-    "tests/test_evidence_replay.py",
-    "tests/test_hatun_evidence_admission.py",
-    "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
-   ]
-  },
-  {
-   "id": "frontier.status_route_passes_clock",
-   "file": "deploy/szl_verticals/frontier.py",
-   "find": "assessment_id=assessment_id, now=time.time, connectors=CONNECTORS)",
-   "replace": "assessment_id=assessment_id, now=time.time(), connectors=CONNECTORS)",
-   "why": "A time read in the route before the store lock is the confirmed P1: racing status polls permanently invalidate an unchanged Hatun REVIEW.",
-   "tests": [
-    "tests/test_evidence_replay.py",
-    "tests/test_hatun_evidence_admission.py",
-    "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
-   ]
-  },
-  {
-   "id": "intelligence.plan_passes_clock",
-   "file": "deploy/szl_verticals/intelligence.py",
-   "find": "kind=\"intelligence-plan\", snapshot=evidence, now=time.time)",
-   "replace": "kind=\"intelligence-plan\", snapshot=evidence, now=time.time())",
-   "why": "Plans have a deterministic basis, so one poisoned registration 409s every later identical plan in that session.",
-   "tests": [
-    "tests/test_evidence_replay.py",
-    "tests/test_hatun_evidence_admission.py",
-    "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
-   ]
-  },
-  {
-   "id": "intelligence.dispatch_passes_clock",
-   "file": "deploy/szl_verticals/intelligence.py",
-   "find": "assessment_id=assessment_id, now=time.time, connectors=CONNECTORS)",
-   "replace": "assessment_id=assessment_id, now=time.time(), connectors=CONNECTORS)",
-   "why": "A status poll overlapping an in-flight invoke would withhold valid model output with a false clock-regression 409.",
+   "find": "            connection.execute(\"BEGIN IMMEDIATE\")\n            now = _sample_clock(self._clock)\n",
+   "replace": "            now = _sample_clock(self._clock)\n            connection.execute(\"BEGIN IMMEDIATE\")\n",
+   "why": "Read after the process lock but before BEGIN IMMEDIATE, another process sharing the SQLite file can commit a later last_checked_at first, so the same false ASSESSMENT_CLOCK_REGRESSED latch happens across workers.",
    "tests": [
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",
@@ -443,22 +391,9 @@
   {
    "id": "replay_store.clock_faults_are_unavailable",
    "file": "deploy/szl_verticals/replay_store.py",
-   "find": "    try:\n        value = now() if callable(now) else now\n    except Exception as exc:\n        raise RuntimeError(\"assessment clock unavailable\") from exc",
-   "replace": "    value = now() if callable(now) else now",
+   "find": "    try:\n        value = clock()\n    except Exception as exc:\n        raise RuntimeError(\"assessment clock unavailable\") from exc",
+   "replace": "    value = clock()",
    "why": "A failing clock would surface as an unhandled server error instead of 503 'evidence replay unavailable'.",
-   "tests": [
-    "tests/test_evidence_replay.py",
-    "tests/test_hatun_evidence_admission.py",
-    "tests/test_intelligence_evidence_admission.py",
-    "tests/test_evidence_resolution.py"
-   ]
-  },
-  {
-   "id": "frontier.hatun_passes_clock",
-   "file": "deploy/szl_verticals/frontier.py",
-   "find": "kind=\"hatun-review\", snapshot=snapshot, now=time.time)",
-   "replace": "kind=\"hatun-review\", snapshot=snapshot, now=assessed_at)",
-   "why": "A pre-read registration time could predate a status poll of the same id and latch ASSESSMENT_CLOCK_REGRESSED on re-registration.",
    "tests": [
     "tests/test_evidence_replay.py",
     "tests/test_hatun_evidence_admission.py",

@@ -27,6 +27,10 @@ def runtime(monkeypatch, ledger):
     monkeypatch.setattr(module, "STORE", ledger)
     monkeypatch.setattr(module, "CONNECTORS", CONNECTORS)
     monkeypatch.setattr(module, "time", SimpleNamespace(time=lambda: CLOCK))
+    # The store owns its clock (read only inside its transaction). This shared
+    # ledger fixture is built elsewhere, so point its clock at the planner's
+    # (monkeypatched) time: one virtual time, as in production.
+    monkeypatch.setattr(ledger, "_clock", lambda: module.time.time())
     # Other independent gates are fixed true to isolate evidence admission.
     monkeypatch.setattr(module, "vertical_readiness", lambda *a, **kw: {
         "ready": True, "requirements": {"source_bound": True}})
@@ -151,7 +155,7 @@ def test_changed_basis_before_dispatch_prevents_network(runtime, ledger, monkeyp
                 ledger.put(original[0], {"finding": "original"})
         else:
             ledger.withdraw_payloads(vertical="finance", session_scope=SCOPE,
-                                     payload_digests=DIGESTS[:1], now=CLOCK)
+                                     payload_digests=DIGESTS[:1])
         return real_client(transport=httpx.MockTransport(response), **kwargs)
     monkeypatch.setattr(runtime.httpx, "AsyncClient", factory)
     with pytest.raises(HTTPException) as error:
@@ -168,7 +172,7 @@ def test_withdrawal_during_provider_call_withholds_output(runtime, ledger, monke
     def response(req):
         seen.append(req)
         ledger.withdraw_payloads(vertical="finance", session_scope=SCOPE,
-                                 payload_digests=DIGESTS[:1], now=CLOCK)
+                                 payload_digests=DIGESTS[:1])
         return httpx.Response(200, json={"choices": [{"message": {"content": "WITHHOLD_THIS"}}]})
     monkeypatch.setattr(runtime.httpx, "AsyncClient",
                         lambda **kwargs: real_client(transport=httpx.MockTransport(response), **kwargs))
@@ -243,7 +247,7 @@ def _isolate_layer(runtime, ledger, monkeypatch, keep):
 def _change(ledger, original, how):
     if how == "withdraw":
         ledger.withdraw_payloads(vertical="finance", session_scope=SCOPE,
-                                 payload_digests=DIGESTS[:1], now=CLOCK)
+                                 payload_digests=DIGESTS[:1])
     else:
         ledger.put(original[0], {"finding": "changed"})
 
@@ -286,68 +290,102 @@ def test_each_post_response_layer_alone_withholds_output(runtime, ledger, monkey
     assert "WITHHOLD_THIS" not in str(error.value.detail)
 
 
-def test_plan_and_dispatch_hand_the_store_a_clock_not_a_pre_read_value(runtime, ledger, monkeypatch):
-    # A time read before the store's lock can predate a concurrent reader's check
-    # and falsely latch ASSESSMENT_CLOCK_REGRESSED (see the racing-reader test in
-    # test_evidence_replay.py), so every replay call must pass the clock itself.
+class RacingClock:
+    """A ticking clock that lets `racer` run each time the test's own thread reads it.
+
+    Each clock read by the thread that built this clock starts `racer` in a new
+    thread and waits briefly for it. A store that reads its clock inside its
+    transaction still holds its lock at that point, so the racer waits and runs
+    afterwards with a later tick. A time read outside that lock (a caller's
+    pre-read, or a store that samples before locking) is overtaken by the racer's
+    later tick and latches ASSESSMENT_CLOCK_REGRESSED. The interleave point is the
+    clock itself, so no call stack or method name is matched.
+    """
+
+    def __init__(self, start, racer, *, wait=0.5, limit=8):
+        self.start, self.racer, self.wait, self.limit = start, racer, wait, limit
+        self.ticks, self.tick_lock = itertools.count(1), threading.Lock()
+        self.owner = threading.get_ident()
+        self.armed, self.threads, self.results = False, [], []
+
+    def __call__(self):
+        with self.tick_lock:
+            value = self.start + next(self.ticks) / 1e6
+        if self.armed and threading.get_ident() == self.owner and len(self.threads) < self.limit:
+            thread = threading.Thread(target=lambda: self.results.append(self.racer()))
+            self.threads.append(thread)
+            thread.start()
+            thread.join(timeout=self.wait)
+        return value
+
+    def settle(self):
+        self.armed = False
+        for thread in self.threads:
+            thread.join(timeout=30)
+        assert not any(thread.is_alive() for thread in self.threads)
+        assert len(self.results) == len(self.threads), "a racer raised"
+
+
+def test_status_polls_racing_an_invoke_never_withhold_its_output(runtime, ledger, monkeypatch):
+    # A status poll of the plan's assessment (what the assessment route does) that
+    # overlaps an in-flight invoke must not withhold valid model output or latch
+    # ASSESSMENT_CLOCK_REGRESSED. Every clock read the invoke makes while in
+    # flight lets a full status read with a later tick run first where it can.
     for digest in DIGESTS[:2]:
         put(ledger, digest)
-    seen = []
-    for name in ("register_assessment", "assessment_status"):
-        def wrapper(*, _real=getattr(ledger, name), _name=name, **kwargs):
-            seen.append((_name, callable(kwargs["now"])))
-            return _real(**kwargs)
-        monkeypatch.setattr(ledger, name, wrapper)
+    payload = request(runtime)
+    plan_id = runtime.build_intelligence_plan("finance", payload, SCOPE)["receipt"]["basis_sha256"]
+
+    def poll():
+        return ledger.assessment_status(vertical="finance", session_scope=SCOPE,
+                                        assessment_id=plan_id, connectors=CONNECTORS)["state"]
+
+    clock = RacingClock(CLOCK, poll)
+    monkeypatch.setattr(runtime, "time", SimpleNamespace(time=clock))
     real_client = httpx.AsyncClient
     ok = httpx.Response(200, json={"choices": [{"message": {"content": "Synthetic output"}}]})
-    monkeypatch.setattr(runtime.httpx, "AsyncClient",
-                        lambda **kwargs: real_client(transport=httpx.MockTransport(lambda req: ok), **kwargs))
-    asyncio.run(runtime.vertical_intelligence_invoke("finance", request(runtime), SCOPE))
-    assert {name for name, _ in seen} == {"register_assessment", "assessment_status"}
-    assert all(is_clock for _, is_clock in seen), seen
 
+    def in_flight(**kwargs):
+        clock.armed = True
+        return real_client(transport=httpx.MockTransport(lambda req: ok), **kwargs)
+
+    monkeypatch.setattr(runtime.httpx, "AsyncClient", in_flight)
+    try:
+        result = asyncio.run(runtime.vertical_intelligence_invoke("finance", payload, SCOPE))
+    except HTTPException as error:
+        result = {"status_code": error.status_code, "detail": error.detail}
+    finally:
+        clock.settle()
+    assert result.get("output") == "Synthetic output", result
+    assert result["plan_receipt_sha256"] == plan_id
+    assert clock.results and set(clock.results) == {"CURRENT"}, clock.results
+    assert poll() == "CURRENT"
 
 
 def test_concurrent_identical_plans_never_poison_their_own_assessment(runtime, ledger, monkeypatch):
     # A plan's basis is deterministic, so identical plans share one assessment.
-    # Just before this plan's registration takes the store lock, a second
-    # identical plan runs to completion. A caller that read the clock before
-    # the lock would now present an older time than the committed last check,
-    # latch ASSESSMENT_CLOCK_REGRESSED and 409 this plan for the rest of the
-    # session. A clock read inside the transaction comes after the racer's.
+    # Each clock read this plan makes lets a second identical plan run to
+    # completion first where it can. A registration time read before the store
+    # lock would then be older than the committed last check, latch
+    # ASSESSMENT_CLOCK_REGRESSED and 409 this plan for the rest of the session.
     for digest in DIGESTS[:2]:
         put(ledger, digest)
-    ticks, tick_lock = itertools.count(1), threading.Lock()
-    def clock():
-        with tick_lock:
-            return CLOCK + next(ticks) / 1e6
-    monkeypatch.setattr(runtime, "time", SimpleNamespace(time=clock))
     payload = request(runtime)
-    assert runtime.build_intelligence_plan("finance", payload, SCOPE)["decision"] == "READY_FOR_INFERENCE"
-    racer = {}
 
-    def race():
+    def plan():
         try:
-            racer["decision"] = runtime.build_intelligence_plan("finance", payload, SCOPE)["decision"]
+            return runtime.build_intelligence_plan("finance", payload, SCOPE)["decision"]
         except HTTPException as error:
-            racer["decision"] = error.status_code
+            return error.status_code
 
-    class RacingLock:
-        def __init__(self, inner):
-            self.inner = inner
-        def __enter__(self):
-            if "thread" not in racer and sys._getframe(1).f_code.co_name == "register_assessment":
-                racer["thread"] = threading.Thread(target=race)
-                racer["thread"].start()
-                racer["thread"].join(timeout=30)
-            return self.inner.__enter__()
-        def __exit__(self, *exc):
-            return self.inner.__exit__(*exc)
-
-    monkeypatch.setattr(ledger, "_lock", RacingLock(ledger._lock))
+    clock = RacingClock(CLOCK, plan)
+    monkeypatch.setattr(runtime, "time", SimpleNamespace(time=clock))
+    assert plan() == "READY_FOR_INFERENCE"
+    clock.armed = True
     try:
-        first = runtime.build_intelligence_plan("finance", payload, SCOPE)["decision"]
-    except HTTPException as error:
-        first = error.status_code
-    assert (first, racer["decision"]) == ("READY_FOR_INFERENCE", "READY_FOR_INFERENCE")
-    assert runtime.build_intelligence_plan("finance", payload, SCOPE)["decision"] == "READY_FOR_INFERENCE"
+        first = plan()
+    finally:
+        clock.settle()
+    assert first == "READY_FOR_INFERENCE"
+    assert clock.results and set(clock.results) == {"READY_FOR_INFERENCE"}, clock.results
+    assert plan() == "READY_FOR_INFERENCE"
