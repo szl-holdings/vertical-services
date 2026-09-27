@@ -173,7 +173,7 @@ class InboundLimitUnitTests(unittest.TestCase):
 
 
 class ContentTypeGateUnitTests(unittest.TestCase):
-    """The strict parser runs on exactly the bodies FastAPI decodes as JSON."""
+    """The strict parser runs on every body FastAPI decodes as JSON."""
 
     def test_json_content_types_are_parsed_as_json(self) -> None:
         for content_type in JSON_CONTENT_TYPES:
@@ -196,6 +196,19 @@ class ContentTypeGateUnitTests(unittest.TestCase):
                     maybe_parse_json(_headers(content_type), b'{"a":1,"a":2}')
                 self.assertEqual(ctx.exception.code, "DUPLICATE_JSON_KEY")
                 self.assertEqual(ctx.exception.status_code, 400)
+
+    def test_types_naming_application_json_are_still_parsed_strictly(self) -> None:
+        # FastAPI hands these to the route as raw bytes, but the strict parser
+        # still runs on the ones that mention application/json, as before.
+        for content_type in NON_JSON_CONTENT_TYPES:
+            with self.subTest(content_type=content_type):
+                headers = _headers(content_type)
+                if "application/json" in content_type.lower():
+                    with self.assertRaises(BodyBoundError) as ctx:
+                        maybe_parse_json(headers, b'{"a":1,"a":2}')
+                    self.assertEqual(ctx.exception.code, "DUPLICATE_JSON_KEY")
+                else:
+                    self.assertIsNone(maybe_parse_json(headers, b'{"a":1,"a":2}'))
 
     def test_empty_body_is_not_parsed(self) -> None:
         for content_type in JSON_CONTENT_TYPES:
@@ -228,10 +241,11 @@ class NestingDepthUnitTests(unittest.TestCase):
 
     def test_object_at_depth_limit_is_accepted(self) -> None:
         self.assertEqual(MAX_JSON_DEPTH, 64)
-        for build in (_nested_object, _nested_array_in_object):
-            with self.subTest(shape=build.__name__):
-                value = parse_strict_json(build(MAX_JSON_DEPTH).encode("utf-8"))
-                self.assertIsInstance(value, dict)
+        for depth in (MAX_JSON_DEPTH - 1, MAX_JSON_DEPTH):
+            for build in (_nested_object, _nested_array_in_object):
+                with self.subTest(depth=depth, shape=build.__name__):
+                    value = parse_strict_json(build(depth).encode("utf-8"))
+                    self.assertIsInstance(value, dict)
 
     def test_object_one_past_depth_limit_is_rejected(self) -> None:
         for build in (_nested_object, _nested_array_in_object):

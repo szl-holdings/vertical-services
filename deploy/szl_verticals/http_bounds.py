@@ -8,9 +8,11 @@ rejected or overridden by the incremental byte budget.
 The strict JSON checks (duplicate keys, non-finite numbers, nesting depth)
 run on every body that FastAPI will decode as JSON: a missing or empty
 Content-Type, ``application/json``, and any ``application/*+json`` type.
-The decision is keyed to the route parser's rule, not to a substring of
-the header, so the strict parser and the route parser agree about which
-bodies are JSON.
+That coverage is keyed to the route parser's rule, so no body reaches a
+route as JSON without passing the strict parser. Bodies whose Content-Type
+merely mentions ``application/json`` (for example ``application/json-seq``)
+are also checked, as they were before, so invalid JSON sent with them keeps
+the fixed-body 400 instead of the framework's input-echoing 422.
 
 This module is not a production authorization, publisher, or model
 identity proof.
