@@ -242,11 +242,22 @@ def body_is_parsed_as_json(headers: Mapping[str, str]) -> bool:
     return subtype == "json" or subtype.endswith("+json")
 
 
+def _names_application_json(headers: Mapping[str, str]) -> bool:
+    """The earlier gate: any Content-Type mentioning application/json.
+
+    Kept alongside body_is_parsed_as_json so types such as
+    application/json-seq keep their fixed-body 400 for invalid JSON instead
+    of falling through to the framework's default 422, which reflects input.
+    """
+    content_type = headers.get("content-type") or headers.get("Content-Type") or ""
+    return "application/json" in str(content_type).lower()
+
+
 def maybe_parse_json(headers: Mapping[str, str], raw: bytes) -> None:
     """Reject invalid JSON before a route handler materializes it."""
     if not raw:
         return
-    if not body_is_parsed_as_json(headers):
+    if not (body_is_parsed_as_json(headers) or _names_application_json(headers)):
         return
     parse_strict_json(raw)
 

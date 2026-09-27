@@ -358,12 +358,16 @@ class InboundLimitAppTests(unittest.TestCase):
                 with self.subTest(path=path, content_type=content_type):
                     response = self.client.post(path, content=raw, headers=_headers(content_type))
                     self.assertBoundsError(response, 400, "DUPLICATE_JSON_KEY")
-            # Other content types are never decoded as JSON, so the route
-            # rejects the raw bytes instead of reading a last-wins object.
+            # Other content types are never decoded as JSON, so no last-wins
+            # object is read. Types that mention application/json keep the
+            # earlier gate's fixed-body 400; the rest reach the route's 422.
             for content_type in NON_JSON_CONTENT_TYPES:
                 with self.subTest(path=path, content_type=content_type):
                     response = self.client.post(path, content=raw, headers=_headers(content_type))
-                    self.assertEqual(response.status_code, 422, response.text)
+                    if "application/json" in content_type.lower():
+                        self.assertBoundsError(response, 400, "DUPLICATE_JSON_KEY")
+                    else:
+                        self.assertEqual(response.status_code, 422, response.text)
 
     def test_non_finite_numbers_rejected_whatever_the_content_type(self) -> None:
         # Audit repro: no Content-Type and +json answered 500, not 400.
