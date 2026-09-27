@@ -61,6 +61,10 @@ jobs:
     name: Guard-teeth self-test and manifest staleness gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      SENTRA_SIGNING_KEY: ci-contract-key-not-used-in-production
+      SZL_SOURCE_REVISION: ${{ github.sha }}
+      SZL_STATE_PATH: /tmp/szl-vertical-services-guard-teeth-gate.sqlite3
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0

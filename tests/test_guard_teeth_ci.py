@@ -75,6 +75,22 @@ def test_every_pull_request_runs_the_self_test_and_staleness_gate():
     assert "continue-on-error" not in workflow
 
 
+def test_guard_teeth_runs_with_the_contract_suite_env():
+    ci = _workflow("ci.yml")
+    contract = ci.split("      - name: Compile and test\n", 1)[1].split("        run:", 1)[0]
+    expected = [
+        line.strip() for line in contract.splitlines()
+        if line.strip().startswith(("SENTRA_SIGNING_KEY:", "SZL_SOURCE_REVISION:"))
+    ]
+    assert len(expected) == 2, contract
+    gate = ci.split("\n  guard-teeth-gate:\n", 1)[1]
+    full = _workflow("guard-teeth.yml")
+    for block in (gate, full):
+        lines = [line.strip() for line in block.splitlines()]
+        assert all(line in lines for line in expected), expected
+        assert any(re.fullmatch(r"SZL_STATE_PATH: /tmp/[\w.-]+\.sqlite3", line) for line in lines)
+
+
 def test_full_receipt_runs_whenever_a_guarded_file_changes():
     workflow = _workflow("guard-teeth.yml")
     paths = _event_paths(_trigger_block(workflow))
