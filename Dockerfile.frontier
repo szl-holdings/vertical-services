@@ -1,5 +1,5 @@
 # SZL Vertical Frontier Fabric — exact dependency-free runtime closure.
-FROM mirror.gcr.io/library/python:3.12-slim
+FROM mirror.gcr.io/library/python:3.14-slim
 
 WORKDIR /app
 ENV HOST=0.0.0.0
