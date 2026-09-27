@@ -16,7 +16,8 @@ def canonical_vertical(value: str) -> str:
     normalized = value.strip().lower()
     normalized = ALIASES.get(normalized, normalized)
     if normalized not in VERTICALS:
-        raise HTTPException(404, f"unknown vertical: {value}")
+        # Fixed detail: the caller's path segment is never reflected.
+        raise HTTPException(404, "unknown vertical")
     return normalized
 
 
