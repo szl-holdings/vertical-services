@@ -32,12 +32,9 @@ from szl_verticals.http_bounds import (  # noqa: E402
     parse_strict_json,
 )
 
-# Content types FastAPI decodes as JSON (absent, empty, application/json,
-# application/*+json; parameters and case ignored), and ones it hands to the
-# route as raw bytes. ``None`` means the request carries no Content-Type.
+# Content types FastAPI decodes as JSON (application/json, application/*+json;
+# parameters and case ignored), and ones it hands to the route as raw bytes.
 JSON_CONTENT_TYPES = (
-    None,
-    "",
     "application/json",
     "application/json; charset=utf-8",
     "Application/JSON",
@@ -57,6 +54,11 @@ NON_JSON_CONTENT_TYPES = (
     "application/json, text/plain",
     "json",
 )
+# A missing (``None``) or empty Content-Type. FastAPI's default
+# strict_content_type hands these to the route as raw bytes, but a route that
+# sets strict_content_type=False decodes them as JSON, so the strict parser
+# still runs on them.
+ABSENT_CONTENT_TYPES = (None, "")
 
 
 def _headers(content_type: str | None) -> dict[str, str]:
@@ -180,6 +182,11 @@ class ContentTypeGateUnitTests(unittest.TestCase):
             with self.subTest(content_type=content_type):
                 self.assertTrue(body_is_parsed_as_json(_headers(content_type)))
 
+    def test_absent_content_type_is_not_parsed_as_json(self) -> None:
+        for content_type in ABSENT_CONTENT_TYPES:
+            with self.subTest(content_type=content_type):
+                self.assertFalse(body_is_parsed_as_json(_headers(content_type)))
+
     def test_title_case_header_name_is_read(self) -> None:
         self.assertTrue(body_is_parsed_as_json({"Content-Type": "application/vnd.api+json"}))
         self.assertFalse(body_is_parsed_as_json({"Content-Type": "text/plain"}))
@@ -190,7 +197,8 @@ class ContentTypeGateUnitTests(unittest.TestCase):
                 self.assertFalse(body_is_parsed_as_json(_headers(content_type)))
 
     def test_duplicate_keys_rejected_for_every_json_content_type(self) -> None:
-        for content_type in JSON_CONTENT_TYPES:
+        # An absent Content-Type is JSON-decoded when strict_content_type is off.
+        for content_type in JSON_CONTENT_TYPES + ABSENT_CONTENT_TYPES:
             with self.subTest(content_type=content_type):
                 with self.assertRaises(BodyBoundError) as ctx:
                     maybe_parse_json(_headers(content_type), b'{"a":1,"a":2}')
@@ -211,7 +219,7 @@ class ContentTypeGateUnitTests(unittest.TestCase):
                     self.assertIsNone(maybe_parse_json(headers, b'{"a":1,"a":2}'))
 
     def test_empty_body_is_not_parsed(self) -> None:
-        for content_type in JSON_CONTENT_TYPES:
+        for content_type in JSON_CONTENT_TYPES + ABSENT_CONTENT_TYPES:
             with self.subTest(content_type=content_type):
                 self.assertIsNone(maybe_parse_json(_headers(content_type), b""))
 
@@ -354,21 +362,43 @@ class InboundLimitAppTests(unittest.TestCase):
         # Pins body_is_parsed_as_json to the installed FastAPI: a valid JSON
         # object is accepted by the route exactly when FastAPI decodes it.
         raw = json.dumps({"stream": "gate-contract", "value": 1.0}).encode("utf-8")
-        for content_type in JSON_CONTENT_TYPES + NON_JSON_CONTENT_TYPES:
+        for content_type in JSON_CONTENT_TYPES + ABSENT_CONTENT_TYPES + NON_JSON_CONTENT_TYPES:
             with self.subTest(content_type=content_type):
                 headers = _headers(content_type)
                 response = self.client.post("/lyte/v1/metrics", content=raw, headers=headers)
                 expected = 200 if body_is_parsed_as_json(headers) else 422
                 self.assertEqual(response.status_code, expected, response.text)
 
+    def test_gate_holds_when_strict_content_type_is_off(self) -> None:
+        # A router or app that sets strict_content_type=False decodes a body
+        # with no Content-Type as JSON; the bounds middleware still answers 400.
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        lenient = FastAPI(strict_content_type=False)
+        lenient.middleware("http")(self.module.inbound_body_bounds)
+        lenient.include_router(self.module.lyte)
+        client = TestClient(lenient)
+        client.headers.update(self.client.headers)
+        valid = b'{"stream":"lenient","value":1.0}'
+        duplicate = b'{"stream":"lenient","stream":"other","value":1.0}'
+        for content_type in ABSENT_CONTENT_TYPES:
+            with self.subTest(content_type=content_type):
+                headers = _headers(content_type)
+                response = client.post("/lyte/v1/metrics", content=valid, headers=headers)
+                self.assertEqual(response.status_code, 200, response.text)
+                response = client.post("/lyte/v1/metrics", content=duplicate, headers=headers)
+                self.assertBoundsError(response, 400, "DUPLICATE_JSON_KEY")
+
     def test_duplicate_keys_rejected_whatever_the_content_type(self) -> None:
         # Audit repro (Hatun): application/json 400, no Content-Type 200,
-        # application/vnd.api+json 200. All JSON-decoded forms must be 400.
+        # application/vnd.api+json 200. All JSON-decoded forms must be 400,
+        # and so must no Content-Type, which strict_content_type=False decodes.
         hatun = b'{"intent":"first","intent":"second","axes":{"evidence":0.9,"freshness":0.9}}'
         sentra = b'{"actor":"a","actor":"b","action":"read","resource":"r"}'
         routes = (("/api/verticals/puriq/hatun/evaluate", hatun), ("/sentra/v1/evaluate", sentra))
         for path, raw in routes:
-            for content_type in JSON_CONTENT_TYPES:
+            for content_type in JSON_CONTENT_TYPES + ABSENT_CONTENT_TYPES:
                 with self.subTest(path=path, content_type=content_type):
                     response = self.client.post(path, content=raw, headers=_headers(content_type))
                     self.assertBoundsError(response, 400, "DUPLICATE_JSON_KEY")
@@ -386,7 +416,7 @@ class InboundLimitAppTests(unittest.TestCase):
     def test_non_finite_numbers_rejected_whatever_the_content_type(self) -> None:
         # Audit repro: no Content-Type and +json answered 500, not 400.
         raw = b'{"actor":"a","action":"read","resource":"r","risk_score":NaN}'
-        for content_type in JSON_CONTENT_TYPES:
+        for content_type in JSON_CONTENT_TYPES + ABSENT_CONTENT_TYPES:
             with self.subTest(content_type=content_type):
                 response = self.client.post("/sentra/v1/evaluate", content=raw, headers=_headers(content_type))
                 self.assertBoundsError(response, 400, "NONFINITE_JSON")

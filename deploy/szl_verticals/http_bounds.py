@@ -6,13 +6,15 @@ only bound: missing, negative, non-integer, and false lengths are
 rejected or overridden by the incremental byte budget.
 
 The strict JSON checks (duplicate keys, non-finite numbers, nesting depth)
-run on every body that FastAPI will decode as JSON: a missing or empty
-Content-Type, ``application/json``, and any ``application/*+json`` type.
-That coverage is keyed to the route parser's rule, so no body reaches a
-route as JSON without passing the strict parser. Bodies whose Content-Type
-merely mentions ``application/json`` (for example ``application/json-seq``)
-are also checked, as they were before, so invalid JSON sent with them keeps
-the fixed-body 400 instead of the framework's input-echoing 422.
+run on every body that FastAPI will decode as JSON: ``application/json``
+and any ``application/*+json`` type. That coverage is keyed to the route
+parser's rule, so no body reaches a route as JSON without passing the strict
+parser. Bodies with a missing or empty Content-Type are also checked: the
+default strict_content_type=True does not decode them, but setting it to
+False does. Bodies whose Content-Type merely mentions ``application/json``
+(for example ``application/json-seq``) are also checked, as they were
+before, so invalid JSON sent with them keeps the fixed-body 400 instead of
+the framework's input-echoing 422.
 
 This module is not a production authorization, publisher, or model
 identity proof.
@@ -225,9 +227,10 @@ async def read_bounded_body(request: Any) -> bytes:
 def body_is_parsed_as_json(headers: Mapping[str, str]) -> bool:
     """Return True when FastAPI's route parser will decode the body as JSON.
 
-    This mirrors fastapi.routing.get_request_handler: an absent or empty
-    Content-Type is decoded as JSON, and otherwise the header is parsed with
-    email.message and decoded when the media type is application/json or
+    This mirrors fastapi.routing.get_request_handler with its default
+    strict_content_type=True: an absent or empty Content-Type is not decoded
+    as JSON, and otherwise the header is parsed with email.message and
+    decoded when the media type is application/json or
     application/<subtype>+json. Parameters and letter case do not matter.
     tests/test_http_bounds.py pins this rule to the installed FastAPI.
     """
@@ -235,7 +238,7 @@ def body_is_parsed_as_json(headers: Mapping[str, str]) -> bool:
     if content_type is None:
         content_type = headers.get("Content-Type")
     if not content_type:
-        return True
+        return False
     message = email.message.Message()
     message["content-type"] = str(content_type)
     if message.get_content_maintype() != "application":
@@ -255,11 +258,26 @@ def _names_application_json(headers: Mapping[str, str]) -> bool:
     return "application/json" in str(content_type).lower()
 
 
+def _lacks_content_type(headers: Mapping[str, str]) -> bool:
+    """An absent or empty Content-Type.
+
+    FastAPI's default strict_content_type=True hands these bodies to the
+    route as raw bytes, but an app or router that sets it to False decodes
+    them as JSON. They stay under the strict parser so the gate does not
+    depend on that setting.
+    """
+    return not (headers.get("content-type") or headers.get("Content-Type"))
+
+
 def maybe_parse_json(headers: Mapping[str, str], raw: bytes) -> None:
     """Reject invalid JSON before a route handler materializes it."""
     if not raw:
         return
-    if not (body_is_parsed_as_json(headers) or _names_application_json(headers)):
+    if not (
+        body_is_parsed_as_json(headers)
+        or _names_application_json(headers)
+        or _lacks_content_type(headers)
+    ):
         return
     parse_strict_json(raw)
 
