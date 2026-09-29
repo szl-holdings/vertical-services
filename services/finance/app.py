@@ -35,6 +35,7 @@ from engine import (
 )
 from feed import get_closes
 from receipts import ReceiptChain
+from runtime_identity import RuntimeIdentity
 
 DEFAULT_ORIGIN = os.environ.get("SZL_FINANCE_ORIGIN", "stooq").strip() or "stooq"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -47,6 +48,7 @@ app = FastAPI(
 )
 
 CHAIN = ReceiptChain()
+IDENTITY = RuntimeIdentity(Path(__file__).resolve().parent)
 
 
 class PortfolioBody(BaseModel):
@@ -77,8 +79,16 @@ def panels():
 
 @app.get("/healthz")
 def healthz():
-    return {"ok": True, "engine": "puriq-finance", "schema": SCHEMA_VERSION,
-            "default_origin": DEFAULT_ORIGIN, **TRUTH_LABELS}
+    return {"ok": True, "engine": "puriq-finance",
+            "default_origin": DEFAULT_ORIGIN, **IDENTITY.document(),
+            "schema": SCHEMA_VERSION, **TRUTH_LABELS}
+
+
+@app.get("/api/build-info")
+@app.get("/api/source")
+@app.get("/.well-known/szl-source.json")
+def source_identity():
+    return JSONResponse(IDENTITY.document(), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/finance/v2/signals/{symbol}")

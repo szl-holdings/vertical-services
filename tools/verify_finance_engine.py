@@ -9,10 +9,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 import urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from tools.verify_runtime_identity import IDENTITY_PATHS, validate_identity_documents
 
 
-def verify(base_url: str) -> dict:
+def verify(base_url: str, expected_revision: str) -> dict:
     base_url = base_url.rstrip("/")
     observed = []
 
@@ -39,6 +44,20 @@ def verify(base_url: str) -> dict:
     require(health.get("schema") == "szl.finance-engine/v2", "wrong engine schema")
     require(health.get("default_origin") == "fixture", "smoke requires fixture default")
     advisory(health)
+    before_identity = request("/api/finance/v2/receipts")["length"]
+    documents = {"/healthz": health}
+    for path in IDENTITY_PATHS[1:]:
+        documents[path] = request(path)
+    require(not validate_identity_documents(documents, expected_revision=expected_revision),
+            "source/runtime identity mismatch")
+    for body in documents.values():
+        binding = body.get("source_binding", {})
+        require(binding.get("state") == "LOCAL_BYTES_MATCH_WITNESS",
+                "controlled runtime files are not bound")
+        require(binding.get("controlled_file_count") == 9, "wrong controlled file count")
+        require(body.get("receipt_minted") is False, "identity read minted a receipt")
+    require(request("/api/finance/v2/receipts")["length"] == before_identity,
+            "identity GET mutated the receipt chain")
     console = request("/", html=True)
     panels = request("/panels", html=True)
     require(console != panels, "console and verification desk are identical")
@@ -70,6 +89,8 @@ def verify(base_url: str) -> dict:
         "live_market_data_verified": False,
         "deployment_claimed": False,
         "receipt_signing": "UNSIGNED_HONEST",
+        "source_revision": expected_revision,
+        "source_binding_state": "LOCAL_BYTES_MATCH_WITNESS",
         "routes": observed,
         "receipt_count": ledger["length"],
     }
@@ -78,8 +99,9 @@ def verify(base_url: str) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", required=True)
+    parser.add_argument("--expected-revision", required=True)
     args = parser.parse_args()
-    print(json.dumps(verify(args.base_url), indent=2, sort_keys=True))
+    print(json.dumps(verify(args.base_url, args.expected_revision), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
