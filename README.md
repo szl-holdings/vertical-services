@@ -7,6 +7,7 @@ sdk: docker
 app_port: 7860
 pinned: true
 license: apache-2.0
+short_description: Source-bound FastAPI fabric for six SZL verticals.
 ---
 
 # SZL Vertical Services

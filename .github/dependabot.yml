@@ -30,8 +30,14 @@ updates:
         patterns:
           - "*"
 
+  # Every Dockerfile is digest-pinned: /deploy is the Space image, /frontier the
+  # images CI builds, / the standalone per-service image CI smoke-tests.
+  # Dependabot moves tag and digest together.
   - package-ecosystem: "docker"
-    directory: "/"
+    directories:
+      - "/"
+      - "/deploy"
+      - "/frontier"
     schedule:
       interval: "weekly"
       day: "monday"

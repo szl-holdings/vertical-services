@@ -1,3 +1,4 @@
+import re
 import subprocess
 from pathlib import Path
 
@@ -151,3 +152,61 @@ def test_stale_live_revision_fails_independent_freshness_check():
     )
     assert failures
     assert any("source_revision mismatch" in failure for failure in failures)
+
+
+def _workflow_jobs(workflow: str) -> dict[str, str]:
+    body = workflow.split("\njobs:\n", 1)[1]
+    parts = re.split(r"(?m)^  ([A-Za-z0-9_-]+):\n", body)
+    return dict(zip(parts[1::2], parts[2::2]))
+
+
+def test_hub_credentials_reach_only_main_jobs_under_the_asset_lock():
+    workflow = (ROOT / ".github" / "workflows" / "hf-space.yml").read_text(
+        encoding="utf-8"
+    )
+    jobs = _workflow_jobs(workflow)
+    credentialed = {name: job for name, job in jobs.items() if "secrets." in job}
+
+    assert set(credentialed) == {"resolve-publisher", "publish"}
+    for name, job in credentialed.items():
+        condition = job.split("    if: >-\n", 1)[1].split("\n    needs:", 1)[0]
+        assert "github.ref == 'refs/heads/main'" in condition, name
+        assert "pull_request" not in condition, name
+        assert "group: hf-write/space/SZLHOLDINGS/vertical-services" in job, name
+        assert "cancel-in-progress: false" in job, name
+    assert re.findall(r"huggingface_hub==([0-9.]+)", workflow) == ["2.0.0"]
+
+
+def test_card_declares_a_hub_valid_short_description():
+    front = (ROOT / "README.md").read_text(encoding="utf-8").split("---\n")[1]
+    fields = dict(
+        line.split(": ", 1) for line in front.splitlines() if ": " in line
+    )
+    assert 0 < len(fields["short_description"]) <= 60
+    assert fields["license"] == "apache-2.0"
+
+
+def test_ci_standalone_build_context_has_a_dockerfile():
+    # ci.yml builds the standalone finance runtime from the repository root
+    # without --file, so the root Dockerfile is load-bearing.
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "docker build --build-arg SERVICE=finance" in ci
+    assert (ROOT / "Dockerfile").is_file()
+
+
+def test_every_dockerfile_is_digest_pinned():
+    dockerfiles = sorted(
+        path
+        for path in ROOT.rglob("Dockerfile*")
+        if ".git" not in path.parts and path.is_file()
+    )
+    assert ROOT / "deploy" / "Dockerfile" in dockerfiles
+    for path in dockerfiles:
+        froms = [
+            line.split()[1]
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip().upper().startswith("FROM ")
+        ]
+        assert froms, path
+        for image in froms:
+            assert re.search(r"@sha256:[0-9a-f]{64}$", image), (path, image)
