@@ -186,6 +186,14 @@ def test_card_declares_a_hub_valid_short_description():
     assert fields["license"] == "apache-2.0"
 
 
+def test_ci_standalone_build_context_has_a_dockerfile():
+    # ci.yml builds the standalone finance runtime from the repository root
+    # without --file, so the root Dockerfile is load-bearing.
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "docker build --build-arg SERVICE=finance" in ci
+    assert (ROOT / "Dockerfile").is_file()
+
+
 def test_every_dockerfile_is_digest_pinned():
     dockerfiles = sorted(
         path
