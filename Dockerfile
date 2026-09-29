@@ -2,7 +2,7 @@
 # services/finance/README.md). The Space itself builds deploy/Dockerfile.
 # Digest-pinned OCI index for python:3.12-slim (3.12.14-slim-trixie), the same
 # index frontier/Dockerfile pins.
-FROM python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
+FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d
 ARG SERVICE
 ENV SERVICE=${SERVICE} PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
