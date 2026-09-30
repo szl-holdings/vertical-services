@@ -9,11 +9,14 @@ in this probe places an order, holds custody, or triggers an effector.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import secrets
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -41,27 +44,76 @@ EXPERIENCES = {
 }
 
 
+def _safe_url(url: str) -> str:
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme, parts.netloc.rsplit("@", 1)[-1], parts.path, "", ""))
+
+
+def _response_evidence(response: httpx.Response) -> dict[str, Any]:
+    prefix = response.content[:4096]
+    return {
+        "http_status": response.status_code,
+        "body_bytes": len(response.content),
+        "body_prefix_bytes": len(prefix),
+        "body_prefix_sha256": hashlib.sha256(prefix).hexdigest(),
+        "body_prefix_truncated": len(response.content) > len(prefix),
+        "body_recorded": False,
+    }
+
+
+class ProbeRequestFailure(RuntimeError):
+    def __init__(self, method: str, url: str, attempts: list[dict[str, Any]]) -> None:
+        super().__init__("request did not converge after three attempts")
+        self.record = {
+            "state": "UNAVAILABLE",
+            "method": method,
+            "url": _safe_url(url),
+            "attempts": attempts,
+            "headers_recorded": False,
+            "request_body_recorded": False,
+        }
+
+
+@contextmanager
+def _capture_request_failure(
+    report: dict[str, Any], failures: list[str],
+) -> Iterator[None]:
+    try:
+        yield
+    except ProbeRequestFailure as exc:
+        report["request_failure"] = exc.record
+        report["stopped_before_remaining_requests"] = True
+        failures.append("request convergence unavailable")
+
+
 def request_with_retry(
     client: httpx.Client,
     method: str,
     url: str,
     **kwargs: Any,
 ) -> httpx.Response:
-    last: Exception | None = None
+    attempts: list[dict[str, Any]] = []
     for attempt in range(1, 4):
         try:
             response = client.request(method, url, **kwargs)
             if response.status_code < 500:
                 return response
-            last = RuntimeError(f"upstream returned {response.status_code}")
+            attempts.append({
+                "attempt": attempt,
+                "classification": "UPSTREAM_5XX",
+                **_response_evidence(response),
+            })
         except httpx.HTTPError as exc:
-            last = exc
+            attempts.append({
+                "attempt": attempt,
+                "classification": "TRANSPORT_ERROR",
+                "error_type": type(exc).__name__,
+                "http_status": None,
+                "exception_message_recorded": False,
+            })
         if attempt < 3:
             time.sleep(2 ** (attempt - 1))
-    raise RuntimeError(
-        "request did not converge after three attempts: "
-        f"{type(last).__name__}"
-    )
+    raise ProbeRequestFailure(method, url, attempts)
 
 
 def _receipt_valid(item: dict[str, Any]) -> bool:
@@ -90,7 +142,7 @@ def main() -> int:
     session = secrets.token_urlsafe(32)
     report: dict[str, Any] = {
         "schema": "szl.live-frontier-probe/v3",
-        "base_url": base,
+        "base_url": _safe_url(base),
         "observed_at": time.time(),
         "probes": [],
         "experiences": [],
@@ -103,7 +155,7 @@ def main() -> int:
     }
     failures: list[str] = []
 
-    with httpx.Client(
+    with _capture_request_failure(report, failures), httpx.Client(
         timeout=httpx.Timeout(75.0, connect=15.0),
         follow_redirects=False,
         headers={
@@ -127,7 +179,7 @@ def main() -> int:
             }
             if response.status_code != 200:
                 item["state"] = "FAILED"
-                item["body_excerpt"] = response.text[:500]
+                item["response_evidence"] = _response_evidence(response)
                 failures.append(f"{vertical}/{connector}: HTTP {response.status_code}")
             else:
                 body = response.json()
@@ -174,7 +226,7 @@ def main() -> int:
                 failures.append(f"{vertical}: readiness HTTP {response.status_code}")
                 vertical_readiness[vertical] = {
                     "http_status": response.status_code,
-                    "body_excerpt": response.text[:500],
+                    "response_evidence": _response_evidence(response),
                 }
                 continue
             body = response.json()
@@ -252,7 +304,7 @@ def main() -> int:
                 ):
                     failures.append(f"frontier/{alias}: authority boundary mismatch")
             else:
-                contract["body_excerpt"] = contract_response.text[:500]
+                contract["response_evidence"] = _response_evidence(contract_response)
                 failures.append(
                     f"frontier/{alias}: HTTP {contract_response.status_code}"
                 )
@@ -302,8 +354,8 @@ def main() -> int:
         json.dumps(
             {
                 "status": report["status"],
-                "probes": len(PROBES),
-                "experiences": len(EXPERIENCES),
+                "probes": len(report["probes"]),
+                "experiences": len(report["experiences"]),
                 "report": str(output),
             }
         )

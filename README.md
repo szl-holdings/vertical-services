@@ -145,4 +145,13 @@ credential failure, and arbitrary-URL rejection.
 7. exercises every required official source through the deployed service,
    uploading a secret-free live connector receipt.
 
+The live probe retains a `FAIL` receipt when a request exhausts its three
+attempts. It records the attempted route, HTTP status or transport error class,
+and SHA-256 of at most the first 4096 response bytes. Earlier observations remain
+in the receipt; unattempted routes are not counted as observed. Request headers,
+request bodies, URL credentials and query strings, response text, and exception
+messages are excluded from this failure evidence. Retry delays and the nonzero
+failure exit remain unchanged. A failed connector probe does not undo a verified
+publication or establish that the other connectors are operational.
+
 Public runtime: `SZLHOLDINGS/vertical-services`.
