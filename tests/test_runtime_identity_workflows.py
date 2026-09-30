@@ -187,11 +187,13 @@ def test_card_declares_a_hub_valid_short_description():
 
 
 def test_ci_standalone_build_context_has_a_dockerfile():
-    # ci.yml builds the standalone finance runtime from the repository root
-    # without --file, so the root Dockerfile is load-bearing.
+    # The standalone smoke must exercise the immutable projected Finance bytes,
+    # including the witness that the actual Finance entrypoint reads.
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    assert "docker build --build-arg SERVICE=finance" in ci
-    assert (ROOT / "Dockerfile").is_file()
+    assert 'tools/export_finance_artifact.py --revision "$GITHUB_SHA"' in ci
+    assert "docker build --file .finance-artifact/Dockerfile" in ci
+    assert 'tools/verify_finance_engine.py --base-url http://127.0.0.1:7861 --expected-revision "$GITHUB_SHA"' in ci
+    assert (ROOT / "services" / "finance" / "Dockerfile").is_file()
 
 
 def test_every_dockerfile_is_digest_pinned():

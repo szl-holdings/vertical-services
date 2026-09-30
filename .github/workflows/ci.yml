@@ -42,7 +42,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker build --build-arg SERVICE=finance --tag szl-finance:test .
+          python tools/export_finance_artifact.py --revision "$GITHUB_SHA" --output .finance-artifact
+          docker build --file .finance-artifact/Dockerfile --tag szl-finance:test .finance-artifact
           cid="$(docker run --detach --publish 127.0.0.1:7861:7860 \
             --env SZL_FINANCE_ORIGIN=fixture szl-finance:test)"
           trap 'docker logs "$cid" || true; docker rm --force "$cid" >/dev/null 2>&1 || true' EXIT
@@ -51,4 +52,4 @@ jobs:
             if [ "$attempt" -eq 30 ]; then echo '::error::finance runtime did not start'; exit 1; fi
             sleep 1
           done
-          python tools/verify_finance_engine.py --base-url http://127.0.0.1:7861
+          python tools/verify_finance_engine.py --base-url http://127.0.0.1:7861 --expected-revision "$GITHUB_SHA"
