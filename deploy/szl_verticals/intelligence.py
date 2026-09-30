@@ -5,6 +5,9 @@ model only when an operator has bound a fixed HTTPS endpoint, allowlisted host,
 protocol, credential, and exact declared model revision through environment
 variables. Caller-supplied URLs are never accepted. Consequential effectors
 remain disabled and all model output requires human review.
+
+The separately named public Khipu GGUF binding uses a source-pinned endpoint
+without credentials, only for an explicitly consented numeric market brief.
 """
 from __future__ import annotations
 
@@ -27,6 +30,7 @@ from .contract import advisory_lambda, canonical_vertical
 from .core import SHA40, SessionScope, StrictModel, build_info
 from .operational import STORE, vertical_readiness
 from .profiles import ALIASES, VERTICALS
+from . import public_khipu
 
 intelligence = APIRouter(tags=["vertical-intelligence"])
 
@@ -40,6 +44,7 @@ MAX_PROVIDER_BYTES = 2_000_000
 MAX_GENERATED_CHARS = 12_000
 
 MODEL_ASSETS: dict[str, dict[str, Any]] = {
+    public_khipu.ALIAS: public_khipu.SPEC,
     "khipu-1.5b": {
         "repo_id": "SZLHOLDINGS/SZL-Khipu-1.5B",
         "artifact_class": "TRAINED_MODEL",
@@ -202,7 +207,7 @@ VERTICAL_INTELLIGENCE: dict[str, dict[str, Any]] = {
             "BQuant research sandbox",
             "OpenBB connect-once data integration",
         ],
-        "models": ["khipu-1.5b", "receipt-agent", "a11oy-mini"],
+        "models": ["khipu-1.5b", "receipt-agent", "a11oy-mini", public_khipu.ALIAS],
         "kernels": ["blocked", "invariants", "lambda-gate", "receipt-attn", "block-kv", "kernel-suite"],
         "tasks": {
             "filing-research": "receipt-agent",
@@ -281,6 +286,7 @@ class IntelligencePlanRequest(StrictModel):
     axes: dict[str, float]
     evidence_sha256: list[str] = Field(default_factory=list, max_length=64)
     preferred_model: str | None = Field(default=None, max_length=64)
+    public_demo_consent: bool = False
 
     @field_validator("task")
     @classmethod
@@ -361,6 +367,8 @@ def _allowed_hosts() -> set[str]:
 
 
 def _model_binding(alias: str) -> dict[str, Any]:
+    if alias == public_khipu.ALIAS:
+        return public_khipu.binding()
     spec = MODEL_ASSETS[alias]
     if spec.get("invokable") is False:
         return {
@@ -508,6 +516,13 @@ def _model_user_content(request: IntelligencePlanRequest, evidence: EvidenceSnap
     })
 
 
+def _model_messages(canonical: str, request: IntelligencePlanRequest,
+                    evidence: EvidenceSnapshot, binding: dict[str, Any]) -> tuple[str, str]:
+    if binding["alias"] == public_khipu.ALIAS:
+        return public_khipu.messages(request, evidence)
+    return _system_instruction(canonical, request.task), _model_user_content(request, evidence)
+
+
 def build_intelligence_plan(
     vertical: str,
     request: IntelligencePlanRequest,
@@ -525,8 +540,17 @@ def build_intelligence_plan(
     if not evidence.matches_scope(canonical, session_scope, request.evidence_sha256):
         raise HTTPException(503, "evidence snapshot scope mismatch")
     evidence_metadata = evidence.metadata()
-    user_content = _model_user_content(request, evidence)
-    input_bytes = len(user_content.encode("utf-8")) + len(_system_instruction(canonical, request.task).encode("utf-8"))
+    public_contract_met = True
+    try:
+        system, user_content = _model_messages(canonical, request, evidence, binding)
+    except (ValueError, KeyError, TypeError, OverflowError):
+        if selected != public_khipu.ALIAS:
+            raise
+        system, user_content = public_khipu.SYSTEM, ""
+        public_contract_met = False
+    if selected == public_khipu.ALIAS and isinstance(request, IntelligenceInvokeRequest):
+        public_contract_met = public_contract_met and request.max_new_tokens == 32 and request.temperature == 0.0
+    input_bytes = len(user_content.encode("utf-8")) + len(system.encode("utf-8"))
     readiness = vertical_readiness(canonical, session_scope=session_scope)
     lambda_result = advisory_lambda(request.axes)
     context_bytes = len(request.context.encode("utf-8"))
@@ -546,6 +570,7 @@ def build_intelligence_plan(
         "lambda_floor_met": lambda_result["score"] >= profile["lambda_floor"],
         "context_budget_met": input_bytes <= profile["context_budget_bytes"],
         "effectors_disabled": True,
+        "public_serving_contract_met": public_contract_met,
     }
     blockers: list[str] = []
     blocker_map = {
@@ -559,6 +584,7 @@ def build_intelligence_plan(
         "lambda_floor_met": "LAMBDA_BELOW_INFERENCE_FLOOR",
         "context_budget_met": "CONTEXT_BUDGET_EXCEEDED",
         "effectors_disabled": "EFFECTOR_BOUNDARY_BROKEN",
+        "public_serving_contract_met": "PUBLIC_DEMO_CONTRACT_NOT_MET",
     }
     for gate, blocker in blocker_map.items():
         if not gates[gate]:
@@ -581,7 +607,9 @@ def build_intelligence_plan(
         "evidence_resolution": evidence_metadata,
         "inference_input_sha256": hashlib.sha256(user_content.encode("utf-8")).hexdigest(),
         "inference_input_bytes": input_bytes,
-        "system_instruction_sha256": hashlib.sha256(_system_instruction(canonical, request.task).encode("utf-8")).hexdigest(),
+        "inference_input_scope": "PUBLIC_NUMERIC_MARKET_PROJECTION" if selected == public_khipu.ALIAS else "FULL_NORMALIZED_CONNECTOR_OBSERVATIONS",
+        "public_demo_consent": request.public_demo_consent,
+        "system_instruction_sha256": hashlib.sha256(system.encode("utf-8")).hexdigest(),
         "lambda_advisory": lambda_result,
         "selected_model": {
             "alias": selected,
@@ -675,7 +703,7 @@ async def _invoke_provider(
     evidence: EvidenceSnapshot,
     session_scope: str,
     assessment_id: str,
-) -> tuple[str, int]:
+) -> tuple[str, int, dict[str, Any]]:
     def require_current_assessment():
         try:
             status = STORE.assessment_status(vertical=canonical, session_scope=session_scope,
@@ -685,17 +713,22 @@ async def _invoke_provider(
         if status is None or status["state"] != "CURRENT":
             raise HTTPException(409, "evidence assessment requires revalidation")
 
-    token = os.environ.get(binding["token_env"], "").strip()
+    public_demo = binding["alias"] == public_khipu.ALIAS
+    token = "" if public_demo else os.environ.get(binding["token_env"], "").strip()
     headers = {
-        "Authorization": f"Bearer {token}",
         "Accept": "application/json",
         "Content-Type": "application/json",
         "User-Agent": "szl-vertical-intelligence/1.0",
         "X-SZL-Model-Revision": binding["revision"],
     }
-    system = _system_instruction(canonical, request.task)
-    user = _model_user_content(request, evidence)
-    if binding["protocol"] == "hf-text-generation":
+    if not public_demo:
+        headers["Authorization"] = f"Bearer {token}"
+    system, user = _model_messages(canonical, request, evidence, binding)
+    if public_demo:
+        if request.max_new_tokens != 32 or request.temperature != 0.0:
+            raise HTTPException(422, "public Khipu requires max_new_tokens=32 and temperature=0")
+        provider_payload = public_khipu.payload(system, user)
+    elif binding["protocol"] == "hf-text-generation":
         provider_payload = {
             "inputs": f"SYSTEM:\n{system}\n\nUSER:\n{user}\n\nASSISTANT:",
             "parameters": {
@@ -717,7 +750,7 @@ async def _invoke_provider(
 
     try:
         async with httpx.AsyncClient(
-            timeout=httpx.Timeout(30.0, connect=8.0),
+            timeout=httpx.Timeout(60.0 if public_demo else 30.0, connect=8.0),
             follow_redirects=False,
             trust_env=False,
         ) as client:
@@ -752,7 +785,10 @@ async def _invoke_provider(
         payload = response.json()
     except ValueError as exc:
         raise HTTPException(502, "model provider returned invalid JSON") from exc
-    return _extract_generated_text(binding["protocol"], payload), response.status_code
+    if public_demo:
+        text, verification = public_khipu.verify_reply(payload, provider_payload)
+        return text, response.status_code, verification
+    return _extract_generated_text(binding["protocol"], payload), response.status_code, {"state": "NOT_VERIFIED", "revision_evidence": "OPERATOR_DECLARED"}
 
 
 @intelligence.get("/api/intelligence")
@@ -807,7 +843,7 @@ async def vertical_intelligence_invoke(
         raise HTTPException(503, detail={"error": "INFERENCE_NOT_READY", "plan": plan})
 
     canonical = plan["vertical"]
-    generated, provider_status = await _invoke_provider(
+    generated, provider_status, provider_verification = await _invoke_provider(
         binding, canonical, request, evidence, session, plan["receipt"]["basis_sha256"])
     output_sha256 = hashlib.sha256(generated.encode("utf-8")).hexdigest()
     invocation_basis = {
@@ -824,6 +860,7 @@ async def vertical_intelligence_invoke(
         "model_revision_evidence": binding["revision_evidence"],
         "protocol": binding["protocol"],
         "provider_http_status": provider_status,
+        "provider_verification": provider_verification,
         "output_sha256": output_sha256,
         "can_execute": False,
         "effectors_enabled": False,

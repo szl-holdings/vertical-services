@@ -141,7 +141,10 @@ def test_aliases_resolve_to_one_runtime_and_one_intelligence_room(monkeypatch):
 def test_model_routes_fail_closed_when_operator_binding_is_missing(monkeypatch):
     clear_model_env(monkeypatch)
     profile = CLIENT.get("/api/verticals/finance/intelligence").json()
-    assert all(item["state"] == "UNAVAILABLE" for item in profile["models"])
+    assert all(item["state"] == "UNAVAILABLE" for item in profile["models"] if item["alias"] != "khipu-gguf-public")
+    public = next(item for item in profile["models"] if item["alias"] == "khipu-gguf-public")
+    assert public["state"] == "BOUND"
+    assert public["credential_present"] is False
     assert all(
         item["credential_value_exposed"] is False for item in profile["models"]
     )

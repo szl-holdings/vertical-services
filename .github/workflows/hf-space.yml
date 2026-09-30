@@ -330,3 +330,16 @@ jobs:
           path: artifacts/live-connector-probe.json
           if-no-files-found: error
           retention-days: 30
+      - name: Witness the pinned public Khipu market brief
+        run: |
+          python tools/probe_public_khipu.py \
+            --expected-revision "$GITHUB_SHA" \
+            --output artifacts/public-khipu-probe.json
+      - name: Upload public model invocation receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vertical-services-public-khipu-probe-${{ github.run_id }}
+          path: artifacts/public-khipu-probe.json
+          if-no-files-found: error
+          retention-days: 30
