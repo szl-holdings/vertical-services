@@ -146,7 +146,9 @@ def _public_market_brief(vertical: str) -> str:
       if (plan.decision !== 'READY_FOR_INFERENCE') throw new Error('Brief withheld: ' + plan.blockers.join(', '));
       const result = await post('/api/verticals/finance/intelligence/invoke', request);
       output.textContent = result.output; output.hidden = false;
-      status.textContent = 'Brief received. Model, request and output hashes match. The reply is unsigned and requires human review.';
+      status.textContent = result.provider_verification.output_complete
+        ? 'Brief received. Model, request and output hashes match. The reply is unsigned and requires human review.'
+        : 'The short output reached a demo limit and is incomplete. Model, request and output hashes match. Review the unsigned text cautiously.';
     } catch (error) { status.textContent = error.message; }
     finally { button.disabled = false; }
   });

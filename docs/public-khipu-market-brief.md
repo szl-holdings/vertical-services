@@ -36,6 +36,8 @@ client enforces characters, bytes and generation settings; the serving endpoint
 enforces its tokenizer budget. It is single-concurrency, best effort, without
 an SLA. Busy, unavailable or rejected requests remain errors. Replies are
 unsigned: content consistency is verified, authorship and investment quality
-are not established. Every output requires human review; trading, custody and
+are not established. Invocation receipts retain the actual termination reason
+and identify token/time-limited output as incomplete; the page displays that
+boundary. Every output requires human review; trading, custody and
 consequential effectors remain disabled. The UI's 0.90 advisory preset is
 explicitly disclosed and is not an empirical investment-quality measurement.

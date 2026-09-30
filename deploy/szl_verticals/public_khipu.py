@@ -130,6 +130,8 @@ def verify_reply(value: Any, sent: dict[str, Any]) -> tuple[str, dict[str, Any]]
                          "temperature": 0.0, "top_p": 1.0, "n": 1,
                          "stream": False, "tools": None}
         usage = record["usage"]
+        termination = record["termination"]
+        reason = termination["reason"]
         if (value["model"] != MODEL_ID or record["model"] != expected_model
                 or record["canonical_request_sha256"] != digest(request_basis)
                 or record["output_sha256"] != hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -139,13 +141,18 @@ def verify_reply(value: Any, sent: dict[str, Any]) -> tuple[str, dict[str, Any]]
                 or record["authenticity_not_established"] is not True
                 or any(type(usage[k]) is not int for k in ("prompt_tokens", "completion_tokens", "total_tokens"))
                 or not 0 <= usage["prompt_tokens"] <= 800
-                or not 0 <= usage["completion_tokens"] <= 32
+                or not 1 <= usage["completion_tokens"] <= 32
                 or usage["total_tokens"] != usage["prompt_tokens"] + usage["completion_tokens"]
-                or value["usage"] != usage):
+                or value["usage"] != usage
+                or reason not in {"stop", "length", "time_budget"}
+                or termination["time_budget_reached"] is not (reason == "time_budget")
+                or value["choices"][0]["finish_reason"] != ("stop" if reason == "stop" else "length")):
             raise ValueError("inconsistent public demo reply")
         return text, {"execution_record_sha256": record["record_sha256"],
                       "request_hash_verified": True, "output_hash_verified": True,
                       "model_identity_verified": True, "usage": usage,
+                      "finish_reason": reason, "output_complete": reason == "stop",
+                      "time_budget_reached": termination["time_budget_reached"],
                       "signature_status": "UNSIGNED", "authenticity_established": False,
                       "service_level": "BEST_EFFORT_NO_SLA"}
     except (KeyError, IndexError, TypeError, ValueError, OverflowError):
