@@ -216,6 +216,7 @@ def main() -> int:
             dict.fromkeys(vertical for vertical, _, _ in PROBES)
         )
         vertical_readiness: dict[str, Any] = {}
+        report["vertical_readiness"] = vertical_readiness
         for vertical in canonical_verticals:
             response = request_with_retry(
                 client,
@@ -311,8 +312,6 @@ def main() -> int:
             report["frontier_contracts"].append(contract)
 
         root = request_with_retry(client, "GET", f"{base}/readyz")
-        build_info = request_with_retry(client, "GET", f"{base}/api/build-info")
-        report["vertical_readiness"] = vertical_readiness
         report["root_readiness"] = {
             "http_status": root.status_code,
             "body": (
@@ -321,6 +320,7 @@ def main() -> int:
                 else root.text[:500]
             ),
         }
+        build_info = request_with_retry(client, "GET", f"{base}/api/build-info")
         report["build_info"] = {
             "http_status": build_info.status_code,
             "body": (

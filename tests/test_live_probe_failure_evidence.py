@@ -113,6 +113,23 @@ def test_client_error_still_returns_without_retry(monkeypatch):
     assert len(requests) == 1 and sleeps == []
 
 
+def test_later_readiness_failure_retains_earlier_readiness(monkeypatch, tmp_path):
+    def handler(request):
+        if request.url.path.endswith("/fetch"):
+            return httpx.Response(200, json=observation())
+        if request.url.path == "/api/verticals/sentra/readyz":
+            return httpx.Response(200, json={"ready": True, "live_data": {"observed_in_scope": True}})
+        return httpx.Response(503, content=b"unavailable")
+    probe, output, sleeps = setup_main(monkeypatch, tmp_path, handler)
+    assert probe.main() == 1
+    report = json.loads(output.read_text())
+    assert len(report["probes"]) == 11
+    assert report["vertical_readiness"] == {"sentra": {"http_status": 200, "ready": True, "status": None, "live_data": {"observed_in_scope": True}, "build": None, "lambda_advisory": None}}
+    assert report["request_failure"]["url"].endswith("/api/verticals/lyte/readyz")
+    assert report["complete"] is False and sleeps == [1, 2]
+    assert report["experiences"] == [] and "root_readiness" not in report
+
+
 def test_recovered_request_still_returns_original_success(monkeypatch):
     probe = load_probe()
     requests = []
@@ -126,7 +143,7 @@ def test_recovered_request_still_returns_original_success(monkeypatch):
     assert len(requests) == 2 and sleeps == [1]
 
 
-def test_complete_success_remains_pass(monkeypatch, tmp_path):
+def successful_handler():
     probe_for_contract = load_probe()
     def handler(request):
         path = request.url.path
@@ -143,7 +160,28 @@ def test_complete_success_remains_pass(monkeypatch, tmp_path):
         alias = path.split("/")[-2]
         canonical = probe_for_contract.EXPERIENCES[alias][0]
         return httpx.Response(200, json={"vertical": canonical, "hatun": {"can_authorize": False, "effectors_enabled": False}})
+    return handler
+
+
+def test_build_failure_retains_successful_root_readiness(monkeypatch, tmp_path):
+    successful = successful_handler()
+    def handler(request):
+        if request.url.path == "/api/build-info":
+            return httpx.Response(503, content=b"unavailable")
+        return successful(request)
     probe, output, sleeps = setup_main(monkeypatch, tmp_path, handler)
+    assert probe.main() == 1
+    report = json.loads(output.read_text())
+    assert report["root_readiness"]["http_status"] == 200
+    assert report["root_readiness"]["body"]["ready"] is True
+    assert len(report["vertical_readiness"]) == 6 and len(report["experiences"]) == 6
+    assert report["request_failure"]["url"].endswith("/api/build-info")
+    assert "build_info" not in report and report["complete"] is False
+    assert sleeps == [1, 2]
+
+
+def test_complete_success_remains_pass(monkeypatch, tmp_path):
+    probe, output, sleeps = setup_main(monkeypatch, tmp_path, successful_handler())
     assert probe.main() == 0
     report = json.loads(output.read_text())
     assert report["status"] == "PASS" and report["complete"] is True
