@@ -103,6 +103,57 @@ def _plan_example(vertical: str, task: str, floor: float) -> str:
     )
 
 
+def _public_market_brief(vertical: str) -> str:
+    if vertical != "finance":
+        return ""
+    return '''<section aria-labelledby="public-brief-title"><div class="section-head"><div>
+<p class="eyebrow">LIVE PUBLIC MARKET BRIEF</p><h2 id="public-brief-title">Two observations. One short review.</h2></div>
+<p>Fetch a Bitcoin spot reference and official Treasury rate observations, then ask Khipu for a short interpretation. This public demo is best effort and every answer needs human review.</p></div>
+<div class="boundary"><label><input type="checkbox" id="public-brief-consent"> I agree to send these public market numbers to the Khipu demo. No private context is accepted.</label>
+<p>The advisory score uses a disclosed 0.90 preset; it is not a measurement of investment quality. No trading or custody is enabled.</p>
+<button type="button" class="button primary" id="public-brief-run">Generate public market brief</button>
+<p id="public-brief-status" role="status" aria-live="polite">Ready when you choose to run.</p>
+<pre id="public-brief-output" hidden></pre></div></section>
+<script>
+(() => {
+  const button = document.getElementById('public-brief-run');
+  const status = document.getElementById('public-brief-status');
+  const output = document.getElementById('public-brief-output');
+  button.addEventListener('click', async () => {
+    if (!document.getElementById('public-brief-consent').checked) {
+      status.textContent = 'Confirm the public demo consent before running.'; return;
+    }
+    button.disabled = true; output.hidden = true;
+    const session = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
+    const post = async (path, body) => {
+      const response = await fetch(path, {method: 'POST', headers: {
+        'Content-Type': 'application/json', 'X-SZL-Session': session}, body: JSON.stringify(body), signal: AbortSignal.timeout(90000)});
+      const value = await response.json();
+      if (!response.ok) throw new Error('Request unavailable (HTTP ' + response.status + '). Review the contract and try again later.');
+      return value;
+    };
+    try {
+      status.textContent = 'Fetching public market observations…';
+      const spot = await post('/api/verticals/finance/connectors/coinbase-spot/fetch', {parameters: {base: 'BTC', currency: 'USD'}, force_refresh: true});
+      const rates = await post('/api/verticals/finance/connectors/treasury-average-rates/fetch', {parameters: {limit: 5}, force_refresh: true});
+      const request = {task: 'risk-summary', objective: 'Review the public market observations.', context: '',
+        axes: {evidence: 0.90, freshness: 0.90, reversibility: 0.90},
+        evidence_sha256: [spot.receipt.payload_sha256, rates.receipt.payload_sha256],
+        preferred_model: 'khipu-gguf-public', public_demo_consent: true, max_new_tokens: 32, temperature: 0};
+      status.textContent = 'Checking evidence and preparing the brief…';
+      const {max_new_tokens, temperature, ...planRequest} = request;
+      const plan = await post('/api/verticals/finance/intelligence/plan', planRequest);
+      if (plan.decision !== 'READY_FOR_INFERENCE') throw new Error('Brief withheld: ' + plan.blockers.join(', '));
+      const result = await post('/api/verticals/finance/intelligence/invoke', request);
+      output.textContent = result.output; output.hidden = false;
+      status.textContent = 'Brief received. Model, request and output hashes match. The reply is unsigned and requires human review.';
+    } catch (error) { status.textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+})();
+</script>'''
+
+
 def _page(vertical: str) -> str:
     canonical = canonical_vertical(vertical)
     product = VERTICALS[canonical]
@@ -154,7 +205,8 @@ pre{{margin:0;max-height:500px;overflow:auto;padding:22px;border:1px solid var(-
 <div class="shell"><section class="hero"><div><p class="eyebrow">{_esc(product['domain'])} · GOVERNED INTELLIGENCE</p><h1>{_esc(experience['title'])}</h1><p class="lede">{_esc(intel['primary_job'])}</p><div class="actions"><a class="button primary" href="/experience/{_esc(canonical)}">Open command surface</a><a class="button" href="/api/verticals/{_esc(canonical)}/intelligence">Inspect contract</a><a class="button" href="/api/verticals/{_esc(canonical)}/second-brain">Second Brain API</a></div></div><aside class="instrument" aria-label="Vertical intelligence instrument"><div class="instrument-copy"><div class="reading"><small>Model bindings</small><strong>{bound_models}/{len(models)} BOUND</strong></div><div class="reading"><small>Kernel contracts</small><strong>{len(intel['kernels'])} ACTIVE</strong></div><div class="reading"><small>Authority</small><strong>HUMAN BIND</strong></div></div></aside></section></div>
 <div class="band"><div class="shell stats"><div class="stat"><strong>{len(tasks)}</strong><small>bounded model tasks</small></div><div class="stat"><strong>{len(models)}</strong><small>approved model assets</small></div><div class="stat"><strong>{len(intel['kernels'])}</strong><small>kernel contracts</small></div><div class="stat"><strong>{intel['policy']['lambda_floor']:.2f}</strong><small>advisory inference floor</small></div></div></div>
 <div class="shell"><section><div class="section-head"><div><p class="eyebrow">PRODUCT WEDGE</p><h2>The job others leave fragmented.</h2></div><p>{_esc(intel['unserved_job'])}</p></div><div class="split"><article class="thesis"><span class="micro">PRIMARY JOB</span><h3>{_esc(intel['primary_job'])}</h3><p>One bounded workflow, one source identity, one session scope, and one review receipt.</p></article><article class="thesis"><span class="micro">SIGNATURE VIEW</span><h3>{_esc(experience['signature_view'])}</h3><p>{_esc(experience['benchmark'])}. This view combines product clarity with evidence-native operating controls.</p></article></div></section>
-<section><div class="section-head"><div><p class="eyebrow">MODEL ROUTING</p><h2>Use the right model, not every model.</h2></div><p>Models remain unavailable until an operator binds a fixed HTTPS endpoint, allowlisted host, credential, protocol, and exact declared revision. The public interface cannot supply an endpoint.</p></div><div class="grid">{_cards(models, kind='model')}</div></section>
+<section><div class="section-head"><div><p class="eyebrow">MODEL ROUTING</p><h2>Use the right model, not every model.</h2></div><p>Operator model routes require a fixed endpoint, credential and exact revision. The separate public Khipu GGUF route accepts only a consented numeric market brief. The public interface cannot supply an endpoint.</p></div><div class="grid">{_cards(models, kind='model')}</div></section>
+{_public_market_brief(canonical)}
 <section><div class="section-head"><div><p class="eyebrow">KERNEL FABRIC</p><h2>Evidence before language.</h2></div><p>The model never owns authority. Invariants, context limits, advisory Lambda, blocking rules, receipt attention, and deterministic hashes constrain the request and preserve reviewability.</p></div><div class="grid">{_cards(intel['kernels'], kind='kernel')}</div></section>
 <section><div class="section-head"><div><p class="eyebrow">TASK PLANE</p><h2>Four jobs. Explicit routes.</h2></div><p>Each task maps to a reviewed default model. A preferred model is accepted only when it belongs to the vertical's approved set.</p></div><div class="grid">{_task_cards(tasks)}</div></section>
 <section><div class="section-head"><div><p class="eyebrow">FRONTIER DELTA</p><h2>Build what is still missing.</h2></div><p>These are contract-ready product directions, not unsupported claims of production capability.</p></div><div class="grid">{_list_cards(intel['novel_capabilities'], 'CONTRACT-READY EDGE')}</div></section>
