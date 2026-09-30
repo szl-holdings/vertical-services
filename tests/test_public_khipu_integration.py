@@ -55,9 +55,10 @@ def reply(k, sent):
                         "file": k.MODEL_FILE, "sha256": k.MODEL_SHA256},
               "source": {"space_id": "SZLHOLDINGS/szl-model-inference-lab"},
               "usage": usage, "signature_status": "UNSIGNED", "signature": None,
+              "termination": {"reason": "stop", "time_budget_reached": False},
               "authenticity_not_established": True}
     record["record_sha256"] = k.digest(record)
-    return {"model": k.MODEL_ID, "choices": [{"message": {"content": text}}],
+    return {"model": k.MODEL_ID, "choices": [{"message": {"content": text}, "finish_reason": "stop"}],
             "usage": usage, "szl_provenance": {"execution_record": record}}
 
 
@@ -86,6 +87,7 @@ def test_actual_invoke_uses_exact_pin_public_projection_and_no_credentials(publi
     assert len(seen) == 1
     assert result["provider_verification"]["request_hash_verified"] is True
     assert result["provider_verification"]["authenticity_established"] is False
+    assert result["provider_verification"]["output_complete"] is True
     assert result["effectors_enabled"] is False
 
 
@@ -128,3 +130,26 @@ def test_mismatched_unsigned_reply_is_withheld(public_runtime, monkeypatch, muta
     with pytest.raises(HTTPException) as error:
         asyncio.run(runtime.vertical_intelligence_invoke("finance", request(runtime), SCOPE))
     assert error.value.status_code == 502
+
+
+@pytest.mark.parametrize("reason", ["length", "time_budget"])
+def test_bounded_output_is_explicitly_incomplete(public_runtime, reason):
+    k = public_runtime.public_khipu
+    sent = k.payload(k.SYSTEM, "Public numbers only")
+    value = reply(k, sent)
+    record = value["szl_provenance"]["execution_record"]
+    record["termination"] = {"reason": reason, "time_budget_reached": reason == "time_budget"}
+    record["record_sha256"] = k.digest({key: item for key, item in record.items() if key != "record_sha256"})
+    value["choices"][0]["finish_reason"] = "length"
+    _, verified = k.verify_reply(value, sent)
+    assert verified["output_complete"] is False
+    assert verified["finish_reason"] == reason
+
+
+def test_inconsistent_termination_label_is_rejected(public_runtime):
+    k = public_runtime.public_khipu
+    sent = k.payload(k.SYSTEM, "Public numbers only")
+    value = reply(k, sent)
+    value["choices"][0]["finish_reason"] = "length"
+    with pytest.raises(HTTPException):
+        k.verify_reply(value, sent)
