@@ -22,14 +22,31 @@ from engine import EngineBlocked
 
 USER_AGENT = "SZLHOLDINGS-FinanceEngine/2.0"
 STOOQ_BASE = "https://stooq.com/q/d/l/"
+# Stooq symbols are ticker[.market] (e.g. aapl.us, ^spx). A symbol is rebuilt character by
+# character from this constant table, so the query string is composed of allowlisted
+# constants only — anything else is BLOCKED before a request exists (CodeQL py/partial-ssrf).
+_SYMBOL_CHARS = {c: c for c in "abcdefghijklmnopqrstuvwxyz0123456789.^-_"}
+_SYMBOL_MAX = 24
+
+
+def stooq_symbol(symbol: str) -> str:
+    """Return the sanitized ``s=`` value for Stooq or raise EngineBlocked."""
+    raw = symbol.lower().strip()
+    if not raw:
+        raise EngineBlocked("stooq: empty symbol")
+    if len(raw) > _SYMBOL_MAX:
+        raise EngineBlocked("stooq: symbol too long")
+    try:
+        sym = "".join(_SYMBOL_CHARS[c] for c in raw)
+    except KeyError as exc:
+        raise EngineBlocked("stooq: symbol contains characters outside [a-z0-9.^-_]") from exc
+    if "." not in sym:
+        sym = sym + ".us"
+    return sym
 
 
 def fetch_stooq_daily(symbol: str, timeout: float = 10.0) -> list[float]:
-    sym = symbol.lower().strip()
-    if not sym:
-        raise EngineBlocked("stooq: empty symbol")
-    if "." not in sym:
-        sym = sym + ".us"
+    sym = stooq_symbol(symbol)
     url = f"{STOOQ_BASE}?s={sym}&i=d"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})

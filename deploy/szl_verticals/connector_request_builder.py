@@ -7,6 +7,18 @@ from typing import Any, Mapping
 from fastapi import HTTPException
 
 from .connector_parameters import _bounded_int, _reject_unknown, _safe_text
+
+
+def _from_allowlist(value: str, allowed) -> str:
+    """Return the allowlist's own copy of ``value`` (or raise 422).
+
+    Only allowlisted constants ever reach a URL; the request string itself never does, which
+    is the property CodeQL's py/partial-ssrf query needs to see as well as the one we want.
+    """
+    for candidate in allowed:
+        if candidate == value:
+            return candidate
+    raise HTTPException(422, "value is not in the connector allowlist")
 from .connector_specs import (
     BBL,
     BOROUGHS,
@@ -84,6 +96,7 @@ def _request_definition(
         repository = _safe_text(parameters, "repository", "a11oy", 100).lower()
         if SAFE_REPO.fullmatch(repository) is None or repository not in GITHUB_REPOSITORIES:
             raise HTTPException(422, "repository is not in the SZL observability allowlist")
+        repository = _from_allowlist(repository, GITHUB_REPOSITORIES)
         query["per_page"] = str(_bounded_int(parameters, "limit", 20, 1, 50))
         branch = _safe_text(parameters, "branch", max_length=100)
         status = _safe_text(parameters, "status", max_length=32)
@@ -122,7 +135,7 @@ def _request_definition(
         cik = _safe_text(parameters, "cik")
         if CIK.fullmatch(cik) is None:
             raise HTTPException(422, "cik must contain 1 to 10 digits")
-        cik = cik.zfill(10)
+        cik = f"{int(cik):010d}"  # numeric round-trip: the URL carries digits derived from an int, never request bytes
         headers["User-Agent"] = SEC_USER_AGENT
         headers["Accept-Encoding"] = "gzip, deflate"
         if spec.builder == "sec-submissions":
@@ -157,6 +170,8 @@ def _request_definition(
             or currency not in COINBASE_QUOTES
         ):
             raise HTTPException(422, "base or currency is not in the public spot allowlist")
+        base = _from_allowlist(base, COINBASE_BASES)
+        currency = _from_allowlist(currency, COINBASE_QUOTES)
         return f"https://api.coinbase.com/v2/prices/{base}-{currency}/spot", query, headers
 
     if spec.builder == "treasury":
