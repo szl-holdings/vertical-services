@@ -74,6 +74,7 @@ def main() -> int:
             revision = require_deployable_revision(repo_root, args.require_revision)
     except (RuntimeError, subprocess.CalledProcessError) as exc:
         parser.error(str(exc))
+        raise  # unreachable: parser.error() exits with status 2; keeps `revision` definitely assigned
     print(revision)
     return 0
 
