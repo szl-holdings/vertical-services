@@ -125,7 +125,10 @@ def test_provider_consumes_exact_planned_snapshot_when_basis_is_unchanged(runtim
         assert data["evidence_snapshot_sha256"] == expected["evidence_resolution"]["snapshot_sha256"]
         assert all(row["summary"]["finding"] == "original" for row in data["connector_observations"])
         assert data["context_provenance"] == "CALLER_REPORTED_NOT_AUTHENTICATED"
-        return httpx.Response(200, json={"choices": [{"message": {"content": "Synthetic output"}}]})
+        return httpx.Response(200, json={
+            "model": "SZLHOLDINGS/SZL-Khipu-1.5B@" + "d" * 40,
+            "choices": [{"message": {"content": "Synthetic output"}}],
+        })
     def client_factory(**kwargs):
         assert kwargs["trust_env"] is False
         assert kwargs["follow_redirects"] is False
@@ -136,8 +139,39 @@ def test_provider_consumes_exact_planned_snapshot_when_basis_is_unchanged(runtim
     assert result["inference_input_sha256"] == expected["inference_input_sha256"]
     assert result["evidence_snapshot_sha256"] == expected["evidence_resolution"]["snapshot_sha256"]
     assert result["model_revision_evidence"] == "OPERATOR_DECLARED"
+    assert result["provider_verification"]["state"] == "NOT_VERIFIED"
     assert result["effectors_enabled"] is False
     assert result["evidence_fresh_at_response"] is True
+
+
+@pytest.mark.parametrize("protocol, claimed_model", [
+    ("openai-chat", "unrelated-model"),
+    ("openai-chat", "SZLHOLDINGS/SZL-Khipu-1.5B@" + "e" * 40),
+    ("hf-text-generation", "unrelated-model"),
+])
+def test_explicit_wrong_provider_model_withholds_generated_text(
+    runtime, ledger, monkeypatch, protocol, claimed_model,
+):
+    for digest in DIGESTS[:2]:
+        put(ledger, digest)
+    monkeypatch.setenv("SZL_MODEL_PROTOCOL_KHIPU_1_5B", protocol)
+    real_client = httpx.AsyncClient
+
+    def response(_req):
+        if protocol == "hf-text-generation":
+            body = [{"model": claimed_model, "generated_text": "WITHHOLD_THIS"}]
+        else:
+            body = {"model": claimed_model,
+                    "choices": [{"message": {"content": "WITHHOLD_THIS"}}]}
+        return httpx.Response(200, json=body)
+
+    monkeypatch.setattr(runtime.httpx, "AsyncClient", lambda **kw:
+                        real_client(transport=httpx.MockTransport(response), **kw))
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(runtime.vertical_intelligence_invoke(
+            "finance", request(runtime), SCOPE))
+    assert error.value.status_code == 502
+    assert "WITHHOLD_THIS" not in str(error.value.detail)
 
 
 @pytest.mark.parametrize("change", ["summary", "withdrawal", "change-then-restore"])

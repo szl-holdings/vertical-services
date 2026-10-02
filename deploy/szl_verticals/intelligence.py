@@ -5,6 +5,7 @@ model only when an operator has bound a fixed HTTPS endpoint, allowlisted host,
 protocol, credential, and exact declared model revision through environment
 variables. Caller-supplied URLs are never accepted. Consequential effectors
 remain disabled and all model output requires human review.
+An operator-declared revision is not proof of what a remote endpoint served.
 
 The separately named public Khipu GGUF binding uses a source-pinned endpoint
 without credentials, only for an explicitly consented numeric market brief.
@@ -696,6 +697,19 @@ def _extract_generated_text(protocol: str, payload: Any) -> str:
     return value.strip()[:MAX_GENERATED_CHARS]
 
 
+def _reject_contradictory_model_claim(binding: dict[str, Any], payload: Any) -> None:
+    """Withhold text when a provider explicitly names a different model.
+
+    An agreeing or absent response claim does not verify the served revision.
+    """
+    record = payload[0] if isinstance(payload, list) and payload else payload
+    if not isinstance(record, dict) or "model" not in record:
+        return
+    expected = binding["repo_id"]
+    if record["model"] not in (expected, f"{expected}@{binding['revision']}"):
+        raise HTTPException(502, "model provider reported a different model identity")
+
+
 async def _invoke_provider(
     binding: dict[str, Any],
     canonical: str,
@@ -788,6 +802,7 @@ async def _invoke_provider(
     if public_demo:
         text, verification = public_khipu.verify_reply(payload, provider_payload)
         return text, response.status_code, verification
+    _reject_contradictory_model_claim(binding, payload)
     return _extract_generated_text(binding["protocol"], payload), response.status_code, {"state": "NOT_VERIFIED", "revision_evidence": "OPERATOR_DECLARED"}
 
 
