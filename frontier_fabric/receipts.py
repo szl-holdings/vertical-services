@@ -7,6 +7,21 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
+# Shared canonicalisation (szl-holdings/szl-evidence-core @ de27568d706c): identical bytes to
+# the local implementation below for every valid JSON value, with the profile declared
+# explicitly (CANON_UTF8: UTF-8). One deliberate difference: NaN/Infinity
+# raise at emit time instead of producing text no conforming JSON reader can parse.
+# The local implementation stays as the fallback so nothing here depends on the package.
+try:
+    from szl_evidence_core.canonical import CANON_UTF8 as _CANON_PROFILE
+    from szl_evidence_core.canonical import canonical_json as _shared_canonical_json
+    _CANON_SOURCE = "szl_evidence_core"
+except Exception:  # pragma: no cover - fallback to the local implementation
+    _CANON_PROFILE = 'szl.lambda/v1'
+    _shared_canonical_json = None
+    _CANON_SOURCE = "local"
+
+
 ZERO_HASH = "0" * 64
 
 
@@ -29,6 +44,8 @@ def _normalize(value: Any) -> Any:
 
 
 def canonical_json(value: Any) -> str:
+    if _shared_canonical_json is not None:
+        return _shared_canonical_json(_normalize(value), profile=_CANON_PROFILE, check=False)
     return json.dumps(
         _normalize(value),
         ensure_ascii=False,
