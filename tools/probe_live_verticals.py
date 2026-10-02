@@ -61,6 +61,48 @@ def _response_evidence(response: httpx.Response) -> dict[str, Any]:
     }
 
 
+class ProbeResponseFailure(RuntimeError):
+    def __init__(
+        self, response: httpx.Response, stage: str, classification: str,
+    ) -> None:
+        super().__init__("response did not satisfy the JSON contract")
+        self.record = {
+            "state": "INVALID_RESPONSE",
+            "stage": stage,
+            "method": response.request.method,
+            "url": _safe_url(str(response.request.url)),
+            "attempts": [{
+                "attempt": 1,
+                "classification": classification,
+                **_response_evidence(response),
+            }],
+            "headers_recorded": False,
+            "request_body_recorded": False,
+        }
+
+
+def _json_object(response: httpx.Response, stage: str) -> dict[str, Any]:
+    media_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if media_type != "application/json":
+        raise ProbeResponseFailure(response, stage, "UNEXPECTED_CONTENT_TYPE")
+    try:
+        body = response.json()
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        raise ProbeResponseFailure(response, stage, "MALFORMED_JSON") from None
+    if not isinstance(body, dict):
+        raise ProbeResponseFailure(response, stage, "NON_OBJECT_JSON")
+    return body
+
+
+def _object_field(
+    body: dict[str, Any], field: str, response: httpx.Response, stage: str,
+) -> dict[str, Any]:
+    value = body.get(field, {})
+    if not isinstance(value, dict):
+        raise ProbeResponseFailure(response, stage, "INVALID_JSON_FIELD")
+    return value
+
+
 class ProbeRequestFailure(RuntimeError):
     def __init__(self, method: str, url: str, attempts: list[dict[str, Any]]) -> None:
         super().__init__("request did not converge after three attempts")
@@ -75,7 +117,7 @@ class ProbeRequestFailure(RuntimeError):
 
 
 @contextmanager
-def _capture_request_failure(
+def _capture_probe_failure(
     report: dict[str, Any], failures: list[str],
 ) -> Iterator[None]:
     try:
@@ -84,6 +126,10 @@ def _capture_request_failure(
         report["request_failure"] = exc.record
         report["stopped_before_remaining_requests"] = True
         failures.append("request convergence unavailable")
+    except ProbeResponseFailure as exc:
+        report["response_failure"] = exc.record
+        report["stopped_before_remaining_requests"] = True
+        failures.append("JSON response contract invalid")
 
 
 def request_with_retry(
@@ -155,7 +201,7 @@ def main() -> int:
     }
     failures: list[str] = []
 
-    with _capture_request_failure(report, failures), httpx.Client(
+    with _capture_probe_failure(report, failures), httpx.Client(
         timeout=httpx.Timeout(75.0, connect=15.0),
         follow_redirects=False,
         headers={
@@ -182,8 +228,8 @@ def main() -> int:
                 item["response_evidence"] = _response_evidence(response)
                 failures.append(f"{vertical}/{connector}: HTTP {response.status_code}")
             else:
-                body = response.json()
-                receipt = body.get("receipt", {})
+                body = _json_object(response, "connector_fetch")
+                receipt = _object_field(body, "receipt", response, "connector_fetch")
                 item.update(
                     {
                         "state": receipt.get("state"),
@@ -199,13 +245,17 @@ def main() -> int:
                         f"{vertical}/{connector}: invalid observation receipt"
                     )
                 if connector in {"polymarket-markets", "coinbase-spot"}:
-                    observation = body.get("observation", {})
+                    observation = _object_field(
+                        body, "observation", response, "connector_fetch"
+                    )
                     if observation.get("trading_enabled") is not False:
                         failures.append(f"{connector}: trading boundary missing")
                     if observation.get("custody_enabled") is not False:
                         failures.append(f"{connector}: custody boundary missing")
                 if connector in {"nyc-hpd-violations", "nyc-dob-violations"}:
-                    observation = body.get("observation", {})
+                    observation = _object_field(
+                        body, "observation", response, "connector_fetch"
+                    )
                     if observation.get("person_level_prospecting") is not False:
                         failures.append(
                             f"{connector}: person-level prospecting boundary missing"
@@ -230,7 +280,10 @@ def main() -> int:
                     "response_evidence": _response_evidence(response),
                 }
                 continue
-            body = response.json()
+            body = _json_object(response, "vertical_readiness")
+            live_data = _object_field(
+                body, "live_data", response, "vertical_readiness"
+            )
             vertical_readiness[vertical] = {
                 "http_status": response.status_code,
                 "ready": body.get("ready"),
@@ -241,7 +294,7 @@ def main() -> int:
             }
             if body.get("ready") is not True:
                 failures.append(f"{vertical}: readiness is not true")
-            if not body.get("live_data", {}).get("observed_in_scope"):
+            if not live_data.get("observed_in_scope"):
                 failures.append(f"{vertical}: live observation not visible")
 
         for alias, (canonical, title, motif) in EXPERIENCES.items():
@@ -283,19 +336,22 @@ def main() -> int:
                 "http_status": contract_response.status_code,
             }
             if contract_response.status_code == 200:
-                body = contract_response.json()
+                body = _json_object(contract_response, "frontier_contract")
+                source = _object_field(
+                    body, "source", contract_response, "frontier_contract"
+                )
+                build = _object_field(
+                    source, "build", contract_response, "frontier_contract"
+                )
+                hatun = _object_field(
+                    body, "hatun", contract_response, "frontier_contract"
+                )
                 contract.update(
                     {
                         "canonical": body.get("vertical"),
-                        "source_revision": (
-                            body.get("source", {}).get("build", {}).get("revision")
-                        ),
-                        "hatun_can_authorize": (
-                            body.get("hatun", {}).get("can_authorize")
-                        ),
-                        "effectors_enabled": (
-                            body.get("hatun", {}).get("effectors_enabled")
-                        ),
+                        "source_revision": build.get("revision"),
+                        "hatun_can_authorize": hatun.get("can_authorize"),
+                        "effectors_enabled": hatun.get("effectors_enabled"),
                     }
                 )
                 if (
@@ -312,32 +368,37 @@ def main() -> int:
             report["frontier_contracts"].append(contract)
 
         root = request_with_retry(client, "GET", f"{base}/readyz")
+        root_body = _json_object(root, "root_readiness") if root.status_code == 200 else {}
         report["root_readiness"] = {
             "http_status": root.status_code,
-            "body": (
-                root.json()
-                if root.headers.get("content-type", "").startswith("application/json")
-                else root.text[:500]
-            ),
+            "body": root_body,
         }
+        if root.status_code != 200:
+            report["root_readiness"]["response_evidence"] = _response_evidence(root)
         build_info = request_with_retry(client, "GET", f"{base}/api/build-info")
+        build_body = (
+            _json_object(build_info, "build_info")
+            if build_info.status_code == 200 else {}
+        )
+        build: dict[str, Any] = {}
+        source_binding: dict[str, Any] = {}
+        if build_info.status_code == 200:
+            build = _object_field(build_body, "build", build_info, "build_info")
+            source_binding = _object_field(
+                build_body, "source_binding", build_info, "build_info"
+            )
         report["build_info"] = {
             "http_status": build_info.status_code,
-            "body": (
-                build_info.json()
-                if build_info.headers.get("content-type", "").startswith(
-                    "application/json"
-                )
-                else build_info.text[:500]
-            ),
+            "body": build_body,
         }
-        if root.status_code != 200 or report["root_readiness"]["body"].get("ready") is not True:
+        if build_info.status_code != 200:
+            report["build_info"]["response_evidence"] = _response_evidence(build_info)
+        if root.status_code != 200 or root_body.get("ready") is not True:
             failures.append("root readiness is not closed")
-        build_body = report["build_info"]["body"]
         if (
             build_info.status_code != 200
-            or build_body.get("build", {}).get("state") != "OBSERVED"
-            or build_body.get("source_binding", {}).get("bindings_agree") is not True
+            or build.get("state") != "OBSERVED"
+            or source_binding.get("bindings_agree") is not True
         ):
             failures.append("build source identity is not closed")
 

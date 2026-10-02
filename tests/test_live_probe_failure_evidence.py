@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import httpx
+import pytest
 
 
 def load_probe():
@@ -187,3 +188,115 @@ def test_complete_success_remains_pass(monkeypatch, tmp_path):
     assert report["status"] == "PASS" and report["complete"] is True
     assert len(report["probes"]) == 11 and len(report["experiences"]) == 6
     assert "request_failure" not in report and sleeps == []
+
+
+@pytest.mark.parametrize(
+    ("content", "content_type", "classification"),
+    [
+        (b"<html>PRIVATE_RESPONSE_FIXTURE</html>" + b"x" * 5000,
+         "text/html", "UNEXPECTED_CONTENT_TYPE"),
+        (b'{"private":"PRIVATE_RESPONSE_FIXTURE",',
+         "application/json", "MALFORMED_JSON"),
+        (b'"PRIVATE_RESPONSE_FIXTURE"',
+         "application/json", "NON_OBJECT_JSON"),
+        (b'{"receipt":"PRIVATE_RESPONSE_FIXTURE"}',
+         "application/json", "INVALID_JSON_FIELD"),
+    ],
+)
+def test_http_200_invalid_connector_retains_bounded_failure_receipt(
+    monkeypatch, tmp_path, content, content_type, classification,
+):
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, content=content, headers={"content-type": content_type})
+
+    probe, output, sleeps = setup_main(monkeypatch, tmp_path, handler)
+    assert probe.main() == 1
+    text = output.read_text()
+    report = json.loads(text)
+    assert report["status"] == "FAIL" and report["complete"] is False
+    assert report["probes"] == [] and report["stopped_before_remaining_requests"] is True
+    assert "request_failure" not in report
+    failure = report["response_failure"]
+    assert failure["state"] == "INVALID_RESPONSE" and failure["stage"] == "connector_fetch"
+    assert failure["method"] == "POST"
+    assert failure["url"].endswith("/sentra/connectors/cisa-kev/fetch")
+    assert failure["headers_recorded"] is False
+    assert failure["request_body_recorded"] is False
+    assert len(failure["attempts"]) == 1
+    attempt = failure["attempts"][0]
+    assert attempt["classification"] == classification and attempt["http_status"] == 200
+    assert attempt["body_bytes"] == len(content)
+    assert attempt["body_prefix_bytes"] == min(len(content), 4096)
+    assert attempt["body_prefix_sha256"] == hashlib.sha256(content[:4096]).hexdigest()
+    assert attempt["body_prefix_truncated"] is (len(content) > 4096)
+    assert len(requests) == 1 and sleeps == []
+    assert "PRIVATE_RESPONSE_FIXTURE" not in text and "PRIVATE_SESSION_FIXTURE" not in text
+
+
+def test_later_invalid_connector_preserves_prior_observation(monkeypatch, tmp_path):
+    def handler(request):
+        if "/cisa-kev/" in request.url.path:
+            return httpx.Response(200, json=observation())
+        return httpx.Response(200, content=b"<html>PRIVATE_RESPONSE_FIXTURE</html>",
+                              headers={"content-type": "text/html"})
+
+    probe, output, sleeps = setup_main(monkeypatch, tmp_path, handler)
+    assert probe.main() == 1
+    report = json.loads(output.read_text())
+    assert len(report["probes"]) == 1 and report["probes"][0]["state"] == "OBSERVED"
+    assert report["response_failure"]["url"].endswith("/lyte/connectors/github-actions/fetch")
+    assert report["complete"] is False and sleeps == []
+
+
+@pytest.mark.parametrize(
+    ("target", "response", "stage", "classification"),
+    [
+        ("/api/verticals/sentra/readyz",
+         httpx.Response(200, content=b'{"ready":', headers={"content-type": "application/json"}),
+         "vertical_readiness", "MALFORMED_JSON"),
+        ("/api/verticals/sentra/readyz",
+         httpx.Response(200, json={"ready": True, "live_data": "PRIVATE_RESPONSE_FIXTURE"}),
+         "vertical_readiness", "INVALID_JSON_FIELD"),
+        ("/api/verticals/defend/frontier",
+         httpx.Response(200, json={"vertical": "sentra", "hatun": []}),
+         "frontier_contract", "INVALID_JSON_FIELD"),
+        ("/readyz",
+         httpx.Response(200, content=b"<html>PRIVATE_RESPONSE_FIXTURE</html>", headers={"content-type": "text/html"}),
+         "root_readiness", "UNEXPECTED_CONTENT_TYPE"),
+        ("/api/build-info",
+         httpx.Response(200, content=b'{"build":', headers={"content-type": "application/json"}),
+         "build_info", "MALFORMED_JSON"),
+        ("/api/build-info",
+         httpx.Response(200, json={"build": "PRIVATE_RESPONSE_FIXTURE"}),
+         "build_info", "INVALID_JSON_FIELD"),
+    ],
+)
+def test_later_invalid_json_contract_retains_completed_stages(
+    monkeypatch, tmp_path, target, response, stage, classification,
+):
+    successful = successful_handler()
+
+    def handler(request):
+        return response if request.url.path == target else successful(request)
+
+    probe, output, sleeps = setup_main(monkeypatch, tmp_path, handler)
+    assert probe.main() == 1
+    text = output.read_text()
+    report = json.loads(text)
+    assert report["status"] == "FAIL" and report["complete"] is False
+    assert len(report["probes"]) == 11
+    assert report["response_failure"]["stage"] == stage
+    assert report["response_failure"]["attempts"][0]["classification"] == classification
+    assert report["response_failure"]["url"].endswith(target)
+    assert report["stopped_before_remaining_requests"] is True
+    assert "PRIVATE_RESPONSE_FIXTURE" not in text and "PRIVATE_SESSION_FIXTURE" not in text
+    assert sleeps == []
+    if stage == "build_info":
+        assert report["root_readiness"]["body"]["ready"] is True
+        assert len(report["experiences"]) == 6
+    if stage == "root_readiness":
+        assert len(report["experiences"]) == 6
+        assert "root_readiness" not in report
