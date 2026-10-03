@@ -172,7 +172,7 @@ def test_in_budget_content_length_mismatch_is_rejected(bound_runtime, monkeypatc
 def test_valid_provider_shapes_and_json_media_types_are_accepted(
     bound_runtime, monkeypatch, protocol, mime,
 ):
-    monkeypatch.setenv("SZL_MODEL_PROTOCOL_KHIPU_1_5B", protocol)
+    monkeypatch.setenv("SZL_MODEL_PROTOCOL_RECEIPT_AGENT", protocol)
     body = _reply_bytes(protocol, OUTPUT, metadata={"finite": .25, "brackets": "[[[{}]]]"})
     # Split a multibyte code point at the transport boundary. UTF-8 is decoded
     # only after bounded accumulation, rather than separately per raw chunk.
@@ -197,7 +197,7 @@ def test_valid_provider_shapes_and_json_media_types_are_accepted(
 def test_generated_text_limit_withholds_whole_oversized_output(
     bound_runtime, monkeypatch, protocol, extra_char,
 ):
-    monkeypatch.setenv("SZL_MODEL_PROTOCOL_KHIPU_1_5B", protocol)
+    monkeypatch.setenv("SZL_MODEL_PROTOCOL_RECEIPT_AGENT", protocol)
     text = PRIVATE_BODY + "x" * (bound_runtime.MAX_GENERATED_CHARS + extra_char - len(PRIVATE_BODY))
     body = _reply_bytes(protocol, text)
     stream = TrackedStream([body[:37], body[37:]])
@@ -247,7 +247,7 @@ def test_misleading_mime_is_rejected_before_reading(bound_runtime, monkeypatch, 
 def test_duplicate_keys_cannot_choose_which_provider_value_is_admitted(
     bound_runtime, monkeypatch, protocol, body,
 ):
-    monkeypatch.setenv("SZL_MODEL_PROTOCOL_KHIPU_1_5B", protocol)
+    monkeypatch.setenv("SZL_MODEL_PROTOCOL_RECEIPT_AGENT", protocol)
     stream = TrackedStream([body[:13], body[13:]])
     response, _ = _serve(bound_runtime, monkeypatch, stream)
 

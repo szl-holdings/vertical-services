@@ -194,11 +194,11 @@ def test_exact_operator_binding_can_make_a_plan_ready_without_invoking_network(
 ):
     clear_model_env(monkeypatch)
     monkeypatch.setenv(
-        "SZL_MODEL_ENDPOINT_KHIPU_1_5B",
-        "https://router.huggingface.co/models/SZLHOLDINGS/SZL-Khipu-1.5B",
+        "SZL_MODEL_ENDPOINT_RECEIPT_AGENT",
+        "https://router.huggingface.co/models/SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2",
     )
-    monkeypatch.setenv("SZL_MODEL_REVISION_KHIPU_1_5B", "d" * 40)
-    monkeypatch.setenv("SZL_MODEL_PROTOCOL_KHIPU_1_5B", "hf-text-generation")
+    monkeypatch.setenv("SZL_MODEL_REVISION_RECEIPT_AGENT", "d" * 40)
+    monkeypatch.setenv("SZL_MODEL_PROTOCOL_RECEIPT_AGENT", "hf-text-generation")
     monkeypatch.setenv("HF_TOKEN", "test-token-not-returned")
 
     # Keep the positive path, but satisfy it with real scoped ledger rows rather
@@ -214,7 +214,7 @@ def test_exact_operator_binding_can_make_a_plan_ready_without_invoking_network(
     ledger = ObservationStore()
     monkeypatch.setattr(runtime, "STORE", ledger)
     spec = next(item for item in CONNECTORS.values() if item.vertical == "finance")
-    payload = plan_payload(task="scenario-analysis")
+    payload = plan_payload(task="filing-research")
     scope = hashlib.sha256(SESSION_TOKEN.encode("utf-8")).hexdigest()
     observed = time.time()
     for index, digest in enumerate(payload["evidence_sha256"]):
@@ -234,7 +234,7 @@ def test_exact_operator_binding_can_make_a_plan_ready_without_invoking_network(
     assert body["decision"] == "READY_FOR_INFERENCE"
     assert body["evidence_resolution"]["state"] == "COMPLETE"
     assert body["evidence_resolution"]["resolved_count"] == 2
-    assert body["selected_model"]["alias"] == "khipu-1.5b"
+    assert body["selected_model"]["alias"] == "receipt-agent"
     assert body["selected_model"]["revision"] == "d" * 40
     assert body["selected_model"]["revision_evidence"] == "OPERATOR_DECLARED"
     assert (

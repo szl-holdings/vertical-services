@@ -35,9 +35,9 @@ def runtime(monkeypatch, ledger):
     monkeypatch.setattr(module, "vertical_readiness", lambda *a, **kw: {
         "ready": True, "requirements": {"source_bound": True}})
     monkeypatch.setattr(module, "build_info", lambda: {"build": {"state": "OBSERVED", "revision": "d"*40}})
-    monkeypatch.setenv("SZL_MODEL_ENDPOINT_KHIPU_1_5B", "https://router.huggingface.co/models/fixture")
-    monkeypatch.setenv("SZL_MODEL_REVISION_KHIPU_1_5B", "d"*40)
-    monkeypatch.setenv("SZL_MODEL_PROTOCOL_KHIPU_1_5B", "openai-chat")
+    monkeypatch.setenv("SZL_MODEL_ENDPOINT_RECEIPT_AGENT", "https://router.huggingface.co/models/fixture")
+    monkeypatch.setenv("SZL_MODEL_REVISION_RECEIPT_AGENT", "d"*40)
+    monkeypatch.setenv("SZL_MODEL_PROTOCOL_RECEIPT_AGENT", "openai-chat")
     monkeypatch.setenv("HF_TOKEN", "synthetic-test-token")
     monkeypatch.setattr(importlib.import_module("szl_verticals.evidence"), "time", SimpleNamespace(time=lambda: CLOCK))
     return module
@@ -46,7 +46,8 @@ def runtime(monkeypatch, ledger):
 def request(runtime, digests=None, **overrides):
     values = dict(task="scenario-analysis", objective="Review a synthetic observation.",
                   context="Caller-reported text", axes={"evidence": .99, "freshness": .99},
-                  evidence_sha256=DIGESTS[:2] if digests is None else digests)
+                  evidence_sha256=DIGESTS[:2] if digests is None else digests,
+                  preferred_model="receipt-agent")
     values.update(overrides)
     return runtime.IntelligenceInvokeRequest(**values)
 
@@ -126,7 +127,7 @@ def test_provider_consumes_exact_planned_snapshot_when_basis_is_unchanged(runtim
         assert all(row["summary"]["finding"] == "original" for row in data["connector_observations"])
         assert data["context_provenance"] == "CALLER_REPORTED_NOT_AUTHENTICATED"
         return httpx.Response(200, json={
-            "model": "SZLHOLDINGS/SZL-Khipu-1.5B@" + "d" * 40,
+            "model": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2@" + "d" * 40,
             "choices": [{"message": {"content": "Synthetic output"}}],
         })
     def client_factory(**kwargs):
@@ -146,7 +147,7 @@ def test_provider_consumes_exact_planned_snapshot_when_basis_is_unchanged(runtim
 
 @pytest.mark.parametrize("protocol, claimed_model", [
     ("openai-chat", "unrelated-model"),
-    ("openai-chat", "SZLHOLDINGS/SZL-Khipu-1.5B@" + "e" * 40),
+    ("openai-chat", "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2@" + "e" * 40),
     ("hf-text-generation", "unrelated-model"),
 ])
 def test_explicit_wrong_provider_model_withholds_generated_text(
@@ -154,7 +155,7 @@ def test_explicit_wrong_provider_model_withholds_generated_text(
 ):
     for digest in DIGESTS[:2]:
         put(ledger, digest)
-    monkeypatch.setenv("SZL_MODEL_PROTOCOL_KHIPU_1_5B", protocol)
+    monkeypatch.setenv("SZL_MODEL_PROTOCOL_RECEIPT_AGENT", protocol)
     real_client = httpx.AsyncClient
 
     def response(_req):
