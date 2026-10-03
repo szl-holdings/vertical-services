@@ -138,6 +138,26 @@ An unbound or disagreeing revision is reported as `UNAVAILABLE` rather than gues
 
 ## Verification and deployment
 
+The finance intelligence page also offers a bounded `khipu-gguf-public`
+observation workflow. It is a separate binding to the exact Khipu GGUF artifact,
+not an activation of the original `khipu-1.5b`, `receipt-agent`, or `a11oy-mini`
+aliases. Those aliases remain unavailable until their serving and qualification
+requirements are satisfied.
+
+With explicit public-demo consent, the workflow fetches Coinbase and Treasury
+observations into the session ledger, validates both typed summaries, and sends
+only a locally compiled public spot-reference sentence to the pinned demo.
+Caller objective, context, axes, and arbitrary ledger text are not sent. The
+service's 32-token limit remains unchanged. A reply must finish with `stop`,
+match that exact sentence, contain one choice, and pass model/request/output
+and execution-record consistency checks. Incomplete text, changed values,
+forecasts, and extra prose are withheld. The publication probe enforces the same
+completed-observation requirement.
+
+`observation_match_verified` covers only the locally compiled public value.
+The source observation remains unverified, the provider reply is unsigned,
+and the workflow does not establish general model quality, authorship, or an SLA.
+
 `tests/test_deploy_app.py` and `tests/test_operational_fabric.py` cover the
 business engines, Vessels consolidation, Living Anatomy, formula bindings,
 session isolation, official-source normalization, caching, response hashing,

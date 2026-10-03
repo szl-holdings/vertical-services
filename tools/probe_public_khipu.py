@@ -94,6 +94,9 @@ def main():
                     or not result["provider_verification"]["model_identity_verified"]
                     or not result["provider_verification"]["request_hash_verified"]
                     or not result["provider_verification"]["output_hash_verified"]
+                    or result["provider_verification"]["output_complete"] is not True
+                    or result["provider_verification"]["observation_match_verified"] is not True
+                    or result["output_sha256"] != plan["inference_input_sha256"]
                     or result["effectors_enabled"] is not False):
                 raise RuntimeError("invocation receipt consistency failed")
             # Cross-session references must remain unresolved after a success.

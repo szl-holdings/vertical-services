@@ -43,7 +43,7 @@ def request(runtime, **overrides):
 
 
 def reply(k, sent):
-    text = "Market observations require cautious human review."
+    text = sent["messages"][1]["content"]
     usage = {"prompt_tokens": 300, "completion_tokens": 8, "total_tokens": 308}
     basis = {"schema": "szl.openai-chat-request/v1", "model": k.MODEL_ID,
              "messages": sent["messages"], "max_completion_tokens": 32,
@@ -133,7 +133,7 @@ def test_mismatched_unsigned_reply_is_withheld(public_runtime, monkeypatch, muta
 
 
 @pytest.mark.parametrize("reason", ["length", "time_budget"])
-def test_bounded_output_is_explicitly_incomplete(public_runtime, reason):
+def test_incomplete_output_is_withheld_even_when_hashes_match(public_runtime, reason):
     k = public_runtime.public_khipu
     sent = k.payload(k.SYSTEM, "Public numbers only")
     value = reply(k, sent)
@@ -141,9 +141,9 @@ def test_bounded_output_is_explicitly_incomplete(public_runtime, reason):
     record["termination"] = {"reason": reason, "time_budget_reached": reason == "time_budget"}
     record["record_sha256"] = k.digest({key: item for key, item in record.items() if key != "record_sha256"})
     value["choices"][0]["finish_reason"] = "length"
-    _, verified = k.verify_reply(value, sent)
-    assert verified["output_complete"] is False
-    assert verified["finish_reason"] == reason
+    with pytest.raises(HTTPException) as error:
+        k.verify_reply(value, sent)
+    assert error.value.status_code == 502
 
 
 def test_inconsistent_termination_label_is_rejected(public_runtime):
