@@ -12,6 +12,7 @@ without credentials, only for an explicitly consented numeric market brief.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import math
@@ -32,6 +33,7 @@ from .core import SHA40, SessionScope, StrictModel, build_info
 from .operational import STORE, vertical_readiness
 from .profiles import ALIASES, VERTICALS
 from . import public_khipu
+from .provider_response import read_provider_json
 
 intelligence = APIRouter(tags=["vertical-intelligence"])
 
@@ -41,7 +43,6 @@ MODEL_ALIAS = re.compile(r"^[a-z][a-z0-9-]{1,63}$")
 DEFAULT_ALLOWED_HOSTS = frozenset(
     {"router.huggingface.co", "api-inference.huggingface.co"}
 )
-MAX_PROVIDER_BYTES = 2_000_000
 MAX_GENERATED_CHARS = 12_000
 
 MODEL_ASSETS: dict[str, dict[str, Any]] = {
@@ -694,7 +695,9 @@ def _extract_generated_text(protocol: str, payload: Any) -> str:
             value = None
     if not isinstance(value, str) or not value.strip():
         raise HTTPException(502, "model provider returned no supported generated text")
-    return value.strip()[:MAX_GENERATED_CHARS]
+    if len(value) > MAX_GENERATED_CHARS:
+        raise HTTPException(502, "model provider generated text exceeded the bounded size")
+    return value.strip()
 
 
 def _reject_contradictory_model_claim(binding: dict[str, Any], payload: Any) -> None:
@@ -731,6 +734,7 @@ async def _invoke_provider(
     token = "" if public_demo else os.environ.get(binding["token_env"], "").strip()
     headers = {
         "Accept": "application/json",
+        "Accept-Encoding": "identity",
         "Content-Type": "application/json",
         "User-Agent": "szl-vertical-intelligence/1.0",
         "X-SZL-Model-Revision": binding["revision"],
@@ -763,7 +767,7 @@ async def _invoke_provider(
         }
 
     try:
-        async with httpx.AsyncClient(
+        async with asyncio.timeout(60.0 if public_demo else 30.0), httpx.AsyncClient(
             timeout=httpx.Timeout(60.0 if public_demo else 30.0, connect=8.0),
             follow_redirects=False,
             trust_env=False,
@@ -774,9 +778,13 @@ async def _invoke_provider(
             current = _resolve_plan_evidence(canonical, request, session_scope)
             if current.snapshot_sha256 != evidence.snapshot_sha256:
                 raise HTTPException(409, "evidence changed before provider dispatch")
-            response = await client.post(
+            async with client.stream("POST",
                 binding["endpoint"], headers=headers, json=provider_payload
-            )
+            ) as response:
+                provider_status = response.status_code
+                payload = await read_provider_json(response)
+    except TimeoutError:
+        raise HTTPException(502, "model provider response deadline exceeded") from None
     except httpx.HTTPError as exc:
         raise HTTPException(
             502,
@@ -787,23 +795,11 @@ async def _invoke_provider(
     current = _resolve_plan_evidence(canonical, request, session_scope)
     if current.snapshot_sha256 != evidence.snapshot_sha256 or not evidence.fresh_at(time.time()):
         raise HTTPException(409, "evidence changed during provider invocation; output withheld")
-    if 300 <= response.status_code < 400:
-        raise HTTPException(502, "model provider redirect refused")
-    if response.status_code < 200 or response.status_code >= 300:
-        raise HTTPException(502, f"model provider returned HTTP {response.status_code}")
-    if len(response.content) > MAX_PROVIDER_BYTES:
-        raise HTTPException(502, "model provider response exceeded the bounded size")
-    if "json" not in response.headers.get("content-type", "").lower():
-        raise HTTPException(502, "model provider response was not JSON")
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise HTTPException(502, "model provider returned invalid JSON") from exc
     if public_demo:
         text, verification = public_khipu.verify_reply(payload, provider_payload)
-        return text, response.status_code, verification
+        return text, provider_status, verification
     _reject_contradictory_model_claim(binding, payload)
-    return _extract_generated_text(binding["protocol"], payload), response.status_code, {"state": "NOT_VERIFIED", "revision_evidence": "OPERATOR_DECLARED"}
+    return _extract_generated_text(binding["protocol"], payload), provider_status, {"state": "NOT_VERIFIED", "revision_evidence": "OPERATOR_DECLARED"}
 
 
 @intelligence.get("/api/intelligence")
