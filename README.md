@@ -144,6 +144,12 @@ not an activation of the original `khipu-1.5b`, `receipt-agent`, or `a11oy-mini`
 aliases. Those aliases remain unavailable until their serving and qualification
 requirements are satisfied.
 
+The original Khipu model's declared 2/6 abstention gate and A11oy Mini's declared
+`publication_eligible: false` are enforced by the planner. Supplying a valid
+endpoint, exact revision and credential cannot override either release block.
+Their immutable qualification sources are included in the model profile; lifting
+a block requires a reviewed source change backed by new qualification evidence.
+
 With explicit public-demo consent, the workflow fetches Coinbase and Treasury
 observations into the session ledger, validates both typed summaries, and sends
 only a locally compiled public spot-reference sentence to the pinned demo.

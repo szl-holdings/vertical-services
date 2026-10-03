@@ -57,6 +57,10 @@ MODEL_ASSETS: dict[str, dict[str, Any]] = {
         "revision_env": "SZL_MODEL_REVISION_KHIPU_1_5B",
         "protocol_env": "SZL_MODEL_PROTOCOL_KHIPU_1_5B",
         "token_env": "HF_TOKEN",
+        "publication_eligible": False,
+        "qualification_truth_label": "DECLARED",
+        "publication_blocker": "KHIPU_ABSTENTION_GATE_FAILED",
+        "qualification_source": "https://github.com/szl-holdings/szl-forge/blob/0560b5055f981141d7ef0841298e864a44348714/publishing/model-source-bindings.json",
     },
     "receipt-agent": {
         "repo_id": "SZLHOLDINGS/szl-receiptagent-qwen35-0.8b-v2",
@@ -79,6 +83,10 @@ MODEL_ASSETS: dict[str, dict[str, Any]] = {
         "revision_env": "SZL_MODEL_REVISION_A11OY_MINI",
         "protocol_env": "SZL_MODEL_PROTOCOL_A11OY_MINI",
         "token_env": "HF_TOKEN",
+        "publication_eligible": False,
+        "qualification_truth_label": "DECLARED",
+        "publication_blocker": "A11OY_MINI_PUBLICATION_INELIGIBLE",
+        "qualification_source": "https://huggingface.co/SZLHOLDINGS/A11OY-MINI/blob/7ea56236ea7988b3915b5ef07548cb2c3930a3cf/README.md",
     },
     "nemo-recipe": {
         "repo_id": "SZLHOLDINGS/szl-nemo",
@@ -349,7 +357,7 @@ class IntelligencePlanRequest(StrictModel):
         if value is None:
             return None
         normalized = value.strip().lower()
-        if MODEL_ALIAS.fullmatch(normalized) is None:
+        if normalized not in MODEL_ASSETS and MODEL_ALIAS.fullmatch(normalized) is None:
             raise ValueError("preferred_model must be a bounded model alias")
         return normalized
 
@@ -420,6 +428,12 @@ def _model_binding(alias: str) -> dict[str, Any]:
         if state == "BOUND":
             state = "AUTH_REQUIRED"
         blockers.append("MODEL_CREDENTIAL_UNAVAILABLE")
+
+    # Endpoint configuration cannot override a source-declared release block.
+    if spec.get("publication_eligible") is False:
+        blockers.append(spec["publication_blocker"])
+        if state == "BOUND":
+            state = "BLOCKED"
 
     return {
         **spec,
