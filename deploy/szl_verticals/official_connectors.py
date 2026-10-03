@@ -6,12 +6,14 @@ import json
 import os
 import time
 from typing import Any, Mapping
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import HTTPException
 
 from .connector_parameters import _redacted_url
 from .connector_request_builder import _request_definition
+from .connector_github_html import parse_public_actions_page
 from .connector_transport import _bounded_get
 from .connector_specs import CONNECTORS, ConnectorFetchRequest, ConnectorSpec
 from .contract import canonical_vertical, connector_state
@@ -105,16 +107,46 @@ def fetch_connector(
                 "cache": {"hit": True, "fresh": True},
             }
 
-    status, raw, content_type = _bounded_get(
-        url,
-        query=query,
-        headers=headers,
-        max_bytes=spec.max_bytes,
-        transport=transport,
-    )
+    fallback_summary = None
+    try:
+        status, raw, content_type = _bounded_get(
+            url,
+            query=query,
+            headers=headers,
+            max_bytes=spec.max_bytes,
+            transport=transport,
+        )
+    except HTTPException as exc:
+        # A public GitHub page can keep this required source observable when
+        # the shared-IP REST quota is exhausted. Never hide a bad configured
+        # credential, change a requested branch/status filter, or accept an
+        # unrecognized source representation.
+        if not (
+            spec.builder == "github"
+            and "Authorization" not in headers
+            and not any(key in query for key in ("branch", "status"))
+            and exc.status_code == 502
+            and exc.detail in {"upstream returned HTTP 403", "upstream returned HTTP 429"}
+        ):
+            raise
+        repository = urlsplit(url).path.split("/")[3]
+        fallback_url = f"https://github.com/szl-holdings/{repository}/actions"
+        status, raw, content_type = _bounded_get(
+            fallback_url,
+            query={},
+            headers={"Accept": "text/html", "User-Agent": headers["User-Agent"]},
+            max_bytes=spec.max_bytes,
+            transport=transport,
+        )
+        fallback_summary = parse_public_actions_page(
+            raw, content_type, repository, int(query["per_page"])
+        )
+        safe_url = fallback_url
     observed_at = time.time()
     digest = hashlib.sha256(raw).hexdigest()
-    summary = _normalize(spec, raw, content_type, parameters)
+    summary = fallback_summary if fallback_summary is not None else _normalize(
+        spec, raw, content_type, parameters
+    )
     receipt = _receipt(
         spec=spec,
         session_scope=session_scope,

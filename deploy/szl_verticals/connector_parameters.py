@@ -6,6 +6,8 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from fastapi import HTTPException
 
+from .connector_specs import GITHUB_REPOSITORIES
+
 
 def _scalar(parameters: Mapping[str, Any], key: str, default: Any = None) -> Any:
     value = parameters.get(key, default)
@@ -72,6 +74,16 @@ def _redacted_url(url: str, query: Mapping[str, str]) -> str:
 
 def _assert_allowed_destination(url: str) -> None:
     parts = urlsplit(url)
+    # The public Actions-page fallback is a single fixed path shape.  Do not
+    # broaden the connector allowlist to arbitrary github.com URLs.
+    public_actions_page = (
+        parts.hostname == "github.com"
+        and parts.path in {
+            f"/szl-holdings/{repository}/actions" for repository in GITHUB_REPOSITORIES
+        }
+        and not parts.query
+        and not parts.fragment
+    )
     allowed_hosts = {
         "www.cisa.gov",
         "services.nvd.nist.gov",
@@ -87,8 +99,9 @@ def _assert_allowed_destination(url: str) -> None:
     }
     if (
         parts.scheme != "https"
-        or parts.hostname not in allowed_hosts
+        or (parts.hostname not in allowed_hosts and not public_actions_page)
         or parts.username
         or parts.password
+        or (parts.hostname == "github.com" and parts.port not in (None, 443))
     ):
         raise HTTPException(500, "connector destination failed the fixed allowlist")

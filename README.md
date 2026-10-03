@@ -88,6 +88,16 @@ SEC EDGAR, NYC PLUTO, and the Federal Register. NVD enrichment is optional.
 Congress.gov is optional and remains `AUTH_REQUIRED` until `CONGRESS_API_KEY` is
 configured.
 
+The Lyte GitHub Actions connector prefers the official REST API. An optional
+`GITHUB_READ_TOKEN` raises its API quota when bound to a credential with only
+Actions read access to the allowlisted repositories. If no token is bound and
+GitHub rejects the REST request with HTTP 403 or 429, Lyte reads GitHub's public
+Actions list for the same repository. That degraded path records the page URL
+and the SHA-256 of the exact HTML response, labels its representation, and
+fails closed if the page no longer carries attributable runs. Branch and status
+filters never fall back to the unfiltered page. A configured but invalid token
+also fails rather than silently switching sources.
+
 NOAA AIS is official historical planning data. It is **not** described as a
 real-time vessel feed. A licensed or authorized live AIS transport must be
 connected separately before Killinchu may claim live vessel positions.
