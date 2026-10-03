@@ -176,3 +176,51 @@ def test_pr_and_schedule_rows_preserve_unknown_head_sha():
     assert [run["event"] for run in result["runs"]] == ["pull_request", "schedule"]
     assert [run["head_sha"] for run in result["runs"]] == [None, None]
     assert result["success_rate"] == 0.5
+
+
+def test_currently_running_public_row_is_observed_without_counting_as_completed(monkeypatch):
+    """GitHub uses 'currently running' while this release's own probe is active."""
+    monkeypatch.delenv("GITHUB_READ_TOKEN", raising=False)
+    page = HTML.replace(b"failed:  Run 6", b"currently running:  Run 6")
+
+    def handler(request):
+        if request.url.host == "api.github.com":
+            return httpx.Response(403)
+        return httpx.Response(200, headers={"content-type": "text/html"}, content=page)
+
+    result = fetch_connector(vertical="lyte", connector_id="github-actions",
+                             request=_request(), session_scope="9" * 64,
+                             transport=httpx.MockTransport(handler))
+    observation = result["observation"]
+    assert observation["returned"] == 2
+    assert observation["completed"] == 1
+    assert observation["failed_or_cancelled"] == 0
+    assert observation["success_rate"] == 1.0
+    assert observation["runs"][1]["status"] == "in_progress"
+    assert observation["runs"][1]["conclusion"] is None
+    assert observation["runs"][1]["head_sha"] == "b" * 40
+    assert result["receipt"]["payload_sha256"] == hashlib.sha256(page).hexdigest()
+    assert result["receipt"]["source_url"] == URL
+    assert observation["coverage"] == "PAGE_FIRST_N"
+
+
+def test_all_currently_running_rows_have_no_measured_success_rate():
+    from szl_verticals.connector_github_html import parse_public_actions_page
+
+    page = HTML.replace(b"completed successfully:", b"currently running:").replace(
+        b"failed:", b"currently running:")
+    result = parse_public_actions_page(page, "text/html", REPO, 10)
+    assert result["returned"] == 2
+    assert result["completed"] == 0
+    assert result["success_rate"] is None
+    assert all(run["conclusion"] is None for run in result["runs"])
+
+
+def test_unrecognized_running_label_still_fails_closed():
+    from szl_verticals.connector_github_html import parse_public_actions_page
+
+    page = HTML.replace(b"failed:", b"currently succeeded:")
+    with pytest.raises(HTTPException) as error:
+        parse_public_actions_page(page, "text/html", REPO, 10)
+    assert error.value.status_code == 502
+    assert error.value.detail == "public Actions page schema is not recognized"

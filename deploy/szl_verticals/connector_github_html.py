@@ -23,6 +23,7 @@ _RUN_STATES = {
     "timed out": ("completed", "timed_out"),
     "skipped": ("completed", "skipped"),
     "in progress": ("in_progress", None),
+    "currently running": ("in_progress", None),
     "queued": ("queued", None),
     "waiting": ("waiting", None),
     "requested": ("requested", None),
