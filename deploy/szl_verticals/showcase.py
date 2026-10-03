@@ -107,11 +107,11 @@ def _public_market_brief(vertical: str) -> str:
     if vertical != "finance":
         return ""
     return '''<section aria-labelledby="public-brief-title"><div class="section-head"><div>
-<p class="eyebrow">LIVE PUBLIC MARKET BRIEF</p><h2 id="public-brief-title">Two observations. One short review.</h2></div>
-<p>Fetch a Bitcoin spot reference and official Treasury rate observations, then ask Khipu for a short interpretation. This public demo is best effort and every answer needs human review.</p></div>
+<p class="eyebrow">LIVE PUBLIC MARKET OBSERVATION</p><h2 id="public-brief-title">Two sources. One checked observation.</h2></div>
+<p>Fetch a Bitcoin spot reference and official Treasury rate observations, then ask Khipu to restate the spot reference. Only a completed exact match is displayed. This public demo is best effort and the underlying observation requires human review.</p></div>
 <div class="boundary"><label><input type="checkbox" id="public-brief-consent"> I agree to send these public market numbers to the Khipu demo. No private context is accepted.</label>
 <p>The advisory score uses a disclosed 0.90 preset; it is not a measurement of investment quality. No trading or custody is enabled.</p>
-<button type="button" class="button primary" id="public-brief-run">Generate public market brief</button>
+<button type="button" class="button primary" id="public-brief-run">Restate public market observation</button>
 <p id="public-brief-status" role="status" aria-live="polite">Ready when you choose to run.</p>
 <pre id="public-brief-output" hidden></pre></div></section>
 <script>
@@ -145,10 +145,11 @@ def _public_market_brief(vertical: str) -> str:
       const plan = await post('/api/verticals/finance/intelligence/plan', planRequest);
       if (plan.decision !== 'READY_FOR_INFERENCE') throw new Error('Brief withheld: ' + plan.blockers.join(', '));
       const result = await post('/api/verticals/finance/intelligence/invoke', request);
+      if (result.provider_verification.output_complete !== true || result.provider_verification.observation_match_verified !== true) {
+        throw new Error('Observation withheld: the model did not return a completed exact match.');
+      }
       output.textContent = result.output; output.hidden = false;
-      status.textContent = result.provider_verification.output_complete
-        ? 'Brief received. Model, request and output hashes match. The reply is unsigned and requires human review.'
-        : 'The short output reached a demo limit and is incomplete. Model, request and output hashes match. Review the unsigned text cautiously.';
+      status.textContent = 'Completed observation received. Its text matches the locally compiled public value. The source and unsigned reply require human review.';
     } catch (error) { status.textContent = error.message; }
     finally { button.disabled = false; }
   });

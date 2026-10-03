@@ -890,7 +890,7 @@ async def vertical_intelligence_invoke(
         },
         "raw_context_returned": False,
         "raw_context_stored": False,
-        "truth_label": "MODEL_GENERATED",
+        "truth_label": "MODELED",
     }
 
 

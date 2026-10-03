@@ -26,6 +26,8 @@ def valid_invocation(plan_hash):
             "model_identity_verified": True,
             "request_hash_verified": True,
             "output_hash_verified": True,
+            "output_complete": True,
+            "observation_match_verified": True,
         },
         "effectors_enabled": False,
     }
@@ -74,6 +76,7 @@ def run_probe(monkeypatch, tmp_path, invoke_replies, *, failure_stage=None,
             return httpx.Response(200, json={
                 "decision": decision,
                 "receipt": {"basis_sha256": ("a" if len(plans) == 1 else "b") * 64},
+                "inference_input_sha256": hashlib.sha256("Public observations require human review.".encode()).hexdigest(),
             })
         if path.endswith("/invoke"):
             invocations.append(payload)
@@ -139,6 +142,33 @@ def test_no_capacity_keeps_the_original_single_pass(monkeypatch, tmp_path):
     assert not any(event[0] == "sleep" for event in events)
     assert len(plans) == len(invocations) == 1
     assert sum(event[0] == "fetch" for event in events) == 2
+
+
+@pytest.mark.parametrize("field,value", [
+    ("output_complete", False), ("output_complete", 1),
+    ("observation_match_verified", False), ("observation_match_verified", "true"),
+])
+def test_hash_consistent_unqualified_observation_remains_failed(monkeypatch, tmp_path, field, value):
+    result = valid_invocation("a" * 64)
+    result["provider_verification"][field] = value
+    basis = {key: item for key, item in result.items() if key not in ("output", "receipt")}
+    result["receipt"]["basis_sha256"] = probe.sha(basis)
+    code, report, events, _, _, _ = run_probe(monkeypatch, tmp_path, [(200, result)])
+    assert code == 1 and report["state"] == "FAILED"
+    assert report["error"] == "invocation receipt consistency failed"
+    assert not any(event[0] in ("sleep", "cross-session-plan") for event in events)
+
+
+def test_completed_self_consistent_output_must_match_the_planned_input(monkeypatch, tmp_path):
+    result = valid_invocation("a" * 64)
+    result["output"] = "Different public value despite matching provider hashes."
+    result["output_sha256"] = hashlib.sha256(result["output"].encode()).hexdigest()
+    basis = {key: item for key, item in result.items() if key not in ("output", "receipt")}
+    result["receipt"]["basis_sha256"] = probe.sha(basis)
+    code, report, events, _, _, _ = run_probe(monkeypatch, tmp_path, [(200, result)])
+    assert code == 1 and report["state"] == "FAILED"
+    assert report["error"] == "invocation receipt consistency failed"
+    assert not any(event[0] in ("sleep", "cross-session-plan") for event in events)
 
 
 def test_second_capacity_failure_remains_failed_and_is_not_retried(monkeypatch, tmp_path):

@@ -336,7 +336,8 @@ def test_streamed_public_reply_still_passes_request_and_provenance_checks(public
 
     result = _invoke(public_runtime, public_request(public_runtime))
 
-    assert result["output"] == "Market observations require cautious human review."
+    assert result["output"] == json.loads(seen[0].content)["messages"][1]["content"]
+    assert result["output_sha256"] == result["inference_input_sha256"]
     assert result["provider_verification"]["request_hash_verified"] is True
     assert result["provider_verification"]["authenticity_established"] is False
     assert len(seen) == 1 and stream.exhausted
