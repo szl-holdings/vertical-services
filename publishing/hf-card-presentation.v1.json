@@ -1,0 +1,32 @@
+{
+  "schema": "szl.source-card-presentation/v1",
+  "source_repository": "szl-holdings/vertical-services",
+  "source_revision": "88f465c10034f1e5c3bbd806fb36297bdf1e2861",
+  "shared_mark_dependency": "https://github.com/szl-holdings/.github/pull/860",
+  "publication_boundary": "This source review is not evidence of Hub publication or runtime qualification. The existing canonical writer retains all exact-source, credential, entitlement, target, and readiness gates.",
+  "cards": [
+    {
+      "kind": "spaces",
+      "repo_id": "SZLHOLDINGS/vertical-services",
+      "source_path": "README.md",
+      "source_url": "https://github.com/szl-holdings/vertical-services/blob/88f465c10034f1e5c3bbd806fb36297bdf1e2861/README.md",
+      "observed_hub_revision": "1c9231c326c17df227dc7be0f40c33e693ad7022",
+      "observed_hub_card_sha256": "707a24c2122224e3d493529dc9bc1158fadc4f58a39cada59c63e183c7798cfc",
+      "observed_at": "2026-10-04T16:11:35.181248+00:00",
+      "canonical_publisher": "https://github.com/szl-holdings/vertical-services/blob/88f465c10034f1e5c3bbd806fb36297bdf1e2861/.github/workflows/hf-space.yml",
+      "publication_trigger": "PROTECTED_MAIN_PUSH",
+      "publication_state": "SOURCE_REVIEW_PENDING",
+      "artifact": "Shared domain service application",
+      "stage": "Per-route evidence and admission",
+      "before_sha256": "707a24c2122224e3d493529dc9bc1158fadc4f58a39cada59c63e183c7798cfc",
+      "after_sha256": "64f14c1944bffbbae5c531f8fd5e344f2c7f321b1c2d70b5ffab75011a7723b8",
+      "front_matter_sha256": "6d65779be16489cd6806257981e1c168fa3f99c4cad02626cb69a626f0559339",
+      "preserved_body_sha256": "82e72c6312aad211b159560a65c0ae4c6874a9098ce85ff0467993437c6309b3",
+      "bytes_before": 9902,
+      "bytes_after": 11281,
+      "front_matter_preserved": true,
+      "original_body_preserved": true,
+      "provider_or_runtime_promotion": false
+    }
+  ]
+}
