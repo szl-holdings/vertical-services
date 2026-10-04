@@ -404,6 +404,7 @@ def _experience_html(vertical: str) -> str:
   --warn:#f4c873;
 }}
 *{{box-sizing:border-box;min-inline-size:0}}
+:where(h1,h2,h3,p,li,span,small,strong,a){{overflow-wrap:anywhere}}
 html{{overflow-x:clip;background:var(--bg);scroll-padding-top:80px}}
 body{{margin:0;min-height:100vh;overflow-x:clip;color:var(--ink);font:15px/1.55 Inter,ui-sans-serif,system-ui,sans-serif;background:
 radial-gradient(circle at 78% 8%,color-mix(in srgb,var(--accent) 15%,transparent),transparent 34rem),
@@ -423,14 +424,14 @@ a:focus-visible,button:focus-visible{{outline:3px solid var(--accent);outline-of
 [data-motif="authority-chain"] .field::before{{width:52vmin;height:32vmin;right:4vw;top:18vh;border-radius:999px;box-shadow:-16vmin 12vmin 0 -1px transparent,-16vmin 12vmin 0 0 var(--line),16vmin 12vmin 0 -1px transparent,16vmin 12vmin 0 0 var(--line)}}
 .field::after{{width:18vmin;height:18vmin;border-radius:50%;left:8vw;bottom:10vh;animation-delay:-7s}}
 @keyframes drift{{to{{transform:translate3d(0,18px,0) rotate(4deg)}}}}
-.shell{{position:relative;width:min(1220px,100%);margin:auto;padding:clamp(20px,5vw,68px)}}
+.shell{{position:relative;width:min(1220px,100%);margin:auto;padding:clamp(20px,5vw,68px);container-type:inline-size}}
 .top{{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}}
 .brand,.eyebrow,.datum-id,.mono{{font:700 11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.12em;text-transform:uppercase}}
 .brand,.eyebrow,.datum-id{{color:var(--accent)}}
 .nav{{display:flex;gap:12px;flex-wrap:wrap}}
 .nav a{{text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:0 14px;background:color-mix(in srgb,var(--panel) 74%,transparent)}}
 .hero{{padding:clamp(54px,9vw,112px) 0 46px;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(270px,.75fr);gap:clamp(30px,6vw,82px);align-items:end}}
-h1{{font-size:clamp(54px,9vw,118px);line-height:.84;letter-spacing:-.06em;margin:16px 0 24px;max-width:9ch}}
+h1{{font-size:clamp(40px,10cqi,112px);line-height:.96;letter-spacing:-.06em;margin:16px 0 24px;max-width:12ch}}
 .lede{{font-size:clamp(17px,2vw,23px);max-width:68ch;color:var(--muted)}}
 .proof{{display:flex;gap:8px;flex-wrap:wrap;margin-top:28px}}
 .pill{{border:1px solid var(--line);border-radius:999px;padding:8px 12px;background:color-mix(in srgb,var(--panel) 72%,transparent)}}
@@ -451,7 +452,8 @@ h1{{font-size:clamp(54px,9vw,118px);line-height:.84;letter-spacing:-.06em;margin
 footer{{display:flex;gap:18px;justify-content:space-between;flex-wrap:wrap;margin-top:42px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted)}}
 code{{overflow-wrap:anywhere;color:var(--accent2)}}
 @media(max-width:900px){{.hero{{grid-template-columns:1fr}}.instrument{{min-height:260px}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
-@media(max-width:620px){{.shell{{padding-inline:18px}}h1{{font-size:clamp(52px,18vw,78px)}}.grid{{grid-template-columns:1fr}}.nav{{width:100%}}.nav a{{flex:1;justify-content:center}}}}
+@media(max-width:620px){{.shell{{padding-inline:18px}}.grid{{grid-template-columns:1fr}}.nav{{width:100%}}.nav a{{flex:1;justify-content:center}}}}
+@container(max-width:54rem){{.hero{{grid-template-columns:minmax(0,1fr)}}.grid{{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}}}}
 @media(pointer:coarse){{a,button{{min-height:48px}}}}
 @media(prefers-reduced-motion:reduce){{*,*::before,*::after{{animation:none!important;transition:none!important;scroll-behavior:auto!important}}}}
 @media(forced-colors:active){{*{{forced-color-adjust:auto}}.field{{display:none}}}}
