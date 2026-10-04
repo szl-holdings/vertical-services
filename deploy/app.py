@@ -338,6 +338,14 @@ def fashion_lineage() -> dict:
 
 def _landing_page() -> str:
     cards = []
+    names = {
+        "sentra": "Killinchu Defend",
+        "lyte": "Lyte",
+        "killinchu": "Killinchu",
+        "finance": "PURIQ Finance",
+        "terra": "Terra",
+        "counsel": "Prism Counsel",
+    }
     for engine in ENGINES:
         info = CATALOG[engine]
         badge = (
@@ -350,13 +358,13 @@ def _landing_page() -> str:
         aliases = " · ".join(info.get("aliases", []))
         cards.append(
             f"""<article class="card"><div class="eyebrow">{html.escape(engine.upper())}{badge}</div>
-            <h2>{html.escape(info['purpose'].split(',')[0].title())}</h2>
+            <h2>{html.escape(names[engine])}</h2>
             <p>{html.escape(info['purpose'])}</p>
             <small>{html.escape(aliases)}</small>
-            <div class="actions"><a href="{html.escape(info['experience'])}">Command</a>
-            <a href="{html.escape(info['intelligence'])}">Intelligence</a>
+            <nav class="actions" aria-label="{html.escape(names[engine])} resources"><a href="{html.escape(info['experience'])}">Workspace</a>
+            <a href="{html.escape(info['intelligence'])}">Evidence</a>
             <a href="/{engine}/healthz">Health</a>
-            <a href="/api/verticals/{engine}/formulas">Math</a></div></article>"""
+            <a href="/api/verticals/{engine}/formulas">Math</a></nav></article>"""
         )
     build = _build_info()
     revision = build["build"]["revision"]
@@ -364,25 +372,24 @@ def _landing_page() -> str:
     store = STORE.status()
     source_ready = _source_ready(build)
     contract_chip = "<strong>REACHABLE</strong>" if source_ready else "UNAVAILABLE"
-    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+    return f"""<!doctype html><html lang="en" data-szl-public-experience-v3="true"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>SZL Vertical Services</title><style>
 :root{{color-scheme:dark;--bg:#05070a;--panel:#0d1219;--line:#263241;--ink:#f4f7fb;--muted:#98a6b8;--accent:#7dd3fc;--good:#6ee7b7}}
-*{{box-sizing:border-box;min-inline-size:0}}html{{overflow-x:clip}}body{{margin:0;background:radial-gradient(circle at 80% 0,#10273a 0,transparent 30%),var(--bg);color:var(--ink);font:15px/1.55 system-ui,sans-serif}}
+*{{box-sizing:border-box;min-inline-size:0}}body{{margin:0;background:radial-gradient(circle at 80% 0,#10273a 0,transparent 30%),var(--bg);color:var(--ink);font:15px/1.55 system-ui,sans-serif}}:where(h1,h2,p,small,span,footer,.brand,.eyebrow,a){{overflow-wrap:anywhere}}
 a{{color:inherit;min-height:44px;display:inline-flex;align-items:center}}a:focus-visible{{outline:3px solid var(--accent);outline-offset:3px}}
-.shell{{width:min(1180px,100%);margin:auto;padding:clamp(22px,5vw,64px)}}.top{{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}}
+.shell{{width:min(1180px,100%);margin:auto;padding:clamp(18px,4vw,56px);container-type:inline-size}}.top{{display:flex;justify-content:space-between;gap:8px 24px;flex-wrap:wrap;align-items:center}}.navigation{{display:flex;gap:8px 20px;flex-wrap:wrap}}.skip{{position:absolute;transform:translateY(-160%);padding:12px;background:var(--panel);z-index:2}}.skip:focus{{transform:none}}
 .brand,.eyebrow,.mono{{font:700 11px/1.4 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase}}.brand,.eyebrow{{color:var(--accent)}}
-h1{{font-size:clamp(48px,9vw,104px);line-height:.88;letter-spacing:-.055em;margin:40px 0 24px;max-width:10ch}}.lede{{font-size:clamp(17px,2vw,22px);max-width:72ch;color:var(--muted)}}
+h1{{font-size:clamp(40px,8cqi,88px);line-height:1;letter-spacing:-.055em;margin:40px 0 24px;max-width:13ch;text-wrap:balance}}.lede{{font-size:clamp(17px,2cqi,22px);max-width:65ch;color:var(--muted)}}
 .proof{{display:flex;gap:8px;flex-wrap:wrap;margin:28px 0 42px}}.pill{{border:1px solid var(--line);border-radius:999px;padding:8px 12px;color:var(--muted)}}.pill strong{{color:var(--good)}}
-.grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}}.card{{background:linear-gradient(145deg,rgba(255,255,255,.035),transparent),var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;min-height:280px;display:flex;flex-direction:column}}
+.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px;scroll-margin-top:20px}}.card{{background:linear-gradient(145deg,rgba(255,255,255,.035),transparent),var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;min-height:280px;display:flex;flex-direction:column}}
 .card h2{{font-size:26px;margin:14px 0 8px}}.card p,.card small{{color:var(--muted);margin:0 0 14px}}.actions{{display:flex;gap:14px;flex-wrap:wrap;margin-top:auto}}.actions a{{text-decoration:none;border-bottom:1px solid var(--accent)}}
 .boundary{{margin-top:18px;padding:18px;border:1px solid var(--line);border-radius:14px;color:var(--muted)}}footer{{margin-top:36px;color:var(--muted)}}
-@media(max-width:900px){{.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}@media(max-width:620px){{.grid{{grid-template-columns:1fr}}h1{{font-size:clamp(46px,18vw,72px)}}}}
 @media(pointer:coarse){{a{{min-height:48px}}}}@media(prefers-reduced-motion:reduce){{*,*::before,*::after{{scroll-behavior:auto!important;animation:none!important;transition:none!important}}}}
-</style></head><body><main class="shell"><div class="top"><div class="brand">SZL / VERTICAL SERVICES V{VERSION}</div><a href="/docs">OpenAPI</a></div>
-<h1>Six engines. One second brain. One governed intelligence fabric.</h1><p class="lede">Real vertical calculations, official-source connectors, Living Anatomy, formula bindings, source identity, governed memory, Hatun review, model routing, kernel gates, and receipts—without fabricated feeds or silent authority.</p>
-<div class="proof"><span class="pill">{contract_chip} Python runtime contract</span><span class="pill">source {html.escape(revision_short)}</span><span class="pill">store {html.escape(store['durability'])}</span><span class="pill">3 model routes</span><span class="pill">6 kernel contracts</span><span class="pill">effectors disabled</span></div>
-<section class="grid">{''.join(cards)}</section><section class="boundary"><strong>Operational boundary:</strong> official-source connectors are fixed and bounded. Connector observations are hash-addressed and stored under a hashed session scope. Model invocation remains unavailable until an operator binds a fixed allowlisted endpoint, credential, protocol, and exact declared revision. Hatun can recommend review or abstention only. NOAA AIS is historical official planning data—not represented as a live vessel feed. Trading, legal advice, cyber effectors, person-level prospecting, and unattended consequential actions remain disabled.</section>
+</style></head><body><a class="skip" href="#engines">Skip to engines</a><main class="shell"><header class="top"><div class="brand">SZL / VERTICAL SERVICES V{VERSION}</div><nav class="navigation" aria-label="Explore vertical services"><a href="#engines">Engines</a><a href="#evidence">Evidence</a><a href="/docs">API</a><a href="https://github.com/szl-holdings/vertical-services">Source</a></nav></header>
+<h1>Six engines. One second brain.</h1><p class="lede">Explore domain calculations, public-source evidence and governed research. Open a workspace, inspect its contract, and check the source and readiness behind each result.</p>
+<section class="proof" id="evidence" aria-label="Runtime evidence"><span class="pill">{contract_chip} Python runtime contract</span><span class="pill">source {html.escape(revision_short)}</span><span class="pill">store {html.escape(store['durability'])}</span><span class="pill">3 model routes</span><span class="pill">6 kernel contracts</span><span class="pill">effectors disabled</span></section>
+<section class="grid" id="engines" aria-label="Six vertical engines">{''.join(cards)}</section><section class="boundary"><strong>Operational boundary:</strong> official-source connectors are fixed and bounded. Connector observations are hash-addressed and stored under a hashed session scope. Model invocation remains unavailable until an operator binds a fixed allowlisted endpoint, credential, protocol, and exact declared revision. Hatun can recommend review or abstention only. NOAA AIS is historical official planning data—not represented as a live vessel feed. Trading, legal advice, cyber effectors, person-level prospecting, and unattended consequential actions remain disabled.</section>
 <footer class="mono">{SOURCE_REPOSITORY} · VERSION {VERSION} · <a href="/api/build-info">BUILD INFO</a> · <a href="/readyz">READINESS</a> · <a href="/api/intelligence">INTELLIGENCE CATALOG</a></footer></main></body></html>"""
 
 

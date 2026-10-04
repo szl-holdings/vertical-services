@@ -198,6 +198,12 @@ section{{padding-block:clamp(62px,8vw,112px);border-bottom:1px solid var(--line)
 pre{{margin:0;max-height:500px;overflow:auto;padding:22px;border:1px solid var(--line);border-radius:18px;background:#020306;color:#d9e3ec;font:12px/1.6 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}}.boundary{{margin-top:20px;padding:20px;border:1px solid var(--line);border-radius:16px;color:var(--muted);background:color-mix(in srgb,var(--panel) 74%,transparent)}}footer{{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;padding-block:30px;color:var(--faint);font:700 10px/1.4 ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase}}
 @media(max-width:920px){{.hero,.section-head{{grid-template-columns:1fr}}.hero{{min-height:0}}.instrument{{min-height:360px}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}.stats{{grid-template-columns:repeat(2,minmax(0,1fr))}}.stat:nth-child(2){{border-right:0}}.stat:nth-child(-n+2){{border-bottom:1px solid var(--line)}}}}
 @media(max-width:620px){{.rail-inner{{grid-template-columns:1fr;gap:0}}.family{{justify-content:flex-start}}h1{{font-size:clamp(54px,18vw,82px)}}.grid,.split{{grid-template-columns:1fr}}.instrument-copy{{grid-template-columns:1fr}}.reading{{border-right:0;border-bottom:1px solid var(--line)}}.reading:last-child{{border-bottom:0}}}}
+/* Size against the available content width, including browser and CSS zoom. */
+.shell{{container-type:inline-size}}:where(h1,h2,h3,p,li,span,small,strong,a){{overflow-wrap:anywhere}}
+h1{{font-size:clamp(40px,10cqi,112px);line-height:.96;max-width:12ch}}
+.rail{{position:relative}}.rail-inner{{display:flex;flex-wrap:wrap;gap:0 18px}}.identity{{flex:1 1 160px}}.family{{flex:1 1 520px;justify-content:flex-start}}
+@container(max-width:54rem){{.hero,.section-head{{grid-template-columns:minmax(0,1fr)}}.hero{{min-height:0}}.grid,.split,.stats{{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}}}}
+@container(max-width:30rem){{.instrument-copy{{grid-template-columns:minmax(0,1fr)}}.reading{{border-right:0;border-bottom:1px solid var(--line)}}.reading:last-child{{border-bottom:0}}}}
 @media(pointer:coarse){{a,button{{min-height:48px}}}}@media(prefers-reduced-motion:reduce){{*,*::before,*::after{{animation:none!important;transition:none!important;scroll-behavior:auto!important}}}}@media(forced-colors:active){{.instrument::before{{display:none}}}}
 </style>
 </head>
