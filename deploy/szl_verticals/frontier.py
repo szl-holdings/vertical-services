@@ -452,7 +452,7 @@ h1{{font-size:clamp(40px,10cqi,112px);line-height:.96;letter-spacing:-.06em;marg
 footer{{display:flex;gap:18px;justify-content:space-between;flex-wrap:wrap;margin-top:42px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted)}}
 code{{overflow-wrap:anywhere;color:var(--accent2)}}
 @media(max-width:900px){{.hero{{grid-template-columns:1fr}}.instrument{{min-height:260px}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
-@media(max-width:620px){{.shell{{padding-inline:18px}}.grid{{grid-template-columns:1fr}}.nav{{width:100%}}.nav a{{flex:1;justify-content:center}}}}
+@media(max-width:620px){{.shell{{padding-inline:18px}}.grid{{grid-template-columns:1fr}}.nav{{width:100%}}.nav a{{flex:1 1 92px;justify-content:center}}}}
 @container(max-width:54rem){{.hero{{grid-template-columns:minmax(0,1fr)}}.grid{{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}}}}
 @media(pointer:coarse){{a,button{{min-height:48px}}}}
 @media(prefers-reduced-motion:reduce){{*,*::before,*::after{{animation:none!important;transition:none!important;scroll-behavior:auto!important}}}}
