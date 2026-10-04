@@ -10,6 +10,29 @@ license: apache-2.0
 short_description: Source-bound FastAPI fabric for six SZL verticals.
 ---
 
+<p><a href="https://huggingface.co/spaces/SZLHOLDINGS/szl-command-lab"><img src="https://raw.githubusercontent.com/szl-holdings/.github/main/profile/assets/szl/logos/szl_mark_holographic.svg" alt="SZL Holdings" width="112" /></a></p>
+
+# SZL Vertical Services
+
+Inspect the shared operational services and source-bound evidence used by the domain applications.
+
+**Artifact:** Shared domain service application · **Stage:** Per-route evidence and admission
+
+[Explore in Command Lab](https://huggingface.co/spaces/SZLHOLDINGS/szl-command-lab) · [Build](https://github.com/szl-holdings/vertical-services) · [Evidence](https://github.com/szl-holdings/vertical-services/blob/88f465c10034f1e5c3bbd806fb36297bdf1e2861/README.md)
+
+## Before you use it
+
+- The default persistence mode is EPHEMERAL\_FILE; process readiness does not establish durable storage.
+- Missing sources, unbound models and incompatible revisions remain unavailable.
+- Advisory scores and unsigned replies do not certify a decision; inspect the exact route’s readiness and evidence.
+
+<details>
+<summary>Technical details and original evidence</summary>
+
+The retained source below is exact and may contain historical observations. Its dates, use restrictions, licenses and evidence boundaries continue to apply.
+
+<!-- SZL-PRESERVED-TECHNICAL-BODY:START -->
+
 # SZL Vertical Services
 
 A source-bound FastAPI operational fabric for six canonical SZL verticals.
@@ -191,3 +214,7 @@ failure exit remain unchanged. A failed connector probe does not undo a verified
 publication or establish that the other connectors are operational.
 
 Public runtime: `SZLHOLDINGS/vertical-services`.
+
+<!-- SZL-PRESERVED-TECHNICAL-BODY:END -->
+
+</details>
