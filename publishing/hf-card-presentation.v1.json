@@ -14,7 +14,7 @@
       "observed_hub_card_sha256": "707a24c2122224e3d493529dc9bc1158fadc4f58a39cada59c63e183c7798cfc",
       "observed_at": "2026-10-04T16:11:35.181248+00:00",
       "canonical_publisher": "https://github.com/szl-holdings/vertical-services/blob/88f465c10034f1e5c3bbd806fb36297bdf1e2861/.github/workflows/hf-space.yml",
-      "publication_trigger": "PROTECTED_MAIN_PUSH",
+      "publication_trigger": "PROTECTED_MAIN_PUSH_WITH_ADMITTED_LOCAL_CREDENTIAL_OR_ESTABLISHED_A11OY_DELEGATION",
       "publication_state": "SOURCE_REVIEW_PENDING",
       "artifact": "Shared domain service application",
       "stage": "Per-route evidence and admission",
@@ -26,7 +26,8 @@
       "bytes_after": 11281,
       "front_matter_preserved": true,
       "original_body_preserved": true,
-      "provider_or_runtime_promotion": false
+      "provider_or_runtime_promotion": false,
+      "credential_boundary": "The existing push router records DELEGATED and performs no publication when an admitted local credential is absent. A delegated route remains controlled by the existing A11oy writer; the label is not publication evidence."
     }
   ]
 }
