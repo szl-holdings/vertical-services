@@ -49,7 +49,7 @@ jobs:
       - name: Set up exact Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12.10"
+          python-version: "3.12.14"
       - name: Compile intelligence and showcase modules
         run: python -m py_compile deploy/szl_verticals/intelligence.py deploy/szl_verticals/showcase.py deploy/app.py tests/test_intelligence_fabric.py
 
@@ -71,7 +71,7 @@ jobs:
       - name: Set up exact Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12.10"
+          python-version: "3.12.14"
       - name: Wait for exact deployment and attest public routes
         env:
           EXPECTED_SHA: ${{ github.sha }}
