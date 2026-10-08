@@ -43,7 +43,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12.10'
+          python-version: '3.12.14'
       - name: Validate manual dispatch source selection
         if: github.event_name == 'workflow_dispatch'
         run: >-
@@ -112,7 +112,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12.10'
+          python-version: '3.12.14'
       - name: Install pinned runtime
         run: python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt
       - name: Verify canonical vertical
@@ -183,7 +183,7 @@ jobs:
         if: steps.route.outputs.mode == 'local'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12.10'
+          python-version: '3.12.14'
       - name: Install pinned Hugging Face client
         if: steps.route.outputs.mode == 'local'
         run: python -m pip install --disable-pip-version-check --no-cache-dir 'huggingface_hub==2.0.0'
@@ -232,7 +232,7 @@ jobs:
     concurrency:
       group: hf-write/space/SZLHOLDINGS/vertical-services
       cancel-in-progress: false
-    uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@c889276e51e7d954c4bba8b216f86fc7577721fa
+    uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@3354b2beac2315c6887f6790d1078e143cd5a14b
     with:
       hf-repo: SZLHOLDINGS/vertical-services
       ref: ${{ github.sha }}
@@ -309,7 +309,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12.10'
+          python-version: '3.12.14'
       - name: Install pinned probe client
         run: python -m pip install --disable-pip-version-check --no-cache-dir 'httpx==0.28.1'
       - name: Verify live source and runtime identity parity
