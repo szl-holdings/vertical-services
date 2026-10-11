@@ -52,7 +52,7 @@ try {
       page.on('pageerror', error => errors.push(error.message));
       const response = await page.goto(target.href, { waitUntil: 'domcontentloaded' });
       await page.evaluate(async () => { await document.fonts.ready; });
-      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await page.waitForTimeout(750);
       if (zoom !== 1) await page.evaluate(value => { document.documentElement.style.zoom = String(value); }, zoom);
       const measured = await page.evaluate(() => {
         const viewport = document.documentElement.clientWidth;
