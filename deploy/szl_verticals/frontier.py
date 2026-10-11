@@ -34,6 +34,7 @@ from .core import SessionScope, StrictModel, build_info
 from .connector_specs import CONNECTORS
 from .evidence import HEX64, resolve_evidence
 from .operational import STORE, vertical_readiness
+from .presentation import NATIVE_ICON_HTML, NATIVE_INTERFACE_CSS, NATIVE_TOKENS_CSS
 from .profiles import ALIASES, VERTICALS
 from .replay_store import EvidenceNotFound
 
@@ -384,13 +385,14 @@ def _experience_html(vertical: str) -> str:
     ready_class = "good" if readiness["ready"] else "warn"
 
     return f"""<!doctype html>
-<html lang="en" data-vertical="{html.escape(canonical)}" data-motif="{html.escape(experience['motif'])}">
+<html lang="en" data-native-view="workspace" data-vertical="{html.escape(canonical)}" data-motif="{html.escape(experience['motif'])}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <title>{html.escape(experience['title'])} · SZL Holdings</title>
 <style>
+{NATIVE_TOKENS_CSS}
 :root{{
   color-scheme:dark;
   --bg:{experience['background']};
@@ -457,18 +459,19 @@ code{{overflow-wrap:anywhere;color:var(--accent2)}}
 @media(pointer:coarse){{a,button{{min-height:48px}}}}
 @media(prefers-reduced-motion:reduce){{*,*::before,*::after{{animation:none!important;transition:none!important;scroll-behavior:auto!important}}}}
 @media(forced-colors:active){{*{{forced-color-adjust:auto}}.field{{display:none}}}}
+{NATIVE_INTERFACE_CSS}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to command surface</a><div class="field" aria-hidden="true"></div>
 <main id="main" class="shell">
-<header class="top"><div class="brand">SZL / {html.escape(experience['kicker'])}</div>
+<header class="top"><div class="brand">{NATIVE_ICON_HTML}<span>SZL / {html.escape(experience['kicker'])}</span></div>
 <nav class="nav" aria-label="Command links"><a href="/">Estate</a><a href="/docs">API</a><a href="/api/verticals/{html.escape(canonical)}/frontier">Contract</a></nav></header>
 <section class="hero"><div><div class="eyebrow">{html.escape(profile['domain'])} · {html.escape(experience['archetype'])}</div>
 <h1>{html.escape(experience['title'])}</h1><p class="lede">{html.escape(profile['mission'])}</p>
 <div class="proof"><span class="pill {ready_class}">{ready_label}</span><span class="pill">SOURCE {html.escape(revision_short)}</span><span class="pill">Λ ADVISORY ONLY</span><span class="pill">SECOND BRAIN SESSION-SCOPED</span></div></div>
 <aside class="instrument" aria-label="Current contract"><div class="mono">SIGNATURE VIEW</div><strong>{html.escape(experience['signature_view'])}</strong>
-<ul><li><span>Runtime</span><strong>{html.escape(canonical)}</strong></li><li><span>Alias</span><strong>{html.escape(alias_note)}</strong></li>
+<ul><li><span>Runtime</span><strong>{html.escape(canonical)}</strong></li><li><span>Alias</span><strong>{alias_note}</strong></li>
 <li><span>Connectors</span><strong>{len(connectors)} BOUNDED</strong></li><li><span>Formulas</span><strong>{len(formulas)} BOUND</strong></li>
 {consolidation_rows}</ul></aside></section>
 <section class="section"><div class="section-head"><div><div class="eyebrow">LIVING ANATOMY / FORMULA ORGAN</div><h2>Math with boundaries.</h2></div>

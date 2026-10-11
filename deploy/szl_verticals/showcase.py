@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 
 from .contract import canonical_vertical
 from .intelligence import intelligence_profile
+from .presentation import NATIVE_ICON_HTML, NATIVE_INTERFACE_CSS, NATIVE_TOKENS_CSS
 from .profiles import CANONICAL_VERTICALS, VERTICALS
 
 showcase = APIRouter(tags=["vertical-showcase"])
@@ -169,7 +170,7 @@ def _page(vertical: str) -> str:
     plan = _plan_example(canonical, first_task, intel["policy"]["lambda_floor"])
 
     return f"""<!doctype html>
-<html lang="en" data-vertical="{_esc(canonical)}" data-motif="{_esc(experience['motif'])}">
+<html lang="en" data-native-view="intelligence" data-vertical="{_esc(canonical)}" data-motif="{_esc(experience['motif'])}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -177,12 +178,13 @@ def _page(vertical: str) -> str:
 <title>{_esc(product['product'])} Intelligence · SZL Holdings</title>
 <meta name="description" content="{_esc(intel['primary_job'])}">
 <style>
+{NATIVE_TOKENS_CSS}
 :root{{color-scheme:dark;--bg:{experience['background']};--panel:{experience['panel']};--ink:#f5f7fb;--muted:#9da8b6;--faint:#687486;--accent:{experience['accent']};--accent2:{experience['accent_secondary']};--line:color-mix(in srgb,var(--accent) 22%,transparent);--good:#6ee7b7;--hold:#f4c873;--bad:#ff7886;--max:1240px}}
 *{{box-sizing:border-box;min-inline-size:0}}html{{overflow-x:clip;background:var(--bg);scroll-behavior:smooth}}body{{margin:0;overflow-x:clip;color:var(--ink);font:15px/1.58 Inter,"Segoe UI",system-ui,sans-serif;background:radial-gradient(circle at 82% 5%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 33rem),radial-gradient(circle at 8% 55%,color-mix(in srgb,var(--accent2) 9%,transparent),transparent 28rem),var(--bg)}}
 a{{color:inherit}}:where(a,button,summary,[tabindex]):focus-visible{{outline:3px solid var(--accent);outline-offset:3px}}:where(h1,h2,h3){{letter-spacing:-.045em;text-wrap:balance}}:where(p,li){{text-wrap:pretty}}code,.mono,.micro{{font-family:"SFMono-Regular","Cascadia Code",ui-monospace,monospace}}
 .skip{{position:fixed;z-index:99;left:12px;top:-80px;padding:10px 14px;background:#fff;color:#000}}.skip:focus{{top:12px}}
 .rail{{position:sticky;top:0;z-index:50;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(20px) saturate(120%)}}
-.rail-inner{{width:min(var(--max),calc(100% - 28px));margin:auto;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:18px;min-height:64px}}.identity{{display:flex;align-items:center;gap:10px;text-decoration:none;min-height:48px}}.mark{{width:28px;height:28px;border:1px solid var(--line);border-radius:9px;background:conic-gradient(from 20deg,var(--accent),transparent 28%,var(--accent2),transparent 68%,var(--accent));box-shadow:0 0 24px color-mix(in srgb,var(--accent) 22%,transparent)}}.identity strong{{font-size:14px}}.family{{display:flex;justify-content:flex-end;gap:5px;overflow-x:auto;scroll-snap-type:x proximity;padding:7px 0;scrollbar-width:thin}}.family a{{flex:0 0 auto;min-height:44px;display:inline-flex;align-items:center;padding:7px 11px;border:1px solid transparent;border-radius:9px;color:var(--muted);font:700 10px/1.2 ui-monospace,monospace;letter-spacing:.08em;text-decoration:none;text-transform:uppercase;scroll-snap-align:start}}.family a:hover,.family a[aria-current="page"]{{border-color:var(--line);color:var(--ink);background:color-mix(in srgb,var(--panel) 82%,transparent)}}
+.rail-inner{{width:min(var(--max),calc(100% - 28px));margin:auto;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:18px;min-height:64px}}.identity{{display:flex;align-items:center;gap:10px;text-decoration:none;min-height:48px}}.identity strong{{font-size:14px}}.family{{display:flex;justify-content:flex-end;gap:5px;overflow-x:auto;scroll-snap-type:x proximity;padding:7px 0;scrollbar-width:thin}}.family a{{flex:0 0 auto;min-height:44px;display:inline-flex;align-items:center;padding:7px 11px;border:1px solid transparent;border-radius:9px;color:var(--muted);font:700 10px/1.2 ui-monospace,monospace;letter-spacing:.08em;text-decoration:none;text-transform:uppercase;scroll-snap-align:start}}.family a:hover,.family a[aria-current="page"]{{border-color:var(--line);color:var(--ink);background:color-mix(in srgb,var(--panel) 82%,transparent)}}
 .shell{{position:relative;width:min(var(--max),100%);margin:auto;padding-inline:clamp(18px,5vw,70px)}}.hero{{min-height:min(830px,88vh);display:grid;grid-template-columns:minmax(0,1.14fr) minmax(310px,.86fr);gap:clamp(36px,7vw,100px);align-items:center;padding-block:clamp(72px,10vw,150px);border-bottom:1px solid var(--line)}}.eyebrow,.micro{{color:var(--accent);font-size:10px;font-weight:750;line-height:1.4;letter-spacing:.16em;text-transform:uppercase}}h1{{max-width:10ch;margin:16px 0 0;font-size:clamp(56px,8.8vw,124px);font-weight:520;line-height:.84;letter-spacing:-.075em}}.lede{{max-width:64ch;margin:26px 0 0;color:var(--muted);font-size:clamp(17px,1.7vw,22px)}}.actions{{display:flex;flex-wrap:wrap;gap:10px;margin-top:30px}}.button{{min-height:48px;display:inline-flex;align-items:center;justify-content:center;padding:10px 16px;border:1px solid var(--line);border-radius:10px;background:color-mix(in srgb,var(--panel) 82%,transparent);font:700 11px/1.2 ui-monospace,monospace;letter-spacing:.07em;text-decoration:none;text-transform:uppercase}}.button.primary{{border-color:color-mix(in srgb,var(--accent) 52%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 18%,transparent),color-mix(in srgb,var(--accent2) 8%,transparent))}}
 .instrument{{position:relative;min-height:440px;overflow:hidden;border:1px solid var(--line);border-radius:26px;background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 9%,transparent),transparent 44%),color-mix(in srgb,var(--panel) 90%,transparent);box-shadow:0 35px 110px rgb(0 0 0/.38)}}.instrument::before{{position:absolute;inset:0;opacity:.58;content:""}}
 [data-motif="threat-shield"] .instrument::before{{inset:13% 25%;clip-path:polygon(50% 0,96% 18%,84% 74%,50% 100%,16% 74%,4% 18%);border:1px solid var(--accent);background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 14%,transparent),transparent)}}
@@ -205,11 +207,12 @@ h1{{font-size:clamp(40px,10cqi,112px);line-height:.96;max-width:12ch}}
 @container(max-width:54rem){{.hero,.section-head{{grid-template-columns:minmax(0,1fr)}}.hero{{min-height:0}}.grid,.split,.stats{{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}}}}
 @container(max-width:30rem){{.instrument-copy{{grid-template-columns:minmax(0,1fr)}}.reading{{border-right:0;border-bottom:1px solid var(--line)}}.reading:last-child{{border-bottom:0}}}}
 @media(pointer:coarse){{a,button{{min-height:48px}}}}@media(prefers-reduced-motion:reduce){{*,*::before,*::after{{animation:none!important;transition:none!important;scroll-behavior:auto!important}}}}@media(forced-colors:active){{.instrument::before{{display:none}}}}
+{NATIVE_INTERFACE_CSS}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to intelligence room</a>
-<header class="rail"><div class="rail-inner"><a class="identity" href="/"><span class="mark" aria-hidden="true"></span><strong>SZL / {_esc(product['product'])}</strong></a><nav class="family" aria-label="Vertical intelligence rooms">{_vertical_nav(canonical)}</nav></div></header>
+<header class="rail"><div class="rail-inner"><a class="identity" href="/">{NATIVE_ICON_HTML}<strong>SZL / {_esc(product['product'])}</strong></a><nav class="family" aria-label="Vertical intelligence rooms">{_vertical_nav(canonical)}</nav></div></header>
 <main id="main">
 <div class="shell"><section class="hero"><div><p class="eyebrow">{_esc(product['domain'])} · GOVERNED INTELLIGENCE</p><h1>{_esc(experience['title'])}</h1><p class="lede">{_esc(intel['primary_job'])}</p><div class="actions"><a class="button primary" href="/experience/{_esc(canonical)}">Open command surface</a><a class="button" href="/api/verticals/{_esc(canonical)}/intelligence">Inspect contract</a><a class="button" href="/api/verticals/{_esc(canonical)}/second-brain">Second Brain API</a></div></div><aside class="instrument" aria-label="Vertical intelligence instrument"><div class="instrument-copy"><div class="reading"><small>Model bindings</small><strong>{bound_models}/{len(models)} BOUND</strong></div><div class="reading"><small>Kernel contracts</small><strong>{len(intel['kernels'])} ACTIVE</strong></div><div class="reading"><small>Authority</small><strong>HUMAN BIND</strong></div></div></aside></section></div>
 <div class="band"><div class="shell stats"><div class="stat"><strong>{len(tasks)}</strong><small>bounded model tasks</small></div><div class="stat"><strong>{len(models)}</strong><small>approved model assets</small></div><div class="stat"><strong>{len(intel['kernels'])}</strong><small>kernel contracts</small></div><div class="stat"><strong>{intel['policy']['lambda_floor']:.2f}</strong><small>advisory inference floor</small></div></div></div>
