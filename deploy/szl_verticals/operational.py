@@ -19,6 +19,7 @@ from .contract import (
 from .core import SessionScope, build_info
 from .briefs import WeeklyBriefRequest
 from .official_connectors import fetch_connector
+from .published_briefs import ArchiveUnavailable, published_brief_summary, published_briefs
 from .store import STORE
 
 operational = APIRouter(prefix="/api/verticals", tags=["operational-fabric"])
@@ -173,6 +174,7 @@ def vertical_second_brain(
                 for item in _briefs_for(canonical, session, min(limit, 25))
             ],
         },
+        "published_briefs": published_brief_summary(canonical, min(limit, 25)),
         "readiness": readiness,
         "effectors_enabled": False,
         "human_approval_required": True,
@@ -185,6 +187,14 @@ def _briefs_for(vertical: str, session: str, limit: int) -> list[dict[str, Any]]
         return STORE.recent_briefs(vertical, session, limit)
     except (OSError, sqlite3.Error, RuntimeError):
         raise HTTPException(503, "brief store unavailable") from None
+
+
+@operational.get("/{vertical}/published-briefs")
+def vertical_published_briefs(vertical: str, limit: int = Query(10, ge=1, le=25)) -> dict[str, Any]:
+    try:
+        return published_briefs(vertical, limit)
+    except ArchiveUnavailable:
+        raise HTTPException(503, "published brief archive unavailable") from None
 
 
 @operational.get("/{vertical}/briefs")

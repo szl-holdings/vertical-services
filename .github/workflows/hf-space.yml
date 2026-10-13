@@ -84,7 +84,8 @@ jobs:
             /finance/healthz /terra/healthz /counsel/healthz \
             /api/verticals/sentra/anatomy /api/verticals/lyte/formulas \
             /api/verticals/killinchu/connectors /api/verticals/finance/readyz \
-            /api/verticals/terra/anatomy /api/verticals/counsel/formulas; do
+            /api/verticals/terra/anatomy /api/verticals/counsel/formulas \
+            /api/verticals/terra/published-briefs; do
             curl --fail --silent --show-error "http://127.0.0.1:7860${path}" >/dev/null
           done
           python tools/verify_runtime_identity.py \
@@ -245,7 +246,7 @@ jobs:
       require-default-branch-tip: true
       restart-space: true
       wait-running: 1200
-      smoke-paths: '["/","/healthz","/readyz","/api/build-info","/api/source","/.well-known/szl-source.json","/api/catalog","/api/verticals","/sentra/healthz","/lyte/healthz","/killinchu/healthz","/vessels/healthz","/finance/healthz","/terra/healthz","/counsel/healthz","/api/verticals/sentra/anatomy","/api/verticals/lyte/formulas","/api/verticals/killinchu/connectors","/api/verticals/finance/readyz","/api/verticals/terra/anatomy","/api/verticals/counsel/formulas"]'
+      smoke-paths: '["/","/healthz","/readyz","/api/build-info","/api/source","/.well-known/szl-source.json","/api/catalog","/api/verticals","/sentra/healthz","/lyte/healthz","/killinchu/healthz","/vessels/healthz","/finance/healthz","/terra/healthz","/counsel/healthz","/api/verticals/sentra/anatomy","/api/verticals/lyte/formulas","/api/verticals/killinchu/connectors","/api/verticals/finance/readyz","/api/verticals/terra/anatomy","/api/verticals/counsel/formulas","/api/verticals/terra/published-briefs"]'
     secrets:
       HF_TOKEN: ${{ secrets.HF_ORG_TOKEN || secrets.HF_ORG_TOKEN1 || secrets.HF_TOKEN || secrets.HF_WRITE_TOKEN }}
 
