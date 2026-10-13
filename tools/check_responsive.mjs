@@ -14,7 +14,7 @@ const workingTreeDirty = Boolean(execFileSync('git', ['status', '--porcelain'], 
 const { chromium } = await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE_PATH).href);
 const directory = process.env.RESPONSIVE_REPORT_DIR || 'reports/responsive-ui';
 fs.mkdirSync(directory, { recursive: true });
-const report = { schema: 'szl.responsive-preview/v1', source_revision: source, working_tree_dirty: workingTreeDirty, observed_at: new Date().toISOString(), scope: 'local layout preview; external data and authority are not qualified; zoom cases apply CSS zoom', live_verified: false, effects_executed: false, cases: [], complete: false };
+const report = { schema: 'szl.responsive-preview/v1', source_revision: source, working_tree_dirty: workingTreeDirty, observed_at: new Date().toISOString(), scope: 'local layout preview; external data and authority are not qualified; zoom cases apply CSS zoom', live_verified: false, effects_executed: false, cases: [], tap_target_controls: [], complete: false };
 const routes = (process.env.RESPONSIVE_ROUTES || '/').split(',');
 const cases = [
   ['phone-320', 320, 800, 1], ['phone-375', 375, 812, 1],
@@ -25,6 +25,15 @@ const cases = [
   ['forced-colors', 375, 812, 1], ['no-script', 375, 812, 1],
 ];
 let browser;
+function smallNavigationTargets() {
+  return [...document.querySelectorAll('.navigation a')].flatMap(element => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || rect.width <= 0 || rect.height <= 0) return [];
+    return rect.width + .5 < 44 || rect.height + .5 < 44
+      ? [{ text: element.textContent.trim(), width: rect.width, height: rect.height }] : [];
+  });
+}
 try {
   let listening = false;
   for (let attempt = 0; attempt < 80; attempt++) {
@@ -37,7 +46,7 @@ try {
     const target = new URL(route, base);
     assert.equal(target.origin, new URL(base).origin, 'routes must stay in the local preview');
     for (const [name, width, height, zoom] of cases) {
-      const context = await browser.newContext({ viewport: { width, height }, reducedMotion: 'reduce', forcedColors: name === 'forced-colors' ? 'active' : 'none', javaScriptEnabled: name !== 'no-script' });
+      const context = await browser.newContext({ viewport: { width, height }, hasTouch: width <= 768, reducedMotion: 'reduce', forcedColors: name === 'forced-colors' ? 'active' : 'none', javaScriptEnabled: name !== 'no-script' });
       const blockedRequests = [];
       await context.route('**/*', intercepted => {
         const request = intercepted.request();
@@ -54,6 +63,20 @@ try {
       await page.evaluate(async () => { await document.fonts.ready; });
       await page.waitForTimeout(750);
       if (zoom !== 1) await page.evaluate(value => { document.documentElement.style.zoom = String(value); }, zoom);
+      if (route === '/' && name === 'phone-320') {
+        for (const [dimension, css] of [
+          ['width', 'min-width:0!important;width:22px!important;max-width:22px!important'],
+          ['height', 'min-height:0!important;height:22px!important;max-height:22px!important'],
+        ]) {
+          const fault = await page.addStyleTag({ content: `.navigation a[href="/docs"]{${css}}` });
+          try {
+            const detected = await page.evaluate(smallNavigationTargets);
+            assert.ok(detected.some(row => row.text === 'API' && row[dimension] < 43.5), `undersized navigation ${dimension} must be detected`);
+            report.tap_target_controls.push({ dimension, detected });
+          } finally { await fault.evaluate(element => element.remove()); }
+        }
+      }
+      const smallNavigation = await page.evaluate(smallNavigationTargets);
       const measured = await page.evaluate(() => {
         const viewport = document.documentElement.clientWidth;
         const visible = element => {
@@ -75,8 +98,8 @@ try {
         const aliasMarkupLeaked = document.documentElement.dataset.nativeView === 'workspace' && /<\/?code>/.test(document.querySelector('.instrument').innerText);
         return { title: document.title, has_main: Boolean(document.querySelector('main')), h1_count: document.querySelectorAll('h1').length, text_characters: document.body.innerText.trim().length, native_icon: icon, small_evidence_labels: smallLabels, hidden_navigation: hiddenNavigation, alias_markup_leaked: aliasMarkupLeaked, overflow_px: Math.max(0, document.documentElement.scrollWidth - viewport), blocking_overlays: overlays, clipped_headings: clippedHeadings, error_overlay: Boolean(document.querySelector('[data-nextjs-dialog],vite-error-overlay')) };
       });
-      const result = { route, case: name, width, height, zoom, http_status: response?.status() ?? null, ...measured, page_errors: errors, blocked_requests: blockedRequests };
-      result.passed = result.http_status === 200 && measured.has_main && measured.h1_count === 1 && measured.text_characters > 100 && measured.overflow_px <= 1 && measured.blocking_overlays.length === 0 && measured.clipped_headings.length === 0 && measured.native_icon?.loaded && measured.native_icon.width === 32 && measured.native_icon.height === 32 && measured.native_icon.clear_space >= 8 && measured.small_evidence_labels.length === 0 && measured.hidden_navigation.length === 0 && !measured.alias_markup_leaked && !measured.error_overlay && errors.length === 0 && blockedRequests.length === 0;
+      const result = { route, case: name, width, height, zoom, http_status: response?.status() ?? null, ...measured, small_navigation_targets: smallNavigation, page_errors: errors, blocked_requests: blockedRequests };
+      result.passed = result.http_status === 200 && measured.has_main && measured.h1_count === 1 && measured.text_characters > 100 && measured.overflow_px <= 1 && measured.blocking_overlays.length === 0 && measured.clipped_headings.length === 0 && measured.native_icon?.loaded && measured.native_icon.width === 32 && measured.native_icon.height === 32 && measured.native_icon.clear_space >= 8 && measured.small_evidence_labels.length === 0 && measured.hidden_navigation.length === 0 && smallNavigation.length === 0 && !measured.alias_markup_leaked && !measured.error_overlay && errors.length === 0 && blockedRequests.length === 0;
       if (!result.passed || ['phone-320', 'desktop-1440', 'zoom-400'].includes(name)) {
         const filename = `${route.replace(/[^a-z0-9]+/gi, '-') || 'home'}--${name}.png`;
         await page.screenshot({ path: path.join(directory, filename) });
