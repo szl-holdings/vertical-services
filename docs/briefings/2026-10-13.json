@@ -1,0 +1,427 @@
+{
+  "schema": "szl.weekly-research-bundle/v1",
+  "research_window": {
+    "start": "2026-10-06",
+    "end": "2026-10-13"
+  },
+  "source_revision": "55c909aac8a3e6a8c006bb582810f53be2a4132d",
+  "notice": "Research records for review, not connector observations or proof of product deployment. Import each briefs entry into the matching canonical vertical with one caller session.",
+  "briefs": {
+    "terra": {
+      "week_start": "2026-10-12",
+      "title": "Terra: property freshness and licensed intelligence",
+      "coverage_state": "DEVELOPMENTS",
+      "sources": [
+        {
+          "id": "regrid-refresh",
+          "title": "Regrid October parcel refresh",
+          "url": "https://regrid.com/blog/parcel-data-update-october-2026",
+          "published_on": "2026-10-06",
+          "verified_at": "2026-10-13T15:31:06.967Z",
+          "verification_method": "Primary publisher page reviewed during research on 2026-10-13.",
+          "access_note": "Commercial data delivery requires an applicable license."
+        },
+        {
+          "id": "cotality-mcp",
+          "title": "Cotality Claude connector",
+          "url": "https://www.cotality.com/press-releases/cotality-launches-claude-connector-to-deliver-trusted-property-intelligence-in-ai-workflows",
+          "published_on": "2026-10-12",
+          "verified_at": "2026-10-13T15:31:06.967Z",
+          "verification_method": "Primary publisher page reviewed during research on 2026-10-13.",
+          "event_on": "2026-10-12",
+          "access_note": "Customer authentication and licensed fields required; SZL entitlement unverified."
+        },
+        {
+          "id": "attom-semantic",
+          "title": "ATTOM Semantic Views",
+          "url": "https://www.attomdata.com/news/company-news/attom-introduces-semantic-views-for-property-data-in-snowflake/",
+          "published_on": "2026-10-12",
+          "verified_at": "2026-10-13T15:31:06.967Z",
+          "verification_method": "Primary publisher page reviewed during research on 2026-10-13.",
+          "event_on": "2026-10-13",
+          "access_note": "ATTOM/Snowflake access required. Page date Oct 12; release dateline Oct 13."
+        }
+      ],
+      "developments": [
+        {
+          "source_fact": "Regrid reports 30,044,022 parcels refreshed across 635 counties, with average parcel age of 127 days.",
+          "source_ids": [
+            "regrid-refresh"
+          ],
+          "product_inference": "Track parcel source age separately from retrieval time and show county coverage.",
+          "confidence": "WELL_SUPPORTED"
+        },
+        {
+          "source_fact": "Cotality launched a licensed MCP-backed Claude connector; ATTOM announced Semantic Views v1.0 for Snowflake property data.",
+          "source_ids": [
+            "cotality-mcp",
+            "attom-semantic"
+          ],
+          "product_inference": "Evaluate stable property identity and versioned joins before enabling natural-language ownership analysis.",
+          "confidence": "WELL_SUPPORTED"
+        }
+      ],
+      "opportunities": [
+        {
+          "title": "Preserve property freshness and identity",
+          "proposal": "Add source timestamps, county coverage, provider IDs and conflict handling to Terra enrichments.",
+          "source_ids": [
+            "regrid-refresh",
+            "cotality-mcp",
+            "attom-semantic"
+          ],
+          "acceptance_criteria": [
+            "Repeated refreshes do not duplicate parcels.",
+            "Conflicting provider identities require review.",
+            "Every result exposes source age and allowed fields."
+          ],
+          "dependencies": [
+            "Licensed sample data and usage rights",
+            "Canonical parcel ID mapping",
+            "Versioned provider schema"
+          ],
+          "priority": "HIGH",
+          "feasibility": "MEDIUM",
+          "status": "PROPOSED"
+        }
+      ]
+    },
+    "killinchu": {
+      "week_start": "2026-10-12",
+      "title": "Killinchu: maritime list changes",
+      "coverage_state": "DEVELOPMENTS",
+      "sources": [
+        {
+          "id": "ofac-oct8",
+          "title": "OFAC October 8 list action",
+          "url": "https://ofac.treasury.gov/recent-actions/20261008",
+          "published_on": "2026-10-08",
+          "verified_at": "2026-10-13T15:31:06.967Z",
+          "verification_method": "Primary publisher page reviewed during research on 2026-10-13.",
+          "event_on": "2026-10-08",
+          "access_note": "Use official list snapshots and corrections; human compliance review remains required."
+        },
+        {
+          "id": "imo-dakar",
+          "title": "IMO Senegal digitalization assessment",
+          "url": "https://www.imo.org/en/mediacentre/pages/whatsnew-2507.aspx",
+          "published_on": "2026-10-09",
+          "verified_at": "2026-10-13T15:31:06.967Z",
+          "verification_method": "Primary publisher page reviewed during research on 2026-10-13.",
+          "event_on": "2026-10-09",
+          "access_note": "Assessment and roadmap; no public operational API announced."
+        }
+      ],
+      "developments": [
+        {
+          "source_fact": "OFAC published vessel/company additions and two vessel delistings on October 8.",
+          "source_ids": [
+            "ofac-oct8"
+          ],
+          "product_inference": "Version vessel screening by stable identifiers and retain additions, corrections and removals.",
+          "confidence": "WELL_SUPPORTED"
+        },
+        {
+          "source_fact": "IMO reported an October 5-9 Dakar maritime-single-window assessment.",
+          "source_ids": [
+            "imo-dakar"
+          ],
+          "product_inference": "Track port digitalization as a future integration, pending actual data access.",
+          "confidence": "WELL_SUPPORTED"
+        }
+      ],
+      "opportunities": [
+        {
+          "title": "Replay sanctions changes by vessel identity",
+          "proposal": "Create a dated IMO-keyed list-change history for maritime screening.",
+          "source_ids": [
+            "ofac-oct8"
+          ],
+          "acceptance_criteria": [
+            "Add/update/remove fixtures replay idempotently.",
+            "Same-name vessels remain distinct.",
+            "Stale source retrieval yields unknown status."
+          ],
+          "dependencies": [
+            "Official list adapter",
+            "IMO/company identifier normalization",
+            "Effective-date history"
+          ],
+          "priority": "HIGH",
+          "feasibility": "HIGH",
+          "status": "PROPOSED"
+        }
+      ]
+    },
+    "sentra": {
+      "week_start": "2026-10-12",
+      "title": "Killinchu Defend: certificate readiness",
+      "coverage_state": "DEVELOPMENTS",
+      "sources": [
+        {
+          "id": "microsoft-pqc",
+          "title": "Microsoft PQC authentication readiness guidance",
+          "url": "https://www.microsoft.com/en-us/security/blog/2026/10/08/post-quantum-authentication-why-organizations-should-start-testing-certificate-ecosystems-now/",
+          "published_on": "2026-10-08",
+          "verified_at": "2026-10-13T15:31:06.967Z",
+          "verification_method": "Primary publisher page reviewed during research on 2026-10-13.",
+          "event_on": "2026-08-27",
+          "access_note": "New guidance about an August pilot; pilot certificates are for nonproduction testing."
+        }
+      ],
+      "developments": [
+        {
+          "source_fact": "Microsoft's October 8 guidance recommends inventorying certificate dependencies; the described pilot began August 27 and excludes production trust.",
+          "source_ids": [
+            "microsoft-pqc"
+          ],
+          "product_inference": "Map owners, trust anchors and upgrade dependencies before considering cryptographic migration.",
+          "confidence": "WELL_SUPPORTED"
+        }
+      ],
+      "opportunities": [
+        {
+          "title": "Inventory certificate dependencies",
+          "proposal": "Extend defensive asset inventory with certificate algorithm, expiry, issuer and service owner.",
+          "source_ids": [
+            "microsoft-pqc"
+          ],
+          "acceptance_criteria": [
+            "Every in-scope service has owner and issuer metadata.",
+            "Unknown vendor support is explicit.",
+            "Pilot tests remain isolated from production trust."
+          ],
+          "dependencies": [
+            "Authorized asset and certificate metadata",
+            "Vendor compatibility evidence"
+          ],
+          "priority": "MEDIUM",
+          "feasibility": "HIGH",
+          "status": "PROPOSED"
+        }
+      ]
+    },
+    "lyte": {
+      "week_start": "2026-10-12",
+      "title": "Lyte and A11oy: correlation and runtime budgets",
+      "coverage_state": "DEVELOPMENTS",
+      "sources": [
+        {
+          "id": "otel-obi",
+          "title": "OBI trace-log correlation",
+          "url": "https://opentelemetry.io/blog/2026/obi-trace-log-correlation/",
+          "published_on": "2026-10-06",
+          "verified_at": "2026-10-13T15:31:06.967Z",
+          "verification_method": "Primary publisher page reviewed during research on 2026-10-13.",
+          "access_note": "Requires compatible Linux/kernel privileges and synchronous logging; verify workload fit."
+        },
+        {
+          "id": "cf-profiling",
+          "title": "Cloudflare on-demand Worker profiling",
+          "url": "https://blog.cloudflare.com/workers-on-demand-profiling/",
+          "published_on": "2026-10-09",
+          "verified_at": "2026-10-13T15:31:06.967Z",
+          "verification_method": "Primary publisher page reviewed during research on 2026-10-13.",
+          "event_on": "2026-10-09",
+          "access_note": "Requires authenticated account access and sufficient traffic on the selected version."
+        },
+        {
+          "id": "cf-clef",
+          "title": "Cloudflare Clef hosted-model changes",
+          "url": "https://blog.cloudflare.com/clef-faster-cheaper-multimodal/",
+          "published_on": "2026-10-09",
+          "verified_at": "2026-10-13T15:31:06.967Z",
+          "verification_method": "Primary publisher page reviewed during research on 2026-10-13.",
+          "event_on": "2026-10-09",
+          "access_note": "Provider access and per-model capability/license checks remain unverified for SZL."
+        }
+      ],
+      "developments": [
+        {
+          "source_fact": "OBI describes trace context enrichment for stdout/stderr; Cloudflare added on-demand CPU/memory profiling for active Workers and Durable Objects.",
+          "source_ids": [
+            "otel-obi",
+            "cf-profiling"
+          ],
+          "product_inference": "Bind incident traces and profiles to exact deployed revisions; pilot correlation only on eligible hosts.",
+          "confidence": "WELL_SUPPORTED"
+        },
+        {
+          "source_fact": "Cloudflare reduced hosted Clef-flash context from 64k to 24k and introduced multimodal Clef-omni.",
+          "source_ids": [
+            "cf-clef"
+          ],
+          "product_inference": "Record provider-specific context limits and reject or reroute oversized requests before inference.",
+          "confidence": "WELL_SUPPORTED"
+        }
+      ],
+      "opportunities": [
+        {
+          "title": "Attach performance evidence to releases",
+          "proposal": "Capture authorized Worker/version profiles with source revision and latency/error comparisons.",
+          "source_ids": [
+            "cf-profiling"
+          ],
+          "acceptance_criteria": [
+            "Profile receipt names Worker version and source SHA.",
+            "Capture uses representative traffic.",
+            "Comparison includes latency and error-rate regression checks."
+          ],
+          "dependencies": [
+            "Cloudflare account access",
+            "Deployment-to-source mapping"
+          ],
+          "priority": "HIGH",
+          "feasibility": "HIGH",
+          "status": "PROPOSED"
+        },
+        {
+          "title": "Validate model context budgets",
+          "proposal": "Version hosted model capabilities and run explicit overflow/fallback tests.",
+          "source_ids": [
+            "cf-clef"
+          ],
+          "acceptance_criteria": [
+            "Requests over the provider limit are rejected or explicitly rerouted.",
+            "Model revision and modality budget are recorded."
+          ],
+          "dependencies": [
+            "Confirmed provider contract",
+            "Existing router adapter and token accounting"
+          ],
+          "priority": "HIGH",
+          "feasibility": "MEDIUM",
+          "status": "PROPOSED"
+        }
+      ]
+    },
+    "finance": {
+      "week_start": "2026-10-12",
+      "title": "PURIQ and advisory: governed enterprise access",
+      "coverage_state": "DEVELOPMENTS",
+      "sources": [
+        {
+          "id": "workday-headless",
+          "title": "Workday headless agent platform",
+          "url": "https://newsroom.workday.com/2026-10-13-Workdays-Trusted-Agent-Platform-Now-Delivers-Headless-Access-to-HR-and-Finance%2C-Letting-Customers-Build-and-Run-Lawful-AI-Agents",
+          "published_on": "2026-10-13",
+          "verified_at": "2026-10-13T15:31:06.967Z",
+          "verification_method": "Primary publisher page reviewed during research on 2026-10-13.",
+          "event_on": "2026-10-13",
+          "access_note": "Requires customer tenant and appropriate Workday entitlement; no SZL access established."
+        }
+      ],
+      "developments": [
+        {
+          "source_fact": "Workday announced generally available MCP tools, live data querying and agent runtime components carrying enterprise permissions and audit context.",
+          "source_ids": [
+            "workday-headless"
+          ],
+          "product_inference": "Keep actor identity, authorization and approvals attached to financial/advisory tool calls; this is an architecture opportunity, not acquired data access.",
+          "confidence": "WELL_SUPPORTED"
+        }
+      ],
+      "opportunities": [
+        {
+          "title": "Carry delegated authorization through A11oy",
+          "proposal": "Evaluate a tenant-scoped read adapter after access is confirmed.",
+          "source_ids": [
+            "workday-headless"
+          ],
+          "acceptance_criteria": [
+            "Different user entitlements produce correctly restricted results.",
+            "Approval-required writes remain pending.",
+            "Audit evidence connects actor, tool, source and result."
+          ],
+          "dependencies": [
+            "Customer tenant",
+            "Product entitlement",
+            "Delegated authorization"
+          ],
+          "priority": "MEDIUM",
+          "feasibility": "LOW",
+          "status": "PROPOSED"
+        }
+      ]
+    },
+    "counsel": {
+      "week_start": "2026-10-12",
+      "title": "PRISM: court-data availability",
+      "coverage_state": "DEVELOPMENTS",
+      "sources": [
+        {
+          "id": "pacer-maintenance",
+          "title": "Eleventh Circuit PACER maintenance notice",
+          "url": "https://www.ca11.uscourts.gov/index.php/news/202610",
+          "published_on": "2026-10-08",
+          "verified_at": "2026-10-13T15:31:06.967Z",
+          "verification_method": "Primary publisher page reviewed during research on 2026-10-13.",
+          "event_on": "2026-10-11",
+          "access_note": "Notice of possible disruption, not proof of actual outage or a deadline change."
+        }
+      ],
+      "developments": [
+        {
+          "source_fact": "An October 8 court notice warned of possible PACER/CM/ECF disruption on October 11, 6:55 a.m.-7 p.m. Eastern.",
+          "source_ids": [
+            "pacer-maintenance"
+          ],
+          "product_inference": "Make docket refresh age and interruption recovery visible; do not infer deadline changes from source unavailability.",
+          "confidence": "WELL_SUPPORTED"
+        }
+      ],
+      "opportunities": [
+        {
+          "title": "Resume docket refresh after interruptions",
+          "proposal": "Preserve the last successful cursor and expose stale-data state.",
+          "source_ids": [
+            "pacer-maintenance"
+          ],
+          "acceptance_criteria": [
+            "Restarting refresh does not duplicate docket events.",
+            "Unavailable refresh is labelled stale.",
+            "Source outage cannot automatically alter a legal deadline."
+          ],
+          "dependencies": [
+            "Authorized docket feed",
+            "Durable polling cursor",
+            "Existing matter identity"
+          ],
+          "priority": "HIGH",
+          "feasibility": "HIGH",
+          "status": "PROPOSED"
+        }
+      ]
+    }
+  },
+  "additional_coverage": [
+    {
+      "area": "Carlota Jo",
+      "state": "NO_DISTINCT_VERIFIED_NEWS",
+      "note": "Shared Workday opportunity is relevant; no separate canonical runtime found in vertical-services."
+    },
+    {
+      "area": "David Leads",
+      "state": "ACTIVE_ADDITIONAL_VERTICAL",
+      "note": "Insurance/public organization research confirmed in its current README. No distinct consequential access change verified this week; do not conflate legacy app and backend v0.",
+      "source": "https://github.com/szl-holdings/david-leads/blob/main/README.md"
+    },
+    {
+      "area": "Microscopy QC",
+      "state": "RESEARCH_PILOT",
+      "note": "Nonclinical image-quality worked example; no consequential verified in-window release identified.",
+      "source": "https://github.com/szl-holdings/szl-microscopy-pilot/blob/main/README.md"
+    },
+    {
+      "area": "SZL Atelier",
+      "state": "SHARED_INFRASTRUCTURE",
+      "note": "Artifact evidence/discovery projection, not a separate fashion vertical.",
+      "source": "https://github.com/szl-holdings/szl-atelier/blob/main/README.md"
+    },
+    {
+      "area": "MCP, RAG, DAG, kernels, provenance and monetization",
+      "state": "NO_VERIFIED_STANDARD_OR_ENTITLEMENT_CHANGE",
+      "note": "No sufficiently verified in-window protocol/standard or SZL entitlement change established. Existing releases were not reclassified as new."
+    }
+  ]
+}
