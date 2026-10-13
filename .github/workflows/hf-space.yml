@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 12
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - name: Checkout exact source
@@ -84,7 +84,8 @@ jobs:
             /finance/healthz /terra/healthz /counsel/healthz \
             /api/verticals/sentra/anatomy /api/verticals/lyte/formulas \
             /api/verticals/killinchu/connectors /api/verticals/finance/readyz \
-            /api/verticals/terra/anatomy /api/verticals/counsel/formulas; do
+            /api/verticals/terra/anatomy /api/verticals/counsel/formulas \
+            /api/verticals/terra/published-briefs; do
             curl --fail --silent --show-error "http://127.0.0.1:7860${path}" >/dev/null
           done
           python tools/verify_runtime_identity.py \
@@ -101,7 +102,7 @@ jobs:
         vertical: [sentra, lyte, killinchu, finance, terra, counsel]
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - name: Checkout exact source
@@ -141,7 +142,7 @@ jobs:
       HF_TOKEN: ${{ secrets.HF_ORG_TOKEN || secrets.HF_ORG_TOKEN1 || secrets.HF_TOKEN || secrets.HF_WRITE_TOKEN }}
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - name: Resolve writer without exposing token material
@@ -214,7 +215,7 @@ jobs:
           PY
       - name: Upload publication routing receipt
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vertical-services-publication-routing-${{ github.run_id }}
           path: artifacts/publication-routing.json
@@ -245,7 +246,7 @@ jobs:
       require-default-branch-tip: true
       restart-space: true
       wait-running: 1200
-      smoke-paths: '["/","/healthz","/readyz","/api/build-info","/api/source","/.well-known/szl-source.json","/api/catalog","/api/verticals","/sentra/healthz","/lyte/healthz","/killinchu/healthz","/vessels/healthz","/finance/healthz","/terra/healthz","/counsel/healthz","/api/verticals/sentra/anatomy","/api/verticals/lyte/formulas","/api/verticals/killinchu/connectors","/api/verticals/finance/readyz","/api/verticals/terra/anatomy","/api/verticals/counsel/formulas"]'
+      smoke-paths: '["/","/healthz","/readyz","/api/build-info","/api/source","/.well-known/szl-source.json","/api/catalog","/api/verticals","/sentra/healthz","/lyte/healthz","/killinchu/healthz","/vessels/healthz","/finance/healthz","/terra/healthz","/counsel/healthz","/api/verticals/sentra/anatomy","/api/verticals/lyte/formulas","/api/verticals/killinchu/connectors","/api/verticals/finance/readyz","/api/verticals/terra/anatomy","/api/verticals/counsel/formulas","/api/verticals/terra/published-briefs"]'
     secrets:
       HF_TOKEN: ${{ secrets.HF_ORG_TOKEN || secrets.HF_ORG_TOKEN1 || secrets.HF_TOKEN || secrets.HF_WRITE_TOKEN }}
 
@@ -257,7 +258,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - name: Record the delegated deployment authority
@@ -283,7 +284,7 @@ jobs:
           JSON
           echo "Publication authority is delegated; this job does not claim that deployment has occurred."
       - name: Upload delegated authority receipt
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vertical-services-delegated-publication-${{ github.run_id }}
           path: artifacts/delegated-publication.json
@@ -298,7 +299,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - name: Checkout exact source
@@ -324,7 +325,7 @@ jobs:
             --output artifacts/live-connector-probe.json
       - name: Upload live connector receipt
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vertical-services-live-connector-probe-${{ github.run_id }}
           path: artifacts/live-connector-probe.json
@@ -337,7 +338,7 @@ jobs:
             --output artifacts/public-khipu-probe.json
       - name: Upload public model invocation receipt
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vertical-services-public-khipu-probe-${{ github.run_id }}
           path: artifacts/public-khipu-probe.json

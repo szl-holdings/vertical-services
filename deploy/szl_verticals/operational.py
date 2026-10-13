@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from typing import Any
+import sqlite3
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from .contract import (
     ALIASES,
@@ -16,7 +17,9 @@ from .contract import (
     formulas_for,
 )
 from .core import SessionScope, build_info
+from .briefs import WeeklyBriefRequest
 from .official_connectors import fetch_connector
+from .published_briefs import ArchiveUnavailable, published_brief_summary, published_briefs
 from .store import STORE
 
 operational = APIRouter(prefix="/api/verticals", tags=["operational-fabric"])
@@ -159,11 +162,61 @@ def vertical_second_brain(
             "count": len(recent),
             "observations": recent,
         },
+        "weekly_briefs": {
+            "scope": "HASHED_CALLER_SESSION",
+            "truth_label": "CALLER_REPORTED",
+            "review_status": "REVIEW_REQUIRED",
+            "counts_as_connector_evidence": False,
+            "items": [
+                {key: item[key] for key in ("vertical", "content_sha256", "created_at", "truth_label", "review_status")}
+                | {"title": item["brief"]["title"], "week_start": item["brief"]["week_start"],
+                   "coverage_state": item["brief"].get("coverage_state", "DEVELOPMENTS")}
+                for item in _briefs_for(canonical, session, min(limit, 25))
+            ],
+        },
+        "published_briefs": published_brief_summary(canonical, min(limit, 25)),
         "readiness": readiness,
         "effectors_enabled": False,
         "human_approval_required": True,
         "truth_label": "MEASURED",
     }
+
+
+def _briefs_for(vertical: str, session: str, limit: int) -> list[dict[str, Any]]:
+    try:
+        return STORE.recent_briefs(vertical, session, limit)
+    except (OSError, sqlite3.Error, RuntimeError):
+        raise HTTPException(503, "brief store unavailable") from None
+
+
+@operational.get("/{vertical}/published-briefs")
+def vertical_published_briefs(vertical: str, limit: int = Query(10, ge=1, le=25)) -> dict[str, Any]:
+    try:
+        return published_briefs(vertical, limit)
+    except ArchiveUnavailable:
+        raise HTTPException(503, "published brief archive unavailable") from None
+
+
+@operational.get("/{vertical}/briefs")
+def vertical_briefs(vertical: str, session: SessionScope, limit: int = Query(10, ge=1, le=25)) -> dict[str, Any]:
+    canonical = canonical_vertical(vertical)
+    return {
+        "schema": "szl.weekly-brief-list/v1", "vertical": canonical,
+        "items": _briefs_for(canonical, session, limit), "store": STORE.status(),
+        "truth_label": "CALLER_REPORTED", "review_status": "REVIEW_REQUIRED",
+        "counts_as_connector_evidence": False,
+    }
+
+
+@operational.post("/{vertical}/briefs")
+def create_vertical_brief(vertical: str, request: WeeklyBriefRequest, session: SessionScope) -> dict[str, Any]:
+    canonical = canonical_vertical(vertical)
+    try:
+        return STORE.put_brief(canonical, session, request)
+    except ValueError:
+        raise HTTPException(413, "brief exceeds size or scope capacity") from None
+    except (OSError, sqlite3.Error, RuntimeError):
+        raise HTTPException(503, "brief store unavailable") from None
 
 
 @operational.post("/{vertical}/connectors/{connector_id}/fetch")

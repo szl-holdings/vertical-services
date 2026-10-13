@@ -12,12 +12,15 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from szl_verticals.replay_store import REPLAY_SCHEMA, ReplayStoreMixin
+from szl_verticals.briefs import BRIEF_SCHEMA, BriefStoreMixin
 
-class ObservationStore(ReplayStoreMixin):
+class ObservationStore(ReplayStoreMixin, BriefStoreMixin):
     """Small bounded observation ledger.
 
     The default path is an ephemeral file. A persistent claim is emitted only
-    when the operator explicitly sets SZL_STATE_DURABILITY=persistent.
+    when the operator explicitly sets SZL_STATE_PATH and
+    SZL_STATE_DURABILITY=persistent. This asserts configuration, not verified
+    durability of the underlying filesystem.
 
     The store owns the clock that times evidence assessments and withdrawals.
     It is read only inside the replay write transaction; callers cannot pass
@@ -32,7 +35,7 @@ class ObservationStore(ReplayStoreMixin):
         self.path = Path(configured or "/tmp/szl-vertical-services.sqlite3")
         self.durability = (
             "PERSISTENT_CONFIGURED"
-            if os.environ.get("SZL_STATE_DURABILITY", "").strip().lower() == "persistent"
+            if configured and os.environ.get("SZL_STATE_DURABILITY", "").strip().lower() == "persistent"
             else "EPHEMERAL_FILE"
         )
         self._lock = threading.RLock()
@@ -68,6 +71,7 @@ class ObservationStore(ReplayStoreMixin):
                     """
                 )
                 connection.executescript(REPLAY_SCHEMA)
+                connection.executescript(BRIEF_SCHEMA)
                 connection.commit()
         except (OSError, sqlite3.Error) as exc:
             self.error = f"{type(exc).__name__}: {exc}"
