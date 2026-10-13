@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import os
 import platform
 import re
@@ -37,11 +38,21 @@ MAX_REQUEST_BYTES: Final = 128 * 1024
 MAX_RESPONSE_BYTES: Final = 2 * 1024 * 1024
 FETCH_TIMEOUT_SECONDS: Final = 8.0
 STARTED_AT: Final = time.monotonic()
+LOGGER: Final = logging.getLogger("szl.vertical_frontier")
 
 SAFE_SLUG = re.compile(r"^[a-z][a-z0-9-]{1,40}$")
 SAFE_REPO = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
 SAFE_CIK = re.compile(r"^\d{1,10}$")
 SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
+
+
+class PublicRequestError(ValueError):
+    """Caller-input validation failure whose message is safe to return publicly."""
+
+
+class PublicConfigurationError(RuntimeError):
+    """Operator configuration gap whose fixed message is safe to return publicly."""
+
 
 CONTENT_TYPES: Final = {
     ".html": "text/html; charset=utf-8",
@@ -323,7 +334,7 @@ def snapshot_sentra(_: Mapping[str, list[str]]) -> Snapshot:
 def snapshot_lyte(query: Mapping[str, list[str]]) -> Snapshot:
     repo = (query.get("repo") or ["szl-command-lab"])[0]
     if not SAFE_REPO.fullmatch(repo):
-        raise ValueError("repo must be a simple GitHub repository name")
+        raise PublicRequestError("repo must be a simple GitHub repository name")
     url = f"https://api.github.com/repos/szl-holdings/{quote(repo, safe='')}/actions/runs?per_page=20"
     headers: dict[str, str] = {"Accept": "application/vnd.github+json"}
     token = os.getenv("GITHUB_TOKEN", "").strip()
@@ -388,14 +399,14 @@ def snapshot_killinchu(_: Mapping[str, list[str]]) -> Snapshot:
 def normalized_cik(query: Mapping[str, list[str]]) -> str:
     raw = (query.get("cik") or [""])[0].strip()
     if not SAFE_CIK.fullmatch(raw):
-        raise ValueError("cik must contain one to ten digits")
+        raise PublicRequestError("cik must contain one to ten digits")
     return raw.zfill(10)
 
 
 def sec_headers() -> dict[str, str]:
     agent = os.getenv("SEC_USER_AGENT", "").strip()
     if not agent or "@" not in agent:
-        raise RuntimeError("SEC_USER_AGENT must identify the operator and include a contact email")
+        raise PublicConfigurationError("SEC_USER_AGENT must identify the operator and include a contact email")
     return {"User-Agent": agent, "Accept-Encoding": "gzip, deflate"}
 
 
@@ -441,7 +452,7 @@ def snapshot_terra(query: Mapping[str, list[str]]) -> Snapshot:
     try:
         limit = max(1, min(25, int(limit_raw)))
     except ValueError as exc:
-        raise ValueError("limit must be an integer") from exc
+        raise PublicRequestError("limit must be an integer") from exc
     url = f"https://data.cityofnewyork.us/resource/64uk-42ks.json?$limit={limit}"
     document, meta = bounded_json(url)
     rows = document if isinstance(document, list) else []
@@ -479,7 +490,7 @@ def snapshot_terra(query: Mapping[str, list[str]]) -> Snapshot:
 def snapshot_prism(query: Mapping[str, list[str]]) -> Snapshot:
     term = (query.get("term") or [""])[0].strip()
     if len(term) > 80:
-        raise ValueError("term exceeds 80 characters")
+        raise PublicRequestError("term exceeds 80 characters")
     suffix = f"&conditions[term]={quote(term)}" if term else ""
     url = f"https://www.federalregister.gov/api/v1/documents.json?per_page=20&order=newest{suffix}"
     document, meta = bounded_json(url)
@@ -595,20 +606,20 @@ def normalize_evidence(raw: Any) -> tuple[list[dict[str, Any]], list[str]]:
 def evaluate_proposal(payload: dict[str, Any]) -> dict[str, Any]:
     slug = str(payload.get("vertical", "")).strip().lower()
     if slug not in VERTICALS:
-        raise ValueError("unknown vertical")
+        raise PublicRequestError("unknown vertical")
     objective = str(payload.get("objective", "")).strip()
     if not objective or len(objective) > 2000:
-        raise ValueError("objective is required and must not exceed 2,000 characters")
+        raise PublicRequestError("objective is required and must not exceed 2,000 characters")
     action = str(payload.get("requested_action", "review")).strip()[:500]
     risk_raw = payload.get("risk", 0.5)
     if isinstance(risk_raw, bool):
-        raise ValueError("risk must be numeric")
+        raise PublicRequestError("risk must be numeric")
     try:
         risk = float(risk_raw)
     except (TypeError, ValueError) as exc:
-        raise ValueError("risk must be numeric") from exc
+        raise PublicRequestError("risk must be numeric") from exc
     if not 0.0 <= risk <= 1.0:
-        raise ValueError("risk must be between 0 and 1")
+        raise PublicRequestError("risk must be between 0 and 1")
 
     evidence, evidence_warnings = normalize_evidence(payload.get("evidence", []))
     human_approved = payload.get("human_approved") is True
@@ -667,7 +678,7 @@ def verify_receipt(payload: dict[str, Any]) -> dict[str, Any]:
     receipt = payload.get("receipt")
     expected = str(payload.get("receipt_sha256", "")).strip().lower()
     if not isinstance(receipt, dict) or not SHA256_HEX.fullmatch(expected):
-        raise ValueError("receipt object and 64-character receipt_sha256 are required")
+        raise PublicRequestError("receipt object and 64-character receipt_sha256 are required")
     observed = sha256(receipt)
     return {
         "schema": "szl.receipt-verification.v1",
@@ -696,10 +707,22 @@ def build_info() -> dict[str, Any]:
 
 
 def sanitize_error(exc: Exception) -> tuple[int, str, str]:
-    if isinstance(exc, ValueError):
+    """Map a request failure to a public status, code and message.
+
+    Only messages written for the caller (PublicRequestError,
+    PublicConfigurationError) are returned verbatim. Every other exception may
+    carry official-source, provider, filesystem or decoder diagnostics, so its
+    text is logged server-side and replaced by a fixed message.
+    """
+    if isinstance(exc, PublicRequestError):
         return HTTPStatus.BAD_REQUEST, "INVALID_REQUEST", str(exc)
-    if isinstance(exc, RuntimeError):
+    if isinstance(exc, PublicConfigurationError):
         return HTTPStatus.SERVICE_UNAVAILABLE, "CONFIGURATION_REQUIRED", str(exc)
+    LOGGER.warning("frontier request failed; public message withheld", exc_info=exc)
+    if isinstance(exc, ValueError):
+        return HTTPStatus.BAD_REQUEST, "INVALID_REQUEST", "request could not be processed"
+    if isinstance(exc, RuntimeError):
+        return HTTPStatus.SERVICE_UNAVAILABLE, "CONFIGURATION_REQUIRED", "required service configuration is unavailable"
     if isinstance(exc, HTTPError):
         return HTTPStatus.BAD_GATEWAY, "UPSTREAM_HTTP_ERROR", f"official source returned HTTP {exc.code}"
     if isinstance(exc, URLError):
@@ -819,16 +842,19 @@ class Handler(BaseHTTPRequestHandler):
         try:
             length = int(raw_length)
         except ValueError as exc:
-            raise ValueError("valid Content-Length is required") from exc
+            raise PublicRequestError("valid Content-Length is required") from exc
         if length <= 0 or length > MAX_REQUEST_BYTES:
-            raise ValueError("request body is empty or exceeds 128 KiB")
+            raise PublicRequestError("request body is empty or exceeds 128 KiB")
         content_type = self.headers.get("Content-Type", "")
         if "application/json" not in content_type.lower():
-            raise ValueError("Content-Type must be application/json")
+            raise PublicRequestError("Content-Type must be application/json")
         raw = self.rfile.read(length)
-        document = json.loads(raw.decode("utf-8"))
+        try:
+            document = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise PublicRequestError("request body must be valid UTF-8 JSON") from exc
         if not isinstance(document, dict):
-            raise ValueError("request body must be a JSON object")
+            raise PublicRequestError("request body must be a JSON object")
         return document
 
     def _serve_static(self, name: str) -> None:
