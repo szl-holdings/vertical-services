@@ -182,7 +182,7 @@ body { font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
 .brand,.eyebrow,.datum-id,.mono,.micro { font-size: .75rem; line-height: 1.55; letter-spacing: .09em; }
 .top { padding-bottom: 1.25rem; border-bottom: 1px solid var(--line); }
 .navigation a,.nav a { font-size: .875rem; text-underline-offset: .22em; }
-.navigation a { text-decoration: none; color: var(--text-sub); }
+.navigation a { min-width: 44px; justify-content: center; text-decoration: none; color: var(--text-sub); }
 .navigation a:hover { color: var(--text); text-decoration: underline; }
 .nav a { border-color: var(--control-edge); border-radius: .6rem; }
 .rail { position: relative; }
