@@ -4,6 +4,7 @@ from html import escape
 from typing import Final
 
 from .catalog import VERTICALS, get_vertical
+from .public_errors import not_found_detail
 from .types import VerticalSpec
 
 
@@ -333,6 +334,6 @@ def create_showcase_router():
         try:
             return render_vertical_showcase(vertical_id)
         except KeyError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            raise HTTPException(status_code=404, detail=not_found_detail(exc)) from exc
 
     return router

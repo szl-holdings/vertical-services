@@ -17,7 +17,8 @@ from typing import Any
 from urllib.parse import unquote, urlsplit
 
 from frontier_fabric.catalog import get_vertical, public_catalog
-from frontier_fabric.engine import EvaluationError, VerticalFabric, request_from_mapping
+from frontier_fabric.engine import VerticalFabric, request_from_mapping
+from frontier_fabric.public_errors import not_found_detail, unprocessable_detail
 from frontier_fabric.showcase import render_showcase_index, render_vertical_showcase
 from frontier_fabric.types import ClaimState, as_public_dict
 
@@ -170,11 +171,11 @@ def resolve_post(path: str, body: bytes) -> tuple[int, str, bytes]:
             result = FABRIC.evaluate(request_from_mapping(payload))
         except KeyError as exc:
             return 404, "application/json; charset=utf-8", _json_bytes(
-                {"ok": False, "error": str(exc)}
+                {"ok": False, "error": not_found_detail(exc)}
             )
-        except (EvaluationError, ValueError) as exc:
+        except ValueError as exc:
             return 422, "application/json; charset=utf-8", _json_bytes(
-                {"ok": False, "error": str(exc)}
+                {"ok": False, "error": unprocessable_detail(exc)}
             )
         return 200, "application/json; charset=utf-8", _json_bytes(as_public_dict(result))
 

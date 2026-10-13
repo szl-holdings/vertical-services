@@ -154,6 +154,7 @@ frontier_fabric/
   connectors.py       # fixed-source bounded fetch client
   engine.py           # proposal → policy → human bind → receipt evaluation
   fastapi_router.py   # optional HTTP integration
+  public_errors.py    # caller-facing 404/422 text; other exception text is logged only
   receipts.py         # canonical JSON and append-only SHA-256 integrity chain
   types.py            # typed public contracts
 scripts/
