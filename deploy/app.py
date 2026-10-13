@@ -40,6 +40,7 @@ from szl_verticals.killinchu_runtime_contract import (
 )
 from szl_verticals.lyte import lyte
 from szl_verticals.operational import STORE, operational, vertical_readiness
+from szl_verticals.presentation import NATIVE_ICON_HTML, NATIVE_INTERFACE_CSS, NATIVE_TOKENS_CSS
 from szl_verticals.sentra import SENTRA_KEY_SOURCE, sentra
 from szl_verticals.showcase import showcase
 from szl_verticals.terra import terra
@@ -361,7 +362,7 @@ def _landing_page() -> str:
             <h2>{html.escape(names[engine])}</h2>
             <p>{html.escape(info['purpose'])}</p>
             <small>{html.escape(aliases)}</small>
-            <nav class="actions" aria-label="{html.escape(names[engine])} resources"><a href="{html.escape(info['experience'])}">Workspace</a>
+            <nav class="actions" aria-label="{html.escape(names[engine])} resources"><a class="primary-action" href="{html.escape(info['experience'])}">Workspace</a>
             <a href="{html.escape(info['intelligence'])}">Evidence</a>
             <a href="/{engine}/healthz">Health</a>
             <a href="/api/verticals/{engine}/formulas">Math</a></nav></article>"""
@@ -372,9 +373,10 @@ def _landing_page() -> str:
     store = STORE.status()
     source_ready = _source_ready(build)
     contract_chip = "<strong>REACHABLE</strong>" if source_ready else "UNAVAILABLE"
-    return f"""<!doctype html><html lang="en" data-szl-public-experience-v3="true"><head><meta charset="utf-8">
+    return f"""<!doctype html><html lang="en" data-native-view="index" data-szl-public-experience-v3="true"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>SZL Vertical Services</title><style>
+{NATIVE_TOKENS_CSS}
 :root{{color-scheme:dark;--bg:#05070a;--panel:#0d1219;--line:#263241;--ink:#f4f7fb;--muted:#98a6b8;--accent:#7dd3fc;--good:#6ee7b7}}
 *{{box-sizing:border-box;min-inline-size:0}}body{{margin:0;background:radial-gradient(circle at 80% 0,#10273a 0,transparent 30%),var(--bg);color:var(--ink);font:15px/1.55 system-ui,sans-serif}}:where(h1,h2,p,small,span,footer,.brand,.eyebrow,a){{overflow-wrap:anywhere}}
 a{{color:inherit;min-height:44px;display:inline-flex;align-items:center}}a:focus-visible{{outline:3px solid var(--accent);outline-offset:3px}}
@@ -386,7 +388,8 @@ h1{{font-size:clamp(40px,8cqi,88px);line-height:1;letter-spacing:-.055em;margin:
 .card h2{{font-size:26px;margin:14px 0 8px}}.card p,.card small{{color:var(--muted);margin:0 0 14px}}.actions{{display:flex;gap:14px;flex-wrap:wrap;margin-top:auto}}.actions a{{text-decoration:none;border-bottom:1px solid var(--accent)}}
 .boundary{{margin-top:18px;padding:18px;border:1px solid var(--line);border-radius:14px;color:var(--muted)}}footer{{margin-top:36px;color:var(--muted)}}
 @media(pointer:coarse){{a{{min-height:48px}}}}@media(prefers-reduced-motion:reduce){{*,*::before,*::after{{scroll-behavior:auto!important;animation:none!important;transition:none!important}}}}
-</style></head><body><a class="skip" href="#engines">Skip to engines</a><main class="shell"><header class="top"><div class="brand">SZL / VERTICAL SERVICES V{VERSION}</div><nav class="navigation" aria-label="Explore vertical services"><a href="#engines">Engines</a><a href="#evidence">Evidence</a><a href="/docs">API</a><a href="https://github.com/szl-holdings/vertical-services">Source</a></nav></header>
+{NATIVE_INTERFACE_CSS}
+</style></head><body><a class="skip" href="#engines">Skip to engines</a><main class="shell"><header class="top"><div class="brand">{NATIVE_ICON_HTML}<span>SZL / VERTICAL SERVICES V{VERSION}</span></div><nav class="navigation" aria-label="Explore vertical services"><a href="#engines">Engines</a><a href="#evidence">Evidence</a><a href="/docs">API</a><a href="https://github.com/szl-holdings/vertical-services">Source</a></nav></header>
 <h1>Six engines. One second brain.</h1><p class="lede">Explore domain calculations, public-source evidence and governed research. Open a workspace, inspect its contract, and check the source and readiness behind each result.</p>
 <section class="proof" id="evidence" aria-label="Runtime evidence"><span class="pill">{contract_chip} Python runtime contract</span><span class="pill">source {html.escape(revision_short)}</span><span class="pill">store {html.escape(store['durability'])}</span><span class="pill">3 model routes</span><span class="pill">6 kernel contracts</span><span class="pill">effectors disabled</span></section>
 <section class="grid" id="engines" aria-label="Six vertical engines">{''.join(cards)}</section><section class="boundary"><strong>Operational boundary:</strong> official-source connectors are fixed and bounded. Connector observations are hash-addressed and stored under a hashed session scope. Model invocation remains unavailable until an operator binds a fixed allowlisted endpoint, credential, protocol, and exact declared revision. Hatun can recommend review or abstention only. NOAA AIS is historical official planning data—not represented as a live vessel feed. Trading, legal advice, cyber effectors, person-level prospecting, and unattended consequential actions remain disabled.</section>
