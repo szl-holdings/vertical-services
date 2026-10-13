@@ -5,7 +5,7 @@
     "end": "2026-10-13"
   },
   "source_revision": "55c909aac8a3e6a8c006bb582810f53be2a4132d",
-  "notice": "Research records for review, not connector observations or proof of product deployment. Import each briefs entry into the matching canonical vertical with one caller session.",
+  "notice": "Source-controlled public research for review, not connector observations or proof of product deployment. Private session import is optional; publication does not independently verify source or implementation claims.",
   "briefs": {
     "terra": {
       "week_start": "2026-10-12",
