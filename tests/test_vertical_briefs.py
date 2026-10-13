@@ -3,19 +3,21 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import importlib
+import json
+import logging
+import sqlite3
 import sys
 from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
 
 DEPLOY = Path(__file__).resolve().parents[1] / "deploy"
 if str(DEPLOY) not in sys.path:
     sys.path.insert(0, str(DEPLOY))
 
-from szl_verticals.briefs import WeeklyBriefRequest
 from szl_verticals import operational
 from szl_verticals.connector_specs import CONNECTORS
 from szl_verticals.evidence import resolve_evidence
@@ -24,6 +26,22 @@ from szl_verticals.store import ObservationStore
 TOKEN = "weekly-brief-test-session-0000000001"
 OTHER = "weekly-brief-test-session-0000000002"
 SCOPE = hashlib.sha256(TOKEN.encode()).hexdigest()
+
+# Harmless synthetic diagnostic. It stands in for raw exception text from the
+# storage layer and must never cross the public response boundary.
+MARKER = "SYNTHETIC_DIAGNOSTIC_MARKER"
+SYNTHETIC_PATH = "/synthetic/private/state.sqlite3"
+SYNTHETIC_ERROR = f"OperationalError: {MARKER} at {SYNTHETIC_PATH}"
+GENERIC_BRIEF_503 = {"detail": "brief store unavailable"}
+PUBLIC_STORE_ERROR = "STORE_UNAVAILABLE"
+STATUS_FIELDS = {"writable", "durability", "configured_path", "persistent_claim_explicit", "error"}
+
+
+def assert_no_diagnostic(text: str) -> None:
+    assert MARKER not in text
+    assert SYNTHETIC_PATH not in text
+    assert "OperationalError" not in text
+    assert "Traceback" not in text
 
 
 def payload():
@@ -142,9 +160,129 @@ def test_no_network_or_evidence_promotion_from_source_claim(runtime, monkeypatch
 
 def test_store_failure_is_explicit(runtime):
     client, store = runtime
-    store.error = "synthetic unavailable store"
-    assert client.post("/api/verticals/terra/briefs", json=payload()).status_code == 503
+    store.error = SYNTHETIC_ERROR
+    responses = (
+        client.post("/api/verticals/terra/briefs", json=payload()),
+        client.get("/api/verticals/terra/briefs"),
+        client.get("/api/verticals/terra/second-brain"),
+    )
+    for response in responses:
+        assert response.status_code == 503
+        assert response.json() == GENERIC_BRIEF_503
+        assert_no_diagnostic(response.text)
+
+
+def test_public_status_never_returns_internal_store_diagnostic(runtime):
+    _, store = runtime
+    store.error = SYNTHETIC_ERROR
+    status = store.status()
+    assert set(status) == STATUS_FIELDS
+    assert status["writable"] is False
+    assert status["durability"] == "UNAVAILABLE"
+    assert status["error"] == PUBLIC_STORE_ERROR
+    assert_no_diagnostic(json.dumps(status))
+    with pytest.raises(RuntimeError) as error:
+        store.put({}, {})
+    assert_no_diagnostic(str(error.value))
+
+
+def test_initialization_failure_keeps_diagnostic_server_side(tmp_path, monkeypatch, caplog):
+    monkeypatch.setenv("SZL_STATE_PATH", str(tmp_path / "state.sqlite3"))
+
+    class FailingStore(ObservationStore):
+        def _connect(self):
+            raise sqlite3.OperationalError(f"{MARKER} at {SYNTHETIC_PATH}")
+
+    with caplog.at_level(logging.ERROR, logger="szl_verticals.store"):
+        store = FailingStore()
+    # Existing truthiness guards still see the failure.
+    assert store.error
+    # Full detail stays internal: a private attribute and the server log.
+    assert MARKER in store._error_detail and "OperationalError" in store._error_detail
+    assert MARKER in caplog.text
+    status = store.status()
+    assert set(status) == STATUS_FIELDS
+    assert status["writable"] is False and status["error"] == PUBLIC_STORE_ERROR
+    assert_no_diagnostic(json.dumps(status))
+    assert_no_diagnostic(str(store.error))
+
+
+def test_readiness_redacts_store_diagnostic_and_stays_degraded(runtime, monkeypatch):
+    client, store = runtime
+    store.error = SYNTHETIC_ERROR
+
+    nested = client.get("/api/verticals/terra/readyz")
+    assert nested.status_code == 200
+    body = nested.json()
+    assert body["ready"] is False and body["status"] == "DEGRADED"
+    assert body["requirements"]["observation_store_writable"] is False
+    assert set(body["store"]) == STATUS_FIELDS
+    assert body["store"]["writable"] is False
+    assert body["store"]["error"] == PUBLIC_STORE_ERROR
+    assert_no_diagnostic(nested.text)
+
+    app_module = importlib.import_module("app")
+    assert Path(app_module.__file__).resolve() == DEPLOY / "app.py"
+    monkeypatch.setattr(app_module, "STORE", store)
+    service = TestClient(app_module.app, headers={"X-SZL-Session": TOKEN})
+    top = service.get("/readyz")
+    assert top.status_code == 503
+    top_body = top.json()
+    assert top_body["ready"] is False
+    assert top_body["store"]["writable"] is False
+    assert top_body["store"]["error"] == PUBLIC_STORE_ERROR
+    for item in top_body["verticals"].values():
+        assert item["status"] == "DEGRADED"
+        assert item["requirements"]["observation_store_writable"] is False
+    assert_no_diagnostic(top.text)
+    for path in ("/healthz", "/api/catalog"):
+        response = service.get(path)
+        assert response.json()["state"]["connector_observations"]["error"] == PUBLIC_STORE_ERROR
+        assert_no_diagnostic(response.text)
+    frontier = service.get("/api/verticals/terra/frontier")
+    assert frontier.json()["readiness"]["store"]["error"] == PUBLIC_STORE_ERROR
+    assert_no_diagnostic(frontier.text)
+
+
+@pytest.mark.parametrize("failure", [sqlite3.OperationalError, sqlite3.DatabaseError, OSError])
+def test_query_time_storage_exception_is_not_echoed(runtime, monkeypatch, failure):
+    client, store = runtime
+
+    def broken_connect():
+        raise failure(f"{MARKER} at {SYNTHETIC_PATH}")
+
+    monkeypatch.setattr(store, "_connect", broken_connect)
+    responses = (
+        client.post("/api/verticals/terra/briefs", json=payload()),
+        client.get("/api/verticals/terra/briefs"),
+    )
+    for response in responses:
+        assert response.status_code == 503
+        assert response.json() == GENERIC_BRIEF_503
+        assert failure.__name__ not in response.text
+        assert_no_diagnostic(response.text)
+
+
+def test_healthy_status_and_brief_behaviour_are_unchanged(runtime):
+    client, store = runtime
+    status = store.status()
+    assert set(status) == STATUS_FIELDS
+    assert status["writable"] is True
+    assert status["error"] is None
+    assert status["durability"] != "UNAVAILABLE"
+    readiness = client.get("/api/verticals/terra/readyz").json()
+    assert readiness["store"] == status
+    assert readiness["requirements"]["observation_store_writable"] is True
+    # A recovered store serves briefs again, still isolated per session.
+    store.error = SYNTHETIC_ERROR
     assert client.get("/api/verticals/terra/briefs").status_code == 503
+    store.error = None
+    saved = client.post("/api/verticals/terra/briefs", json=payload())
+    assert saved.status_code == 200 and saved.json()["inserted"] is True
+    listed = client.get("/api/verticals/terra/briefs").json()
+    assert listed["store"] == status
+    assert [item["content_sha256"] for item in listed["items"]] == [saved.json()["content_sha256"]]
+    assert client.get("/api/verticals/terra/briefs", headers={"X-SZL-Session": OTHER}).json()["items"] == []
 
 
 def test_no_material_change_is_storable_without_invented_findings(runtime):

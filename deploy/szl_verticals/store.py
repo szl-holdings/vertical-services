@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -13,6 +14,12 @@ from typing import Any, Callable, Mapping, Sequence
 
 from szl_verticals.replay_store import REPLAY_SCHEMA, ReplayStoreMixin
 from szl_verticals.briefs import BRIEF_SCHEMA, BriefStoreMixin
+
+_LOGGER = logging.getLogger(__name__)
+
+# Fixed public value for a failed store. Raw exception detail never leaves
+# the process through status(); it is kept in ``_error_detail`` and the log.
+STORE_UNAVAILABLE = "STORE_UNAVAILABLE"
 
 class ObservationStore(ReplayStoreMixin, BriefStoreMixin):
     """Small bounded observation ledger.
@@ -40,6 +47,7 @@ class ObservationStore(ReplayStoreMixin, BriefStoreMixin):
         )
         self._lock = threading.RLock()
         self.error: str | None = None
+        self._error_detail: str | None = None
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with closing(self._connect()) as connection:
@@ -74,7 +82,9 @@ class ObservationStore(ReplayStoreMixin, BriefStoreMixin):
                 connection.executescript(BRIEF_SCHEMA)
                 connection.commit()
         except (OSError, sqlite3.Error) as exc:
-            self.error = f"{type(exc).__name__}: {exc}"
+            self._error_detail = f"{type(exc).__name__}: {exc}"
+            self.error = STORE_UNAVAILABLE
+            _LOGGER.error("observation store unavailable: %s", self._error_detail)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5.0)
@@ -87,12 +97,12 @@ class ObservationStore(ReplayStoreMixin, BriefStoreMixin):
             "durability": self.durability if self.error is None else "UNAVAILABLE",
             "configured_path": bool(os.environ.get("SZL_STATE_PATH", "").strip()),
             "persistent_claim_explicit": self.durability == "PERSISTENT_CONFIGURED",
-            "error": self.error,
+            "error": None if self.error is None else STORE_UNAVAILABLE,
         }
 
     def put(self, receipt: Mapping[str, Any], summary: Mapping[str, Any]) -> None:
         if self.error:
-            raise RuntimeError(self.error)
+            raise RuntimeError(STORE_UNAVAILABLE)
         serialized = json.dumps(summary, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         if len(serialized.encode("utf-8")) > 512_000:
             raise RuntimeError("normalized connector summary exceeds 512000 bytes")
