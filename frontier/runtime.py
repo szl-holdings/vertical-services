@@ -192,9 +192,9 @@ class Handler(base.Handler):
                 receipt = payload.get("receipt")
                 model_result = payload.get("model_proposal")
                 if slug not in base.VERTICALS:
-                    raise ValueError("unknown vertical")
+                    raise base.PublicRequestError("unknown vertical")
                 if not isinstance(receipt, dict):
-                    raise ValueError("receipt must be a JSON object")
+                    raise base.PublicRequestError("receipt must be a JSON object")
                 result = kernel_engine.evaluate_kernel_stack(
                     vertical=base.VERTICALS[slug],
                     proposal_receipt=receipt,
