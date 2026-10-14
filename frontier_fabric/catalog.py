@@ -622,11 +622,15 @@ def by_id() -> dict[str, VerticalSpec]:
     return {vertical.id: vertical for vertical in VERTICALS}
 
 
+class UnknownVerticalError(KeyError):
+    """A caller-supplied vertical id is not in the catalog; the message is public."""
+
+
 def get_vertical(vertical_id: str) -> VerticalSpec:
     try:
         return by_id()[vertical_id]
     except KeyError as exc:
-        raise KeyError(f"unknown vertical: {vertical_id}") from exc
+        raise UnknownVerticalError(f"unknown vertical: {vertical_id}") from exc
 
 
 def public_catalog() -> dict[str, object]:

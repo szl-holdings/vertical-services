@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from .catalog import get_vertical
-from .engine import EvaluationError, VerticalFabric, request_from_mapping
+from .engine import VerticalFabric, request_from_mapping
+from .public_errors import not_found_detail, unprocessable_detail
 from .types import as_public_dict
 
 
@@ -42,14 +43,14 @@ def create_router(fabric: VerticalFabric | None = None):
         try:
             return runtime.capabilities(vertical_id)
         except KeyError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            raise HTTPException(status_code=404, detail=not_found_detail(exc)) from exc
 
     @router.get("/verticals/{vertical_id}/experience")
     def experience(vertical_id: str) -> dict[str, Any]:
         try:
             spec = get_vertical(vertical_id)
         except KeyError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            raise HTTPException(status_code=404, detail=not_found_detail(exc)) from exc
         return {
             "schema": "szl.vertical-experience/v1",
             "vertical_id": vertical_id,
@@ -72,9 +73,9 @@ def create_router(fabric: VerticalFabric | None = None):
             result = runtime.evaluate(request)
             return as_public_dict(result)
         except KeyError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except (EvaluationError, ValueError) as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            raise HTTPException(status_code=404, detail=not_found_detail(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=unprocessable_detail(exc)) from exc
 
     @router.post("/receipts/verify")
     def verify_receipts(payload: Mapping[str, Any] = Body(...)) -> dict[str, Any]:
@@ -85,7 +86,7 @@ def create_router(fabric: VerticalFabric | None = None):
         try:
             get_vertical(vertical_id)
         except KeyError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            raise HTTPException(status_code=404, detail=not_found_detail(exc)) from exc
         return runtime.verify_session(vertical_id, session_id)
 
     return router
