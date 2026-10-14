@@ -21,7 +21,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    uses: szl-holdings/.github/.github/workflows/reusable-workflow-lint.yml@c889276e51e7d954c4bba8b216f86fc7577721fa
+    uses: szl-holdings/.github/.github/workflows/reusable-workflow-lint.yml@c26bce92867766c154e16a36a30823c9ed38022b
     with:
       fail-on-zizmor-warning: false
 
