@@ -29,6 +29,7 @@ from szl_verticals.core import (
 )
 from szl_verticals.counsel import counsel
 from szl_verticals.finance import finance
+from szl_verticals.frontier_contracts import frontier_contracts
 from szl_verticals.frontier import frontier
 from szl_verticals.http_bounds import BodyBoundError, error_payload, maybe_parse_json, read_bounded_body
 from szl_verticals.intelligence import intelligence
@@ -100,6 +101,7 @@ for router in (
     terra,
     counsel,
     operational,
+    frontier_contracts,
     frontier,
     intelligence,
     showcase,
