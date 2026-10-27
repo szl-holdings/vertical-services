@@ -89,3 +89,33 @@ def test_finance_adapter_requires_freshness_and_human_receipt():
     assert result["decision"] == "REVIEW_REQUIRED"
     assert result["human_approval_required"] is True
     assert len(result["audit_receipt_sha256"]) == 64
+
+def test_unavailable_revisions_cannot_be_treated_as_bound():
+    try:
+        profiling_evidence(
+            worker_id="lyte-worker",
+            deployed_revision="UNAVAILABLE",
+            captured_at="2026-10-27T12:00:00Z",
+            duration_seconds=30,
+            traffic_observed=True,
+            source_map_state="AVAILABLE",
+            cpu_profile_sha256=DIGEST,
+            heap_profile_sha256=DIGEST,
+        )
+    except ValueError as error:
+        assert "exact deployed revision" in str(error)
+    else:
+        raise AssertionError("unavailable worker revision was accepted")
+    result = authorize_finance_read(
+        actor_id="user-1",
+        tenant_id="tenant-1",
+        scopes=["read:balances"],
+        field_scopes=["balance"],
+        query="select balance",
+        source_revision="UNAVAILABLE",
+        observed_at="2026-10-27T11:59:00Z",
+        freshness_seconds=3600,
+        approval_id="approval-1",
+        now=datetime(2026, 10, 27, 12, 0, tzinfo=timezone.utc),
+    )
+    assert result["decision"] == "REVIEW_REQUIRED"
