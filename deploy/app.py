@@ -303,6 +303,8 @@ def catalog() -> dict:
             "identity_replay": "/killinchu/v1/identity/replay",
             "terra_coverage": "/terra/v1/coverage/evaluate",
             "provenance_contract": "/api/provenance/contract",
+            "lyte_profiling": "/lyte/v1/profiling/evidence",
+            "finance_adapter": "/finance/v1/adapter/authorize",
         },
         "state": {
             "business_working_sets": "SESSION_ISOLATED_PROCESS_MEMORY",
