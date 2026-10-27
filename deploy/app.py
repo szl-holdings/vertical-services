@@ -300,6 +300,9 @@ def catalog() -> dict:
             "hatun_review": "/api/verticals/{vertical}/hatun/evaluate",
             "readiness": "/api/verticals/{vertical}/readyz",
             "fetch": "/api/verticals/{vertical}/connectors/{connector_id}/fetch",
+            "identity_replay": "/killinchu/v1/identity/replay",
+            "terra_coverage": "/terra/v1/coverage/evaluate",
+            "provenance_contract": "/api/provenance/contract",
         },
         "state": {
             "business_working_sets": "SESSION_ISOLATED_PROCESS_MEMORY",
