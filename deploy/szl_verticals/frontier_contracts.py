@@ -144,8 +144,7 @@ def replay_identity_lifecycle(
         > timedelta(days=365)
         for item in observed
     )
-    complete = bool(chain_complete) and identity_conflicts == 0 and not degraded
-    if not recovered or not observed:
+    # Prior IDs carry no state payload; treating them as complete would allow an\n    # unseen designation to be cleared by a later removal event.\n    complete = bool(chain_complete) and not prior_event_ids and identity_conflicts == 0 and not degraded\n    if not recovered or not observed:
         screening_state = "UNAVAILABLE"
     elif complete and not active_designations and not stale:
         screening_state = "CLEAR"
@@ -185,6 +184,7 @@ def replay_identity_lifecycle(
         "screening_state": screening_state,
         "definitive_clear_screening": screening_state == "CLEAR",
         "chain_complete": bool(chain_complete),
+        "history_state": "OPAQUE_PRIOR_IDS" if prior_event_ids else "FULL_REPLAY",
         "identity_conflicts": identity_conflicts,
         "deadline_state_changed": False,
         "truth_label": truth_label,
