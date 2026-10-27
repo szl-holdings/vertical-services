@@ -7,7 +7,7 @@ trading, legal, or cyber-effecting authority.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
@@ -141,7 +141,7 @@ def replay_identity_lifecycle(
     degraded = [item for item in recovered if item.source_state != "OBSERVED"]
     stale = bool(degraded) or any(
         (now or datetime.now(timezone.utc)) - _parse_time(item.event_time)
-        > __import__("datetime").timedelta(days=365)
+        > timedelta(days=365)
         for item in observed
     )
     complete = bool(chain_complete) and identity_conflicts == 0 and not degraded
@@ -341,6 +341,8 @@ def profiling_evidence(
     heap_profile_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Bind CPU/heap profiling to a live revision and traffic window."""
+    if not worker_id or not deployed_revision or deployed_revision == "UNAVAILABLE":
+        raise ValueError("worker and exact deployed revision are required")
     if duration_seconds < 1:
         raise ValueError("profiling duration must be positive")
     _parse_time(captured_at)
@@ -394,8 +396,8 @@ def authorize_finance_read(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Authorize only fresh, scoped, read-only finance queries."""
-    if not actor_id or not tenant_id or not query:
-        raise ValueError("actor, tenant, and query are required")
+    if not actor_id or not tenant_id or not query or not source_revision:
+        raise ValueError("actor, tenant, query, and source revision are required")
     if freshness_seconds < 1:
         raise ValueError("freshness_seconds must be positive")
     observed = _parse_time(observed_at)
@@ -410,6 +412,9 @@ def authorize_finance_read(
     elif not read_scopes:
         decision = "DENY_SCOPE"
         reason = "every scope must be explicitly read-scoped"
+    elif source_revision == "UNAVAILABLE":
+        decision = "REVIEW_REQUIRED"
+        reason = "source revision is unavailable"
     elif freshness_state != "FRESH":
         decision = "REVIEW_REQUIRED"
         reason = "source observation is stale"
