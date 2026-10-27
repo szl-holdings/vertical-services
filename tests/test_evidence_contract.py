@@ -58,3 +58,21 @@ def test_replay_deduplicates_and_never_advances_deadline():
     )
     assert unavailable.source_unavailable is True
     assert unavailable.deadline_state_changed is False
+
+def test_provenance_digest_covers_decision_controls():
+    source = SourceObservation.observed(
+        "sec", "sec@1", {"filing": "A"}, observed_at="2026-10-27T12:00:00+00:00"
+    )
+    base = provenance_envelope(
+        decision_id="d-1", source=source, model_revision="m@1",
+        formula_revision="f@1", policy_result="PASS",
+        approval_required=True, freshness_seconds=60,
+        execution_state="READY_FOR_REVIEW",
+    )
+    changed = provenance_envelope(
+        decision_id="d-1", source=source, model_revision="m@1",
+        formula_revision="f@1", policy_result="PASS",
+        approval_required=False, freshness_seconds=120,
+        execution_state="NOT_EXECUTED",
+    )
+    assert base["envelope_sha256"] != changed["envelope_sha256"]
