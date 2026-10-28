@@ -31,8 +31,12 @@ def test_identity_replay_deduplicates_and_never_clears_incomplete_chain():
         chain_complete=False,
         now=datetime(2026, 10, 27, tzinfo=timezone.utc),
     )
-    assert result["duplicate_event_ids"] == ["add-1"]
+    # Opaque prior IDs are not entity/source scoped, so they cannot suppress an
+    # incoming event; the match is reported and prior state stays UNKNOWN.
+    assert result["duplicate_event_ids"] == []
+    assert result["opaque_prior_id_matches"] == ["add-1"]
     assert result["active_designations"] == []
+    assert result["designation_state"] == "UNKNOWN_PRIOR_STATE"
     assert result["screening_state"] == "REVIEW_REQUIRED"
     assert result["definitive_clear_screening"] is False
     assert result["deadline_state_changed"] is False
@@ -50,14 +54,33 @@ def test_identity_replay_refuses_clear_with_stale_or_degraded_source():
 
 
 def test_identity_replay_can_clear_only_complete_observed_chain():
+    # A caller's chain_complete claim is not sufficient: completeness must be
+    # established by an injected history verifier (none is configured by
+    # default), and a removal must match a designation in that history.
+    added = event("add-1", "DESIGNATION_ADDED", payload={"designation_id": "sdn-1"})
+    removed = IdentityEvent(**{
+        **added.__dict__,
+        "event_id": "remove-1",
+        "event_time": "2026-10-21T00:00:00Z",
+        "kind": "DELISTED",
+    })
     result = replay_identity_lifecycle(
         prior_event_ids=[],
-        incoming=[event("remove-1", "DELISTED", payload={"designation_id": "sdn-1"})],
+        incoming=[added, removed],
         chain_complete=True,
         now=datetime(2026, 10, 27, tzinfo=timezone.utc),
+        history_verifier=lambda entity_id, source_id, events, snapshot: True,
     )
     assert result["screening_state"] == "CLEAR"
     assert result["definitive_clear_screening"] is True
+    unverified = replay_identity_lifecycle(
+        prior_event_ids=[],
+        incoming=[added, removed],
+        chain_complete=True,
+        now=datetime(2026, 10, 27, tzinfo=timezone.utc),
+    )
+    assert unverified["screening_state"] == "REVIEW_REQUIRED"
+    assert unverified["definitive_clear_screening"] is False
 
 
 def test_terra_coverage_is_scoped_and_stale_data_is_unavailable():
