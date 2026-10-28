@@ -1,0 +1,35 @@
+# Standard (PEP 621) project metadata for vertical-services.
+#
+# Installing the project installs two dependency-free parts: the
+# frontier_fabric package and the frontier_app runtime module. Their optional
+# imports, fastapi (router helpers only) and szl_evidence_core (shared
+# canonical JSON, with a local fallback), are not required.
+#
+# The Space (deploy/), the per-service images (services/) and the frontier
+# image (frontier/) are still built from their Dockerfiles' COPY sources and
+# are not installed by this file; deploy/szl_verticals resolves files relative
+# to deploy/ and /app. Runtime and test pins stay in requirements.txt and
+# requirements-test.txt, which CI and the Dockerfiles install from, and are
+# not repeated here. Version 0.0.0 marks a distribution that is never
+# published, and the "Private :: Do Not Upload" classifier makes PyPI refuse
+# an upload.
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vertical-services"
+version = "0.0.0"
+description = "SZL vertical services: the Space runtime, per-service images and the frontier fabric"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "SZL Holdings" }]
+dependencies = []
+classifiers = ["Private :: Do Not Upload"]
+
+[tool.setuptools]
+packages = ["frontier_fabric"]
+py-modules = ["frontier_app"]
