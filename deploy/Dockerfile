@@ -2,7 +2,8 @@ FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 COPY requirements.txt ./requirements.txt
-RUN python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt
+RUN python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt \
+    && python -m pip check
 COPY deploy/app.py ./app.py
 COPY deploy/szl_verticals/ ./szl_verticals/
 COPY deploy/source_revision.txt ./source_revision.txt
