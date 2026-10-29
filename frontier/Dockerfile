@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-# Dependency-free Python 3.12 runtime for the SZL Vertical Frontier.
-# Digest-pinned OCI index for python:3.12-slim (3.12.14-slim-trixie, linux/amd64
-# included), identical on mirror.gcr.io and registry-1.docker.io on 2026-09-29.
+# Dependency-free Python runtime for the SZL Vertical Frontier.
+# The base image is pinned by the immutable digest below.
 FROM mirror.gcr.io/library/python:3.15-slim@sha256:533b0b2f9b5d46fd097091cf826f27902f1d6c3bca714b6dc74551356aa97a51
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
