@@ -233,7 +233,7 @@ jobs:
     concurrency:
       group: hf-write/space/SZLHOLDINGS/vertical-services
       cancel-in-progress: false
-    uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@3354b2beac2315c6887f6790d1078e143cd5a14b
+    uses: szl-holdings/.github/.github/workflows/reusable-hf-deploy.yml@7ddbbc5e8a90df78607b770c2119aa2058419b7c
     with:
       hf-repo: SZLHOLDINGS/vertical-services
       ref: ${{ github.sha }}
