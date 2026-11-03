@@ -344,3 +344,15 @@ jobs:
           path: artifacts/public-khipu-probe.json
           if-no-files-found: error
           retention-days: 30
+
+  attest-live-intelligence:
+    name: Attest published intelligence rooms
+    # Judge exactly the commit this run published (publish deploys github.sha
+    # and refuses anything but the main tip). Running inside this run keeps the
+    # vertical-services-hf concurrency slot held, so no later deploy from this
+    # repository can replace the Space while the rooms are captured.
+    if: github.event_name != 'pull_request' && needs.publish.result == 'success'
+    needs: [publish]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/intelligence-live.yml
