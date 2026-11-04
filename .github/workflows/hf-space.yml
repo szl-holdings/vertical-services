@@ -145,6 +145,12 @@ jobs:
         uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
+      - name: Checkout exact source for local writer helpers
+        # Before the routing receipt: actions/checkout cleans the workspace by default.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - name: Resolve writer without exposing token material
         id: route
         shell: bash
@@ -180,12 +186,6 @@ jobs:
           else
             echo "A repository-scoped Hugging Face token is available; the local exact-source writer is authorized."
           fi
-      - name: Checkout exact source for visibility helper
-        if: steps.route.outputs.mode == 'local'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
       - name: Set up Python for local writer
         if: steps.route.outputs.mode == 'local'
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0

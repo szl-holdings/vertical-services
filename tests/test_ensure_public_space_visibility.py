@@ -66,6 +66,10 @@ def test_workflow_invokes_ensure_public_before_publish():
     workflow = (root / ".github" / "workflows" / "hf-space.yml").read_text(encoding="utf-8")
     assert "tools/ensure_public_space_visibility.py" in workflow
     assert "Ensure public Space visibility for public smoke" in workflow
+    assert "Checkout exact source for local writer helpers" in workflow
+    assert workflow.index("Checkout exact source for local writer helpers") < workflow.index(
+        "Resolve writer without exposing token material"
+    )
     # Must run in the local writer path before reusable publish consumes the Space.
     assert workflow.index("Ensure public Space visibility for public smoke") < workflow.index(
         "reusable-hf-deploy.yml"
