@@ -45,6 +45,9 @@ def test_probe_unauthenticated_records_http_error(monkeypatch):
         def read(self):
             return b"y" * 3020
 
+        def close(self):
+            return None
+
     def fake_urlopen(request, timeout=0):
         raise subject.urllib.error.HTTPError(
             request.full_url, 404, "Not Found", hdrs=None, fp=_FP()
