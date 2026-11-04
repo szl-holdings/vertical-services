@@ -1,3 +1,5 @@
+<!-- szl:header v1 -->
+
 ---
 title: SZL Vertical Services
 emoji: ⚙️
@@ -10,7 +12,7 @@ license: apache-2.0
 short_description: Source-bound FastAPI fabric for six SZL verticals.
 ---
 
-<!-- szl:header v1 -->
+
 [![org: szl-holdings](https://img.shields.io/badge/org-szl--holdings-black)](https://github.com/szl-holdings)
 [![doctrine](https://img.shields.io/badge/doctrine-control%20before%20action%20%C2%B7%20evidence%20after-blue)](https://a-11-oy.com)
 
