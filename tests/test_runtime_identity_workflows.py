@@ -177,6 +177,22 @@ def test_hub_credentials_reach_only_main_jobs_under_the_asset_lock():
     assert re.findall(r"huggingface_hub==([0-9.]+)", workflow) == ["2.0.0"]
 
 
+def test_readme_hub_yaml_frontmatter_is_byte_zero():
+    """HF Spaces parse YAML only when README.md begins with ---; any prefix yields CONFIG_ERROR."""
+    raw = (ROOT / "README.md").read_bytes()
+    assert raw.startswith(b"---\n"), raw[:40]
+    text = raw.decode("utf-8")
+    parts = text.split("---\n")
+    assert len(parts) >= 3
+    fields = dict(
+        line.split(": ", 1) for line in parts[1].splitlines() if ": " in line
+    )
+    assert fields["sdk"] == "docker"
+    assert fields["app_port"] == "7860"
+    # Estate header may follow the Hub YAML, never precede it.
+    assert text.find("<!-- szl:header") > text.find("\n---\n")
+
+
 def test_card_declares_a_hub_valid_short_description():
     front = (ROOT / "README.md").read_text(encoding="utf-8").split("---\n")[1]
     fields = dict(
