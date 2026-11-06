@@ -15,6 +15,8 @@ updates:
         patterns:
           - "*"
 
+  # requirements.in / requirements-test.in are the inputs; requirements.txt and
+  # requirements-test.txt are their hash-locked outputs (uv pip compile).
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -27,6 +29,23 @@ updates:
     open-pull-requests-limit: 5
     groups:
       pip:
+        patterns:
+          - "*"
+
+  # Hash-locked single-purpose CI tool sets (huggingface_hub, the probe
+  # client, the frontier test runner).
+  - package-ecosystem: "pip"
+    directory: "/requirements/ci"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+    open-pull-requests-limit: 5
+    groups:
+      pip-ci:
         patterns:
           - "*"
 
@@ -48,5 +67,21 @@ updates:
     open-pull-requests-limit: 5
     groups:
       docker:
+        patterns:
+          - "*"
+
+  # Playwright driver for the Responsive UI workflow (npm ci from the lockfile).
+  - package-ecosystem: "npm"
+    directory: "/tools/responsive-browser"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+    open-pull-requests-limit: 5
+    groups:
+      npm:
         patterns:
           - "*"

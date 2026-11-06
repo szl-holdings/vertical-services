@@ -1,0 +1,5 @@
+# Test-only dependencies. The runtime stack, including the httpx that
+# fastapi.testclient needs, is installed from the hash-locked requirements.txt;
+# the constraint keeps any shared package on the same pin as the runtime lock.
+-c requirements.txt
+pytest>=9.2.0

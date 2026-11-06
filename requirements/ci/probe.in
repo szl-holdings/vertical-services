@@ -1,0 +1,2 @@
+# HTTP client for the live official-source probe in .github/workflows/hf-space.yml.
+httpx==0.28.1
