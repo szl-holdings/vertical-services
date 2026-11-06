@@ -1,5 +1,5 @@
 # Exact Finance projection emitted by tools/export_finance_artifact.py.
-FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d
+FROM python:3.14-slim@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 SZL_FINANCE_ORIGIN=stooq
 WORKDIR /app
 COPY requirements.txt ./
