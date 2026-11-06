@@ -232,3 +232,5 @@ Public runtime: `SZLHOLDINGS/vertical-services`.
 <!-- SZL-PRESERVED-TECHNICAL-BODY:END -->
 
 </details>
+
+Estate on Hugging Face: models, datasets and Spaces are published under the [SZLHOLDINGS](https://huggingface.co/SZLHOLDINGS) org.
