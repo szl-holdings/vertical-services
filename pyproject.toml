@@ -8,11 +8,13 @@
 # The Space (deploy/), the per-service images (services/) and the frontier
 # image (frontier/) are still built from their Dockerfiles' COPY sources and
 # are not installed by this file; deploy/szl_verticals resolves files relative
-# to deploy/ and /app. Runtime and test pins stay in requirements.txt and
-# requirements-test.txt, which CI and the Dockerfiles install from, and are
-# not repeated here. Version 0.0.0 marks a distribution that is never
-# published, and the "Private :: Do Not Upload" classifier makes PyPI refuse
-# an upload.
+# to deploy/ and /app. CI and the Dockerfiles install the exact, hash-locked
+# pins in requirements.txt and requirements-test.txt (generated from
+# requirements.in and requirements-test.in). The "test" extra only carries
+# lower bounds so `pip install -e '.[test]'` can run the suite locally; it is
+# not the pinned set CI verifies. Version 0.0.0 marks a distribution that is
+# never published, and the "Private :: Do Not Upload" classifier makes PyPI
+# refuse an upload.
 
 [build-system]
 requires = ["setuptools>=77"]
@@ -25,10 +27,32 @@ description = "SZL vertical services: the Space runtime, per-service images and 
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "SZL Holdings" }]
 dependencies = []
-classifiers = ["Private :: Do Not Upload"]
+classifiers = [
+  "Private :: Do Not Upload",
+  "Framework :: FastAPI",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+
+[project.optional-dependencies]
+test = [
+  "fastapi>=0.162.0",
+  "uvicorn[standard]>=0.54.0",
+  "pydantic>=2.14.2",
+  "httpx>=0.28.1",
+  "pytest>=9.2.0",
+]
+
+[project.urls]
+Homepage = "https://huggingface.co/spaces/SZLHOLDINGS/vertical-services"
+Source = "https://github.com/szl-holdings/vertical-services"
+Issues = "https://github.com/szl-holdings/vertical-services/issues"
 
 [tool.setuptools]
 packages = ["frontier_fabric"]

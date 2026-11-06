@@ -1,9 +1,8 @@
 cff-version: 1.2.0
 message: If you use this software, please cite it using the metadata from this file.
 type: software
-title: szl-holdings/vertical-services — Live deployable FastAPI services for the five SZL vertical Spaces
+title: SZL Vertical Services — source-bound FastAPI fabric for six SZL verticals
 version: 0.0.0
-date-released: '2026-11-05'
 license: Apache-2.0
 url: https://huggingface.co/spaces/SZLHOLDINGS/vertical-services
 repository-code: https://github.com/szl-holdings/vertical-services

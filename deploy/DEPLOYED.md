@@ -29,4 +29,4 @@ The governed publisher:
 
 The historical `SZLHOLDINGS/vessels` Space is retained. Vessels is consolidated into Killinchu as the public maritime surface, while the executable risk engine remains available at `/vessels` in this combined service.
 
-The Space tree copies only `deploy/app.py` (no root `app.py`). Convergence docs live in GitHub `docs/`; the README points at the absolute GitHub URL so the Hub artifact does not 404 a relative `docs/` path.
+The image copies only `deploy/app.py` (to `/app/app.py`); a root `app.py` on the Space is not part of the derived artifact set and is never executed. Convergence docs live in GitHub `docs/`; the README points at the absolute GitHub URL so the Hub artifact does not 404 a relative `docs/` path.
