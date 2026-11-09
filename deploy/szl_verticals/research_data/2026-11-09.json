@@ -1,0 +1,277 @@
+{
+  "schema": "szl.weekly-research-bundle/v1",
+  "research_window": {
+    "start": "2026-11-02",
+    "end": "2026-11-09"
+  },
+  "source_revision": "d41309df05c10e69a335135561e1f98cf55e59de",
+  "notice": "Source-controlled public research for review, not connector observations or proof of product deployment. Private session import is optional; publication does not independently verify source or implementation claims.",
+  "briefs": {
+    "terra": {
+      "week_start": "2026-11-09",
+      "title": "Terra: parcel freshness, API delivery and ownership intelligence",
+      "sources": [
+        {
+          "id": "regrid-nov",
+          "title": "Regrid November parcel update",
+          "url": "https://regrid.com/blog/parcel-data-update-november-2026",
+          "published_on": "2026-11-05",
+          "verified_at": "2026-11-09T13:00:00Z",
+          "verification_method": "Primary publisher page reviewed on 2026-11-09."
+        }
+      ],
+      "developments": [
+        {
+          "source_fact": "Regrid reports 48,648,877 parcels refreshed across 419 counties, average parcel age down to 114 days, and 95,058 new parcels. API 2.0 adds faster responses, usage reporting, filtering, alerts and limits.",
+          "source_ids": [
+            "regrid-nov"
+          ],
+          "product_inference": "Prioritize source-age and county-coverage fields, then expose provider usage limits before adding distressed-asset joins.",
+          "confidence": "WELL_SUPPORTED"
+        }
+      ],
+      "opportunities": [
+        {
+          "title": "Terra source-freshness adapter",
+          "proposal": "Add provider-aware freshness and quota metadata to each parcel or ownership result.",
+          "source_ids": [
+            "regrid-nov"
+          ],
+          "acceptance_criteria": [
+            "County and retrieval dates are returned",
+            "Quota or rate-limit state is visible",
+            "Stale records cannot appear current"
+          ],
+          "priority": "HIGH",
+          "feasibility": "HIGH",
+          "dependencies": [
+            "Licensed Regrid API 2.0 access",
+            "County coverage mapping"
+          ],
+          "status": "PROPOSED"
+        }
+      ]
+    },
+    "killinchu": {
+      "week_start": "2026-11-09",
+      "title": "Killinchu/Vessels: false-flag and shadow-fleet screening",
+      "sources": [
+        {
+          "id": "ofac-alert",
+          "title": "OFAC alert on Iranian shadow-fleet false flags",
+          "url": "https://ofac.treasury.gov/media/937316/download?inline=",
+          "published_on": "2026-11-04",
+          "verified_at": "2026-11-09T13:00:00Z",
+          "verification_method": "Primary publisher page reviewed on 2026-11-09.",
+          "event_on": "2026-11-04"
+        }
+      ],
+      "developments": [
+        {
+          "source_fact": "OFAC warned that vessels using fraudulent registries or false flags create sanctions and insurance risk, alongside designations tied to a maritime fraud network.",
+          "source_ids": [
+            "ofac-alert"
+          ],
+          "product_inference": "Vessels screening should model registry legitimacy and certification provenance alongside IMO, MMSI, ownership and AIS history.",
+          "confidence": "WELL_SUPPORTED"
+        }
+      ],
+      "opportunities": [
+        {
+          "title": "False-flag provenance gate",
+          "proposal": "Add a reviewable registry and certification provenance signal to maritime screening.",
+          "source_ids": [
+            "ofac-alert"
+          ],
+          "acceptance_criteria": [
+            "IMO-linked registry evidence is retained",
+            "False-flag indicators produce review status",
+            "No stale record is emitted as clear"
+          ],
+          "priority": "HIGH",
+          "feasibility": "HIGH",
+          "dependencies": [
+            "Official registry sources",
+            "AIS history and ownership crosswalks"
+          ],
+          "status": "PROPOSED"
+        }
+      ]
+    },
+    "sentra": {
+      "week_start": "2026-11-09",
+      "title": "Sentra/Aegis: SI incident governance and defensive readiness",
+      "sources": [
+        {
+          "id": "nist-si",
+          "title": "NIST IR 8621: SI incident management workshop findings",
+          "url": "https://csrc.nist.gov/News/2026",
+          "published_on": "2026-11-02",
+          "verified_at": "2026-11-09T13:00:00Z",
+          "verification_method": "Primary publisher page reviewed on 2026-11-09."
+        }
+      ],
+      "developments": [
+        {
+          "source_fact": "NIST published IR 8621 on incident-management challenges for super-intelligence systems, including cyberattacks, misuse, malfunction and unintended actions.",
+          "source_ids": [
+            "nist-si"
+          ],
+          "product_inference": "Extend Sentra incident states with explicit misuse, malfunction and unintended-action categories while preserving defensive scope.",
+          "confidence": "WELL_SUPPORTED"
+        }
+      ],
+      "opportunities": [
+        {
+          "title": "SI incident taxonomy",
+          "proposal": "Add defensive incident categories and handoff fields for AI-system misuse and malfunction.",
+          "source_ids": [
+            "nist-si"
+          ],
+          "acceptance_criteria": [
+            "Each category has a detection source",
+            "Human approval remains required for response",
+            "Test fixtures cover unknown and unavailable states"
+          ],
+          "priority": "HIGH",
+          "feasibility": "HIGH",
+          "dependencies": [
+            "NIST IR 8621 mapping",
+            "Existing Sentra policy gates"
+          ],
+          "status": "PROPOSED"
+        }
+      ]
+    },
+    "lyte": {
+      "week_start": "2026-11-09",
+      "title": "Lyte: OpenTelemetry JS 3.0 and telemetry compatibility",
+      "sources": [
+        {
+          "id": "otel-js3",
+          "title": "OpenTelemetry JavaScript SDK 3.0",
+          "url": "https://opentelemetry.io/blog/2026/otel-js-sdk-3-0/",
+          "published_on": "2026-11-05",
+          "verified_at": "2026-11-09T13:00:00Z",
+          "verification_method": "Primary publisher page reviewed on 2026-11-09."
+        }
+      ],
+      "developments": [
+        {
+          "source_fact": "OpenTelemetry JS SDK 3.0 is stable, raises minimum Node.js to 22.15, and stabilizes logs alongside traces and metrics.",
+          "source_ids": [
+            "otel-js3"
+          ],
+          "product_inference": "Lyte should treat SDK and runtime compatibility as a versioned telemetry contract, especially for Node 18/20 estates.",
+          "confidence": "WELL_SUPPORTED"
+        }
+      ],
+      "opportunities": [
+        {
+          "title": "Telemetry compatibility gate",
+          "proposal": "Add a Node/runtime and signal-availability matrix to Lyte ingestion readiness.",
+          "source_ids": [
+            "otel-js3"
+          ],
+          "acceptance_criteria": [
+            "Node version is reported",
+            "Trace, metric and log support is explicit",
+            "Unsupported combinations are marked unavailable"
+          ],
+          "priority": "HIGH",
+          "feasibility": "HIGH",
+          "dependencies": [
+            "Node 22.15 test lane",
+            "OTel collector compatibility fixtures"
+          ],
+          "status": "PROPOSED"
+        }
+      ]
+    },
+    "counsel": {
+      "week_start": "2026-11-09",
+      "title": "PRISM Counsel: AI governance and legal-intelligence implications",
+      "sources": [
+        {
+          "id": "doj-sitf",
+          "title": "DOJ launches Super Intelligence Task Force",
+          "url": "https://www.justice.gov/opa/pr/department-justice-launches-super-intelligence-task-force",
+          "published_on": "2026-11-05",
+          "verified_at": "2026-11-09T13:00:00Z",
+          "verification_method": "Primary publisher page reviewed on 2026-11-09."
+        }
+      ],
+      "developments": [
+        {
+          "source_fact": "The DOJ announced a Super Intelligence Task Force focused on misuse, unlawful conduct, reporting on SI risk and internal controls.",
+          "source_ids": [
+            "doj-sitf"
+          ],
+          "product_inference": "PRISM matter intelligence can track AI-governance authorities, obligations and evidence without treating policy announcements as deadlines.",
+          "confidence": "WELL_SUPPORTED"
+        }
+      ],
+      "opportunities": [
+        {
+          "title": "AI-governance matter template",
+          "proposal": "Add authority, obligation, evidence and deadline fields for AI-governance matters.",
+          "source_ids": [
+            "doj-sitf"
+          ],
+          "acceptance_criteria": [
+            "Authority date and jurisdiction are stored",
+            "Deadlines require source evidence",
+            "Policy text is separated from legal advice"
+          ],
+          "priority": "HIGH",
+          "feasibility": "HIGH",
+          "dependencies": [
+            "Primary legal-source ingestion",
+            "Counsel review"
+          ],
+          "status": "PROPOSED"
+        }
+      ]
+    },
+    "finance": {
+      "week_start": "2026-11-09",
+      "title": "PURIQ Finance: no material verified vertical-specific change",
+      "coverage_state": "NO_MATERIAL_CHANGE",
+      "coverage_note": "No new finance-data access, licensing, market-feed or accounting-system development met the reviewed inclusion threshold this week."
+    }
+  },
+  "additional_coverage": [
+    {
+      "area": "A11oy shared agent infrastructure",
+      "state": "DEVELOPMENT",
+      "note": "OpenAI API changelog on Nov 5 lists GPT-6-Cyber for authorized vulnerability investigation and fix verification; this is a provider capability, not an SZL deployment or permission grant.",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    {
+      "area": "A11oy monetization",
+      "state": "NO_NEW_IN_WINDOW",
+      "note": "Cloudflare Monetization Gateway closed beta was announced Sep 30, outside this week. It remains a relevant integration dependency, not a new weekly event.",
+      "source": "https://blog.cloudflare.com/monetization-gateway-beta/"
+    },
+    {
+      "area": "Carlota Jo",
+      "state": "NO_MATERIAL_CHANGE",
+      "note": "No distinct verified advisory-intelligence or coordination release found in the reviewed primary sources this week."
+    },
+    {
+      "area": "David Leads",
+      "state": "NO_MATERIAL_CHANGE",
+      "note": "Separate insurance and broker research vertical confirmed in GitHub; no new verified data-access development found this week."
+    },
+    {
+      "area": "Microscopy pilot",
+      "state": "NO_MATERIAL_CHANGE",
+      "note": "Nonclinical image-QC pilot confirmed in the portfolio; no new verified research-data or tool release found this week."
+    },
+    {
+      "area": "MCP/RAG/DAG/governed kernels",
+      "state": "NO_MATERIAL_CHANGE",
+      "note": "No new primary-source specification or SZL runtime release was verified in-window beyond the provider and observability changes recorded above."
+    }
+  ]
+}
