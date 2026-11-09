@@ -27,7 +27,7 @@ from szl_verticals.evidence import resolve_evidence
 from szl_verticals.store import ObservationStore
 
 PACKAGED = archive.ARCHIVE_DIRECTORY
-FILENAME = "2026-10-13.json"
+FILENAME = "2026-11-09.json"
 REVISION = "a" * 40
 TOKEN = "published-brief-private-test-session-000001"
 
