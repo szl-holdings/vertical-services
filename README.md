@@ -40,6 +40,28 @@ Inspect the shared operational services and source-bound evidence used by the do
 - Missing sources, unbound models and incompatible revisions remain unavailable.
 - Advisory scores and unsigned replies do not certify a decision; inspect the exact route’s readiness and evidence.
 
+## Run locally and verify
+
+Python 3.12 or newer (CI uses 3.12.14; the Space image uses 3.14). Runtime and
+test dependencies install from hash-locked files:
+
+```bash
+python -m venv .venv && . .venv/bin/activate
+python -m pip install --require-hashes -r requirements.txt -r requirements-test.txt
+SENTRA_SIGNING_KEY=local-test-key SZL_STATE_PATH=/tmp/vs-test.sqlite3 python -m pytest tests -q
+python -I -P frontier/app.py --self-test && python -m pytest -q frontier/tests
+SENTRA_SIGNING_KEY=local-test-key SZL_SOURCE_REVISION="$(git rev-parse HEAD)" \
+  SZL_STATE_PATH=/tmp/vs-local.sqlite3 python -m uvicorn app:app --app-dir deploy --port 7860
+curl -s http://127.0.0.1:7860/readyz
+```
+
+`/readyz` fails closed with HTTP 503 until a source revision is bound and a
+signing key is present, and `/healthz` reports `source-unavailable` while the
+revision is unbound. Use a throwaway key locally; the production key exists only
+as a Space secret. To change a pin, edit `requirements.in`, `requirements-test.in`
+or `requirements/ci/*.in` and regenerate its lock with the `uv pip compile`
+command recorded in that lock's header.
+
 <details>
 <summary>Technical details and original evidence</summary>
 

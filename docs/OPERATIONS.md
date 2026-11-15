@@ -2,6 +2,12 @@
 
 **Version:** 1.1.0 · **Updated:** 2026-09-03 · **Doctrine:** v11 · **Truth labels:** MEASURED / REPORTED / MODELED
 
+> **Historical record.** Architecture, API reference, deployment record and
+> changelog below describe the v1.1.0 service of 2026-09-03. The current runtime
+> (`VERSION` 2.2.0, Killinchu canonical, `/vessels` a compatibility lobe) is
+> documented in the [README](../README.md) and [`deploy/DEPLOYED.md`](../deploy/DEPLOYED.md).
+> The Testing and CI sections are kept current.
+
 ## Architecture
 
 Six governed vertical engines behind one FastAPI service, each mounted as a prefixed APIRouter:
@@ -37,16 +43,17 @@ No fabricated data, ever. Fail-closed paths return explicit errors or BLOCKED_PE
 
 ## Testing
 
-Ten-test pytest suite in `tests/test_engines.py` covering every engine: allow/deny behavior, signature shape, percentile bounds, dark-gap and implied-speed anomaly (1 degree latitude = 60 nm = 30 kn over 2h), the 3-point finance minimum, PSF/cap-rate medians, and receipt-chain ordering.
+`tests/test_engines.py` covers every engine: allow/deny behavior, signature shape, percentile bounds, dark-gap and implied-speed anomaly (1 degree latitude = 60 nm = 30 kn over 2h), the 3-point finance minimum, PSF/cap-rate medians, and receipt-chain ordering. The rest of `tests/` covers the operational fabric, evidence admission and replay, runtime identity, workflows and dependency locks; the dependency-free frontier runtime has its own suite in `frontier/tests`.
 
 ```bash
-pip install -r requirements.txt -r requirements-test.txt
+python -m pip install --require-hashes -r requirements.txt -r requirements-test.txt
 python -m pytest tests -q
+python -m pytest -q frontier/tests
 ```
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every push and PR to main: Python 3.12, dependency install, `compileall services deploy`, `pytest`. No secrets, no deploy steps — CI validates, the Hub deploys.
+`.github/workflows/ci.yml` runs on every push to main and every pull request: Python 3.12.14, hash-locked dependency install, `pip check`, `compileall services deploy tools tests`, `pytest tests`, then it exports the standalone Finance artifact, builds its image and verifies the running engine. It uses no secrets and deploys nothing; the Space is published only by the `main` push/dispatch jobs of `.github/workflows/hf-space.yml`.
 
 ## Deployment record
 

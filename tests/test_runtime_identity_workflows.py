@@ -174,7 +174,27 @@ def test_hub_credentials_reach_only_main_jobs_under_the_asset_lock():
         assert "pull_request" not in condition, name
         assert "group: hf-write/space/SZLHOLDINGS/vertical-services" in job, name
         assert "cancel-in-progress: false" in job, name
-    assert re.findall(r"huggingface_hub==([0-9.]+)", workflow) == ["2.0.0"]
+    # The credentialed Hub client is installed once, only from its hash lock,
+    # and that lock pins exactly the one version its input file pins.
+    hub_installs = [
+        line.strip()
+        for line in workflow.splitlines()
+        if "pip install" in line and ("huggingface" in line or "hf-client" in line)
+    ]
+    assert hub_installs == [
+        "run: python -m pip install --disable-pip-version-check --no-cache-dir "
+        "--require-hashes -r requirements/ci/hf-client.txt"
+    ]
+    assert "hf-client.txt" in jobs["resolve-publisher"]
+    pinned = re.findall(
+        r"(?m)^huggingface_hub==([0-9.]+)$",
+        (ROOT / "requirements" / "ci" / "hf-client.in").read_text(encoding="utf-8"),
+    )
+    locked = re.findall(
+        r"(?m)^huggingface-hub==([0-9.]+) \\$",
+        (ROOT / "requirements" / "ci" / "hf-client.txt").read_text(encoding="utf-8"),
+    )
+    assert len(pinned) == 1 and locked == pinned
 
 
 def test_readme_hub_yaml_frontmatter_is_byte_zero():

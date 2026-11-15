@@ -11,20 +11,24 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
       - name: Install the preview and isolated browser runner
+        # The browser runner is installed outside the checkout, from the
+        # committed manifest and lockfile (npm ci verifies registry integrity).
         run: |
-          python3 -m pip install --requirement requirements.txt
-          npm install --prefix "$RUNNER_TEMP/responsive-browser" --ignore-scripts --no-audit --no-fund playwright@1.63.0
+          python3 -m pip install --require-hashes --requirement requirements.txt
+          mkdir -p "$RUNNER_TEMP/responsive-browser"
+          cp tools/responsive-browser/package.json tools/responsive-browser/package-lock.json "$RUNNER_TEMP/responsive-browser/"
+          npm ci --prefix "$RUNNER_TEMP/responsive-browser" --ignore-scripts --no-audit --no-fund
           "$RUNNER_TEMP/responsive-browser/node_modules/.bin/playwright" install --with-deps chromium
       - name: Verify every shared engine page from exact source
         env:
@@ -40,7 +44,7 @@ jobs:
           PLAYWRIGHT_MODULE_PATH="$RUNNER_TEMP/responsive-browser/node_modules/playwright/index.mjs" node tools/check_responsive.mjs
       - name: Retain source-bound browser observations
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vertical-responsive-${{ github.run_id }}-${{ github.run_attempt }}
           path: reports/responsive-ui/

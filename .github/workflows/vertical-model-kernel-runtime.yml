@@ -13,6 +13,7 @@ on:
       - frontier/tests/**
       - frontier/Dockerfile.runtime
       - .github/workflows/vertical-model-kernel-runtime.yml
+      - requirements/ci/frontier-test.txt
   push:
     branches: [main]
     paths:
@@ -25,6 +26,7 @@ on:
       - frontier/tests/**
       - frontier/Dockerfile.runtime
       - .github/workflows/vertical-model-kernel-runtime.yml
+      - requirements/ci/frontier-test.txt
   workflow_dispatch: {}
 
 permissions:
@@ -53,7 +55,7 @@ jobs:
 
       - name: Install exact test runner
         shell: bash
-        run: "python -m pip install --disable-pip-version-check --only-binary=:all: pytest==8.4.2"
+        run: "python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r requirements/ci/frontier-test.txt"
 
       - name: Compile and run all embedded self-tests
         shell: bash

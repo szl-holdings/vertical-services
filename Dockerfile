@@ -7,7 +7,7 @@ ARG SERVICE
 ENV SERVICE=${SERVICE} PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY requirements.txt .
-RUN python -m pip install --no-cache-dir -r requirements.txt \
+RUN python -m pip install --no-cache-dir --require-hashes -r requirements.txt \
     && python -m pip check
 COPY services/${SERVICE}/ ./
 EXPOSE 7860

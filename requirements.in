@@ -1,0 +1,7 @@
+# Top-level runtime pins for the Space image (deploy/Dockerfile), the per-service
+# images (Dockerfile, services/finance/Dockerfile) and CI. Edit this file, then
+# regenerate the hash-locked requirements.txt with the command in its header.
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+pydantic==2.14.2
+httpx==0.28.1

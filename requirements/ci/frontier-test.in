@@ -1,0 +1,3 @@
+# Test runner for the dependency-free frontier runtime
+# (.github/workflows/vertical-frontier.yml, vertical-model-kernel-runtime.yml).
+pytest==8.4.2
