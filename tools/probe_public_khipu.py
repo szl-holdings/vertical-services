@@ -11,6 +11,9 @@ import httpx
 
 
 CAPACITY_RETRY_SECONDS = 45
+# The inference lab enforces a single concurrent inference; 429s are contention.
+# Bounded busy-retry only: receipt-consistency verification below is unchanged.
+CAPACITY_RETRY_ATTEMPTS = 4
 
 
 def is_public_model_capacity_response(response):
@@ -45,7 +48,7 @@ def main():
             identity.raise_for_status()
             if identity.json()["build"]["revision"] != args.expected_revision:
                 raise RuntimeError("source revision mismatch")
-            for attempt in range(2):
+            for attempt in range(CAPACITY_RETRY_ATTEMPTS):
                 refs = []
                 observations = []
                 for connector, parameters in (("coinbase-spot", {"base": "BTC", "currency": "USD"}),
@@ -74,9 +77,10 @@ def main():
                 try:
                     invoke.raise_for_status()
                 except httpx.HTTPStatusError:
-                    if attempt != 0 or not is_public_model_capacity_response(invoke):
+                    if attempt >= CAPACITY_RETRY_ATTEMPTS - 1 or not is_public_model_capacity_response(invoke):
                         raise
                     report["capacity_retry"] = {
+                        "attempt": attempt + 1,
                         "trigger": "model provider returned HTTP 429",
                         "wait_seconds": CAPACITY_RETRY_SECONDS,
                         "first_plan_receipt_sha256": plan["receipt"]["basis_sha256"],
