@@ -25,3 +25,5 @@ Surface: https://szlholdings-vertical-services.hf.space (landing page).
 Source: deploy/szl_verticals/holo3d.py (rendered inline by deploy/app.py).
 Receipt schema: szl.holo3d/v1. Owner directive (2026-11-15): all spaces fully
 3D holographic.
+
+2026-11-15 v1.1: the live /api/catalog returns engines as an object keyed by engine name (sentra, lyte, killinchu, finance, terra, counsel) with aliases arrays, not an array of engine dicts. collectNodes now accepts both shapes (object-keyed and array) so the constellation renders the real catalog; the render helper was simplified with no behavior change.

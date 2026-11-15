@@ -58,6 +58,7 @@ class Holo3dContract(unittest.TestCase):
         self.assertIn("prefers-reduced-motion", js)
         self.assertIn("ResizeObserver", js)
         self.assertIn('e.key === "Escape"', js)
+        self.assertIn("Object.keys(raw)", js)
         for forbidden in (
             "localStorage",
             "sessionStorage",
@@ -72,6 +73,52 @@ class Holo3dContract(unittest.TestCase):
             "https://",
         ):
             self.assertNotIn(forbidden, js)
+
+    def test_collect_nodes_handles_live_catalog_shapes(self) -> None:
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("node unavailable for behavior check")
+        js = load_module().HOLO3D_JS
+        start = js.index("function collectNodes")
+        end = js.index("function fetchFeed")
+        source = js[start:end]
+        harness = (
+            source
+            + chr(10)
+            + 'var r1 = collectNodes({engines: {sentra: {aliases: ["alpha", "beta"]}}});'
+            + chr(10)
+            + 'var r2 = collectNodes({engines: [{name: "x", models: ["m1"]}, {name: "y", aliases: ["a1"]}]});'
+            + chr(10)
+            + "var r3 = collectNodes({});"
+            + chr(10)
+            + "var r4 = collectNodes(null);"
+            + chr(10)
+            + 'console.log(r1.join(","));'
+            + chr(10)
+            + 'console.log(r2.join(","));'
+            + chr(10)
+            + 'console.log(r3.join(","));'
+            + chr(10)
+            + 'console.log(r4.join("@"));'
+            + chr(10)
+        )
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".js", delete=False, encoding="utf-8"
+        ) as handle:
+            handle.write(harness)
+            name = handle.name
+        try:
+            result = subprocess.run(
+                [node, name], capture_output=True, text=True, timeout=30, check=False
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+        finally:
+            Path(name).unlink(missing_ok=True)
+        parts = result.stdout.split(chr(10))
+        self.assertEqual(parts[0], "sentra,alpha,beta")
+        self.assertEqual(parts[1], "x,m1,y,a1")
+        self.assertEqual(parts[2], "")
+        self.assertEqual(parts[3], "")
 
     def test_css_is_cosmetic_only_and_accessible(self) -> None:
         css = load_module().HOLO3D_CSS
