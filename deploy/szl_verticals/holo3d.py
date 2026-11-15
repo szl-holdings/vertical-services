@@ -62,18 +62,34 @@ HOLO3D_JS = """
 
   function collectNodes(payload) {
     var nodes = [];
-    var engines = payload && Object.prototype.toString.call(payload.engines) === "[object Array]" ? payload.engines : [];
-    for (var i = 0; i < engines.length; i++) {
-      var e = engines[i];
-      if (!e || typeof e !== "object") { continue; }
-      var name = e.name || e.alias || e.id || e.vertical || "engine";
-      nodes.push(String(name));
-      var sub = e.models || e.kernels || e.capabilities || e.contracts;
-      if (Object.prototype.toString.call(sub) === "[object Array]") {
-        for (var j = 0; j < sub.length && j < 6; j++) {
-          var m = sub[j];
-          var mn = m && typeof m === "object" ? (m.name || m.alias || m.id || m.state) : m;
-          if (mn) { nodes.push(String(mn)); }
+    var raw = payload && payload.engines;
+    var entries = [];
+    if (Object.prototype.toString.call(raw) === "[object Array]") {
+      for (var i = 0; i < raw.length; i++) {
+        var e = raw[i];
+        if (!e || typeof e !== "object") { continue; }
+        entries.push({ label: e.name || e.alias || e.id || e.vertical || "engine", sub: e.models || e.kernels || e.capabilities || e.contracts || e.aliases });
+      }
+    } else if (raw && typeof raw === "object") {
+      var keys = Object.keys(raw);
+      for (var j = 0; j < keys.length; j++) {
+        var v = raw[keys[j]];
+        var sub = null;
+        if (v && typeof v === "object") {
+          sub = v.models || v.kernels || v.capabilities || v.contracts || v.aliases;
+        }
+        entries.push({ label: keys[j], sub: sub });
+      }
+    }
+    for (var k = 0; k < entries.length && nodes.length < 96; k++) {
+      var ent = entries[k];
+      nodes.push(String(ent.label));
+      var list = ent.sub;
+      if (Object.prototype.toString.call(list) === "[object Array]") {
+        for (var m = 0; m < list.length && m < 6 && nodes.length < 96; m++) {
+          var item = list[m];
+          var nm = item && typeof item === "object" ? (item.name || item.alias || item.id || item.state) : item;
+          if (nm) { nodes.push(String(nm)); }
         }
       }
     }
@@ -203,11 +219,9 @@ HOLO3D_JS = """
     if (!st.gl) { return; }
     var gl = st.gl;
     gl.useProgram(st.prog);
-    gl.uniform1f(gl.getUniformLocation(gl_program_u(st), "uTime"), t);
     render_body(gl, t);
   }
 
-  function gl_program_u(st2) { return st.prog; }
 
   function render_body(gl, t) {
     gl.uniform1f(gl.getUniformLocation(st.prog, "uTime"), t);
