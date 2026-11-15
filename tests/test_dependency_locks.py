@@ -18,7 +18,7 @@ LOCKS = [ROOT / "requirements.txt", ROOT / "requirements-test.txt",
          *sorted((ROOT / "requirements" / "ci").glob("*.txt"))]
 PIP_INSTALL = re.compile(r"pip\s+install\b[^\n]*")
 PIN = re.compile(r"(?m)^([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([^\s;\\]+)")
-LOCK_LINE = re.compile(r"^[a-z0-9][a-z0-9.-]*==[^\s;\\]+( ; [^\\]+)? \\$")
+LOCK_LINE = re.compile(r"^[a-z0-9][a-z0-9.-]*(?:\[[^\]\s]*\])?==[^\s;\\]+( ; [^\\]+)? \\\$")
 
 
 def _name(name: str) -> str:
