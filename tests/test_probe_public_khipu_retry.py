@@ -112,7 +112,7 @@ def test_capacity_once_refetches_and_replans_in_same_session(monkeypatch, tmp_pa
 
     assert code == 0 and report["state"] == "VERIFIED_LIVE"
     assert report["capacity_retry"] == {
-        "trigger": "model provider returned HTTP 429", "wait_seconds": 45,
+        "attempt": 1, "trigger": "model provider returned HTTP 429", "wait_seconds": 45,
         "first_plan_receipt_sha256": "a" * 64,
     }
     assert events == [
