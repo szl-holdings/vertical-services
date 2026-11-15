@@ -112,7 +112,7 @@ def test_capacity_once_refetches_and_replans_in_same_session(monkeypatch, tmp_pa
 
     assert code == 0 and report["state"] == "VERIFIED_LIVE"
     assert report["capacity_retry"] == {
-        "trigger": "model provider returned HTTP 429", "wait_seconds": 45,
+        "attempt": 1, "trigger": "model provider returned HTTP 429", "wait_seconds": 45,
         "first_plan_receipt_sha256": "a" * 64,
     }
     assert events == [
@@ -171,9 +171,9 @@ def test_completed_self_consistent_output_must_match_the_planned_input(monkeypat
     assert not any(event[0] in ("sleep", "cross-session-plan") for event in events)
 
 
-def test_second_capacity_failure_remains_failed_and_is_not_retried(monkeypatch, tmp_path):
+def test_exhausted_capacity_retries_remain_failed(monkeypatch, tmp_path):
     code, report, events, _, plans, invocations = run_probe(
-        monkeypatch, tmp_path, [(502, CAPACITY), (502, CAPACITY)])
+        monkeypatch, tmp_path, [(502, CAPACITY)] * 4)
 
     assert code == 1 and report["state"] == "FAILED"
     assert report["error_class"] == "HTTPStatusError"
@@ -181,8 +181,9 @@ def test_second_capacity_failure_remains_failed_and_is_not_retried(monkeypatch, 
     assert report["path"] == "/api/verticals/finance/intelligence/invoke"
     assert report["plan"]["receipt"]["basis_sha256"] == "b" * 64
     assert "invocation" not in report and "cross_session_evidence_rejected" not in report
-    assert events.count(("sleep", 45)) == 1
-    assert len(plans) == len(invocations) == 2
+    assert events.count(("sleep", 45)) == 3
+    assert report["capacity_retry"]["attempt"] == 3
+    assert len(plans) == len(invocations) == 4
 
 
 @pytest.mark.parametrize("status, body", [
