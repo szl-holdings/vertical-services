@@ -44,6 +44,7 @@ from szl_verticals.operational import STORE, operational, vertical_readiness
 from szl_verticals.presentation import NATIVE_ICON_HTML, NATIVE_INTERFACE_CSS, NATIVE_TOKENS_CSS
 from szl_verticals.sentra import SENTRA_KEY_SOURCE, sentra
 from szl_verticals.showcase import showcase
+from szl_verticals.holo3d import HOLO3D_CSS, HOLO3D_JS, HOLO3D_PANEL_HTML
 from szl_verticals.terra import terra
 from szl_verticals.vessels import vessels
 
@@ -396,11 +397,14 @@ h1{{font-size:clamp(40px,8cqi,88px);line-height:1;letter-spacing:-.055em;margin:
 .boundary{{margin-top:18px;padding:18px;border:1px solid var(--line);border-radius:14px;color:var(--muted)}}footer{{margin-top:36px;color:var(--muted)}}
 @media(pointer:coarse){{a{{min-height:48px}}}}@media(prefers-reduced-motion:reduce){{*,*::before,*::after{{scroll-behavior:auto!important;animation:none!important;transition:none!important}}}}
 {NATIVE_INTERFACE_CSS}
+{HOLO3D_CSS}
 </style></head><body><a class="skip" href="#engines">Skip to engines</a><main class="shell"><header class="top"><div class="brand">{NATIVE_ICON_HTML}<span>SZL / VERTICAL SERVICES V{VERSION}</span></div><nav class="navigation" aria-label="Explore vertical services"><a href="#engines">Engines</a><a href="#evidence">Evidence</a><a href="/docs">API</a><a href="https://github.com/szl-holdings/vertical-services">Source</a></nav></header>
 <h1>Six engines. One second brain.</h1><p class="lede">Explore domain calculations, public-source evidence and governed research. Open a workspace, inspect its contract, and check the source and readiness behind each result.</p>
 <section class="proof" id="evidence" aria-label="Runtime evidence"><span class="pill">{contract_chip} Python runtime contract</span><span class="pill">source {html.escape(revision_short)}</span><span class="pill">store {html.escape(store['durability'])}</span><span class="pill">3 model routes</span><span class="pill">6 kernel contracts</span><span class="pill">effectors disabled</span></section>
 <section class="grid" id="engines" aria-label="Six vertical engines">{''.join(cards)}</section><section class="boundary"><strong>Operational boundary:</strong> official-source connectors are fixed and bounded. Connector observations are hash-addressed and stored under a hashed session scope. Model invocation remains unavailable until an operator binds a fixed allowlisted endpoint, credential, protocol, and exact declared revision. Hatun can recommend review or abstention only. NOAA AIS is historical official planning data—not represented as a live vessel feed. Trading, legal advice, cyber effectors, person-level prospecting, and unattended consequential actions remain disabled.</section>
-<footer class="mono">{SOURCE_REPOSITORY} · VERSION {VERSION} · <a href="/api/build-info">BUILD INFO</a> · <a href="/readyz">READINESS</a> · <a href="/api/intelligence">INTELLIGENCE CATALOG</a></footer></main></body></html>"""
+{HOLO3D_PANEL_HTML}
+<footer class="mono">{SOURCE_REPOSITORY} · VERSION {VERSION} · <a href="/api/build-info">BUILD INFO</a> · <a href="/readyz">READINESS</a> · <a href="/api/intelligence">INTELLIGENCE CATALOG</a></footer></main>
+<script>{HOLO3D_JS}</script></body></html>"""
 
 
 @app.get("/killinchu/architecture", tags=["Killinchu"])
