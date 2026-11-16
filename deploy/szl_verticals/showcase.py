@@ -104,55 +104,89 @@ def _plan_example(vertical: str, task: str, floor: float) -> str:
     )
 
 
-def _public_market_brief(vertical: str) -> str:
-    if vertical != "finance":
+def _public_governed_review(vertical: str) -> str:
+    if vertical == "finance":
+        return '''<section aria-labelledby="retired-public-title"><div class="section-head"><div>
+<p class="eyebrow">PUBLIC MODEL STATUS</p><h2 id="retired-public-title">Market echo retired.</h2></div>
+<p>The provider retired its exact market observation endpoint. Finance does not substitute a different model task. The separate <a href="/intelligence/lyte">Lyte governed review</a> asks a fixed public governance question and returns a proposal for human review.</p></div></section>'''
+    if vertical != "lyte":
         return ""
-    return '''<section aria-labelledby="public-brief-title"><div class="section-head"><div>
-<p class="eyebrow">LIVE PUBLIC MARKET OBSERVATION</p><h2 id="public-brief-title">Two sources. One checked observation.</h2></div>
-<p>Fetch a Bitcoin spot reference and official Treasury rate observations, then ask Khipu to restate the spot reference. Only a completed exact match is displayed. This public demo is best effort and the underlying observation requires human review.</p></div>
-<div class="boundary"><label><input type="checkbox" id="public-brief-consent"> I agree to send these public market numbers to the Khipu demo. No private context is accepted.</label>
-<p>The advisory score uses a disclosed 0.90 preset; it is not a measurement of investment quality. No trading or custody is enabled.</p>
-<button type="button" class="button primary" id="public-brief-run">Restate public market observation</button>
-<p id="public-brief-status" role="status" aria-live="polite">Ready when you choose to run.</p>
-<pre id="public-brief-output" hidden></pre></div></section>
+    return '''<section aria-labelledby="governed-review-title"><div class="section-head"><div>
+<p class="eyebrow">PUBLIC GOVERNANCE PROPOSAL</p><h2 id="governed-review-title">Inspect a bounded governed response.</h2></div>
+<p>Ask the pinned Khipu service about Lambda’s advisory status using its public corpus. Session dataset and delivery receipts establish this application’s invocation gate; their contents are not sent to the model. This does not analyze or qualify the datasets.</p></div>
+<div class="boundary"><p>Fixed question: “Answer with exactly this status, then cite evidence: Lambda remains Conjecture 1, advisory only.”</p>
+<label><input type="checkbox" id="governed-review-consent"> I agree to send this fixed public question to the governed service.</label>
+<p>Uses the inventory session below. The advisory gate uses a disclosed 0.90 preset. A completed proposal must pass unsigned hash and protocol checks; authenticity, answer quality, and semantic grounding are not established. Training admission and actions remain disabled.</p>
+<button type="button" class="button primary" id="governed-review-run">Request governed proposal</button>
+<p id="governed-review-status" role="status" aria-live="polite">Create or enter an inventory session, then request a proposal.</p>
+<pre id="governed-review-output" hidden></pre></div></section>
 <script>
 (() => {
-  const button = document.getElementById('public-brief-run');
-  const status = document.getElementById('public-brief-status');
-  const output = document.getElementById('public-brief-output');
+  const button = document.getElementById('governed-review-run');
+  const status = document.getElementById('governed-review-status');
+  const output = document.getElementById('governed-review-output');
+  let version = 0;
+  let activeAbort = null;
+  const invalidate = () => {
+    version += 1;
+    if (activeAbort) activeAbort.abort();
+    activeAbort = null; button.disabled = false;
+    output.hidden = true; output.textContent = '';
+    status.textContent = 'Session changed. Request a new governed proposal in the current session.';
+  };
+  document.addEventListener('input', event => {
+    if (event.target.id === 'dataset-session') invalidate();
+  });
+  document.addEventListener('click', event => {
+    if (event.target.id === 'dataset-new-session') invalidate();
+  });
   button.addEventListener('click', async () => {
-    if (!document.getElementById('public-brief-consent').checked) {
-      status.textContent = 'Confirm the public demo consent before running.'; return;
+    if (!document.getElementById('governed-review-consent').checked) {
+      status.textContent = 'Confirm consent to the fixed public question before running.'; return;
     }
-    button.disabled = true; output.hidden = true;
-    const session = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
+    const session = document.getElementById('dataset-session').value.trim();
+    if (!/^[A-Za-z0-9._~-]{32,128}$/.test(session)) {
+      status.textContent = 'Create or enter the inventory session below first.'; return;
+    }
+    const operation = ++version;
+    const controller = new AbortController(); activeAbort = controller;
+    const deadline = setTimeout(() => controller.abort(), 90000);
+    const current = () => operation === version && document.getElementById('dataset-session').value.trim() === session;
+    button.disabled = true; output.hidden = true; output.textContent = '';
     const post = async (path, body) => {
       const response = await fetch(path, {method: 'POST', headers: {
-        'Content-Type': 'application/json', 'X-SZL-Session': session}, body: JSON.stringify(body), signal: AbortSignal.timeout(90000)});
+        'Content-Type': 'application/json', 'X-SZL-Session': session}, body: JSON.stringify(body), signal: controller.signal});
       const value = await response.json();
-      if (!response.ok) throw new Error('Request unavailable (HTTP ' + response.status + '). Review the contract and try again later.');
+      if (!current()) throw new Error('Session changed.');
+      if (!response.ok) throw new Error('Proposal withheld or provider unavailable (HTTP ' + response.status + '). No successful generation is claimed.');
       return value;
     };
     try {
-      status.textContent = 'Fetching public market observations…';
-      const spot = await post('/api/verticals/finance/connectors/coinbase-spot/fetch', {parameters: {base: 'BTC', currency: 'USD'}, force_refresh: true});
-      const rates = await post('/api/verticals/finance/connectors/treasury-average-rates/fetch', {parameters: {limit: 5}, force_refresh: true});
-      const request = {task: 'risk-summary', objective: 'Review the public market observations.', context: '',
+      status.textContent = 'Observing session inventory and delivery receipts…';
+      const inventory = await post('/api/verticals/lyte/connectors/hf-datasets/fetch', {parameters: {}, force_refresh: true});
+      const delivery = await post('/api/verticals/lyte/connectors/github-actions/fetch', {parameters: {repository: 'vertical-services', limit: 5}, force_refresh: true});
+      const request = {task: 'governed-evidence-review', objective: 'Review the fixed public governance proposal.', context: '',
         axes: {evidence: 0.90, freshness: 0.90, reversibility: 0.90},
-        evidence_sha256: [spot.receipt.payload_sha256, rates.receipt.payload_sha256],
-        preferred_model: 'khipu-gguf-public', public_demo_consent: true, max_new_tokens: 32, temperature: 0};
-      status.textContent = 'Checking evidence and preparing the brief…';
+        evidence_sha256: [inventory.receipt.payload_sha256, delivery.receipt.payload_sha256],
+        preferred_model: 'khipu-governed-public', public_demo_consent: true, max_new_tokens: 32, temperature: 0};
+      status.textContent = 'Checking source identity, scoped receipts, and the governed response…';
       const {max_new_tokens, temperature, ...planRequest} = request;
-      const plan = await post('/api/verticals/finance/intelligence/plan', planRequest);
-      if (plan.decision !== 'READY_FOR_INFERENCE') throw new Error('Brief withheld: ' + plan.blockers.join(', '));
-      const result = await post('/api/verticals/finance/intelligence/invoke', request);
-      if (result.provider_verification.output_complete !== true || result.provider_verification.observation_match_verified !== true) {
-        throw new Error('Observation withheld: the model did not return a completed exact match.');
+      const plan = await post('/api/verticals/lyte/intelligence/plan', planRequest);
+      if (plan.decision !== 'READY_FOR_INFERENCE') throw new Error('Proposal withheld: ' + plan.blockers.join(', '));
+      const result = await post('/api/verticals/lyte/intelligence/invoke', request);
+      const verification = result.provider_verification;
+      if (verification.output_complete !== true || verification.hash_consistency_verified !== true ||
+          verification.provider_state !== 'PROPOSAL' || verification.authenticity_established !== false ||
+          result.local_evidence_forwarded !== false || result.effectors_enabled !== false) {
+        throw new Error('Proposal withheld: required governed response checks did not pass.');
       }
       output.textContent = result.output; output.hidden = false;
-      status.textContent = 'Completed observation received. Its text matches the locally compiled public value. The source and unsigned reply require human review.';
-    } catch (error) { status.textContent = error.message; }
-    finally { button.disabled = false; }
+      status.textContent = 'MODELED proposal received for human review. Unsigned protocol and hash consistency passed. Answer quality and semantic grounding remain unavailable; session dataset contents were not forwarded.';
+    } catch (error) { if (current()) status.textContent = error.message; }
+    finally {
+      clearTimeout(deadline);
+      if (current()) { button.disabled = false; activeAbort = null; }
+    }
   });
 })();
 </script>'''
@@ -477,8 +511,8 @@ h1{{font-size:clamp(40px,10cqi,112px);line-height:.96;max-width:12ch}}
 <div class="shell"><section><div class="section-head"><div><p class="eyebrow">PRODUCT WEDGE</p><h2>The job others leave fragmented.</h2></div><p>{_esc(intel['unserved_job'])}</p></div><div class="split"><article class="thesis"><span class="micro">PRIMARY JOB</span><h3>{_esc(intel['primary_job'])}</h3><p>One bounded workflow, one source identity, one session scope, and one review receipt.</p></article><article class="thesis"><span class="micro">SIGNATURE VIEW</span><h3>{_esc(experience['signature_view'])}</h3><p>{_esc(experience['benchmark'])}. This view combines product clarity with evidence-native operating controls.</p></article></div></section>
 {_catalog_search()}
 {_dataset_inventory(canonical)}
-<section><div class="section-head"><div><p class="eyebrow">MODEL ROUTING</p><h2>Use the right model, not every model.</h2></div><p>Operator model routes require a fixed endpoint, credential and exact revision. The separate public Khipu GGUF route accepts only a consented numeric market brief. The public interface cannot supply an endpoint.</p></div><div class="grid">{_cards(models, kind='model')}</div></section>
-{_public_market_brief(canonical)}
+<section><div class="section-head"><div><p class="eyebrow">MODEL ROUTING</p><h2>Route each task explicitly.</h2></div><p>Operator model routes require a fixed endpoint, credential and exact revision. Lyte’s separate public governed route asks a fixed question using the provider’s public corpus. The old market echo is retired. The public interface cannot supply an endpoint.</p></div><div class="grid">{_cards(models, kind='model')}</div></section>
+{_public_governed_review(canonical)}
 <section><div class="section-head"><div><p class="eyebrow">KERNEL FABRIC</p><h2>Evidence before language.</h2></div><p>The model never owns authority. Invariants, context limits, advisory Lambda, blocking rules, receipt attention, and deterministic hashes constrain the request and preserve reviewability.</p></div><div class="grid">{_cards(intel['kernels'], kind='kernel')}</div></section>
 <section><div class="section-head"><div><p class="eyebrow">TASK PLANE</p><h2>Four jobs. Explicit routes.</h2></div><p>Each task maps to a reviewed default model. A preferred model is accepted only when it belongs to the vertical's approved set.</p></div><div class="grid">{_task_cards(tasks)}</div></section>
 <section><div class="section-head"><div><p class="eyebrow">FRONTIER DELTA</p><h2>Build what is still missing.</h2></div><p>These are contract-ready product directions, not unsupported claims of production capability.</p></div><div class="grid">{_list_cards(intel['novel_capabilities'], 'CONTRACT-READY EDGE')}</div></section>

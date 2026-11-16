@@ -1,0 +1,93 @@
+{
+  "schema": "szl.model-inference-lab.governed-health/v2",
+  "status": "READY",
+  "legacy_model_runtime": "READY",
+  "source_revision": "c94e9218093e0815745cbd5dccaddea1797379a3",
+  "controller_revision": "9f227f6a10dac178b29130c742c98451b6ed8391",
+  "dependency_status": {
+    "ready": true,
+    "packages": {
+      "szl-forge-inference": {
+        "expected": "0.2.0",
+        "observed": "0.2.0",
+        "match": true,
+        "direct_url": {
+          "archive_info": {
+            "hash": "sha256=e1e5d3fdd0de04be06344246c57f79b1a67130c4afe4fd0c278b4c62d0e89daf",
+            "hashes": {
+              "sha256": "e1e5d3fdd0de04be06344246c57f79b1a67130c4afe4fd0c278b4c62d0e89daf"
+            }
+          },
+          "url": "https://github.com/szl-holdings/szl-forge/archive/9f227f6a10dac178b29130c742c98451b6ed8391.tar.gz"
+        }
+      },
+      "szl-second-brain": {
+        "expected": "1.3.0",
+        "observed": "1.3.0",
+        "match": true,
+        "direct_url": {
+          "archive_info": {
+            "hash": "sha256=23260a61b905818302429d5881a7ad0e6127f32b0a2ff4e8d2482bbc3a16b44b",
+            "hashes": {
+              "sha256": "23260a61b905818302429d5881a7ad0e6127f32b0a2ff4e8d2482bbc3a16b44b"
+            }
+          },
+          "url": "https://github.com/szl-holdings/szl-second-brain/archive/1d3960c69235f117b7ec2b5ea97472f81fb588f5.tar.gz"
+        }
+      },
+      "szl-nemo": {
+        "expected": "0.4.0",
+        "observed": "0.4.0",
+        "match": true,
+        "direct_url": {
+          "archive_info": {
+            "hash": "sha256=600c992d4b34a9c2e4fbee68d2766717a0d719aa7e0ecab1ae19ad423c40f452",
+            "hashes": {
+              "sha256": "600c992d4b34a9c2e4fbee68d2766717a0d719aa7e0ecab1ae19ad423c40f452"
+            }
+          },
+          "url": "https://github.com/szl-holdings/szl-nemo/archive/810231a531188bb569e3faa17396386eb0a5e260.tar.gz"
+        }
+      }
+    },
+    "contract_ready": true,
+    "contract_error": null,
+    "formula_atlas_ready": true,
+    "formula_atlas_error": null,
+    "formula_atlas_counts": {
+      "attributed_formula_count": 30,
+      "executable_formula_count": 21,
+      "quant_domain_count": 9,
+      "locked_proven_count": 8
+    }
+  },
+  "formula_atlas": {
+    "ready": true,
+    "attributed_formula_count": 30,
+    "executable_formula_count": 21,
+    "quant_domain_count": 9,
+    "locked_proven_count": 8,
+    "formula_may_authorize": false
+  },
+  "second_brain": {
+    "ready": true,
+    "public_chunk_count": 575,
+    "content_access": "HANDLES_ONLY",
+    "private_graph_present": false,
+    "frontier": {
+      "ready": true,
+      "state": "REVIEW_REQUIRED",
+      "candidate_count": 129,
+      "source_count": 7,
+      "candidate_set_sha256": "fb15e2d2822a9afb445c3eae7e077a7c250a59565fdd395a9e11f2247b12a884",
+      "training_authority": "NONE",
+      "execution_authority": "NONE"
+    }
+  },
+  "nemo": {
+    "version": "0.4.0",
+    "envelope_rules": "doctrine-v11/E1-E10",
+    "text_rules": "doctrine-v11/R1-R5"
+  },
+  "component_error": null
+}

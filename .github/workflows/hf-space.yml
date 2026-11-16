@@ -357,17 +357,17 @@ jobs:
           path: artifacts/live-connector-probe.json
           if-no-files-found: error
           retention-days: 30
-      - name: Witness the pinned public Khipu market brief
+      - name: Witness the pinned public governed proposal protocol
         run: |
-          python tools/probe_public_khipu.py \
+          python tools/probe_public_governed_khipu.py \
             --expected-revision "$GITHUB_SHA" \
-            --output artifacts/public-khipu-probe.json
-      - name: Upload public model invocation receipt
+            --output artifacts/public-governed-khipu-probe.json
+      - name: Upload governed protocol consistency receipt
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: vertical-services-public-khipu-probe-${{ github.run_id }}
-          path: artifacts/public-khipu-probe.json
+          name: vertical-services-public-governed-khipu-probe-${{ github.run_id }}
+          path: artifacts/public-governed-khipu-probe.json
           if-no-files-found: error
           retention-days: 30
 

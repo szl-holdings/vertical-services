@@ -17,6 +17,11 @@ def public_runtime(runtime, ledger, monkeypatch):
     from szl_verticals.connector_specs import CONNECTORS
     from szl_verticals.official_connectors import _receipt
     monkeypatch.setattr(runtime, "CONNECTORS", CONNECTORS)
+    # Historical protocol contract tests stay exact. Production planning retires
+    # this alias; only this synthetic transport fixture restores the old binding.
+    historical_binding = runtime.public_khipu.binding()
+    monkeypatch.setattr(runtime.public_khipu, "binding", lambda: {
+        **historical_binding, "state": "BOUND", "blockers": []})
     samples = [
         ("coinbase-spot", "https://api.coinbase.com/v2/prices/BTC-USD/spot",
          {"base": "BTC", "currency": "USD", "amount": 65000.0,

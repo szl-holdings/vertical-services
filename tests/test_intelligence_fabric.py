@@ -84,7 +84,7 @@ def test_each_vertical_has_distinct_jobs_tasks_and_frontend(monkeypatch):
         assert data["vertical"] == vertical
         assert data["primary_job"]
         assert data["unserved_job"]
-        assert len(data["tasks"]) == 4
+        assert len(data["tasks"]) == (5 if vertical == "lyte" else 4)
         assert len(data["novel_capabilities"]) == 3
         assert data["policy"]["effectors_enabled"] is False
         assert all(
@@ -143,7 +143,8 @@ def test_model_routes_fail_closed_when_operator_binding_is_missing(monkeypatch):
     profile = CLIENT.get("/api/verticals/finance/intelligence").json()
     assert all(item["state"] == "UNAVAILABLE" for item in profile["models"] if item["alias"] != "khipu-gguf-public")
     public = next(item for item in profile["models"] if item["alias"] == "khipu-gguf-public")
-    assert public["state"] == "BOUND"
+    assert public["state"] == "RETIRED"
+    assert "PUBLIC_EXACT_ECHO_PROTOCOL_RETIRED" in public["blockers"]
     assert public["credential_present"] is False
     assert all(
         item["credential_value_exposed"] is False for item in profile["models"]
