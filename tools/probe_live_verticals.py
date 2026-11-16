@@ -20,6 +20,10 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
+# Bounded retry budget for transient upstream 5xx; exhaustion still fails closed.
+REQUEST_RETRY_ATTEMPTS = 5
+REQUEST_RETRY_BACKOFF_SECONDS = (5, 15, 45, 45)
+
 PROBES = (
     ("sentra", "cisa-kev", {"limit": 3}),
     ("lyte", "github-actions", {"repository": "vertical-services", "limit": 10}),
@@ -139,7 +143,7 @@ def request_with_retry(
     **kwargs: Any,
 ) -> httpx.Response:
     attempts: list[dict[str, Any]] = []
-    for attempt in range(1, 4):
+    for attempt in range(1, REQUEST_RETRY_ATTEMPTS + 1):
         try:
             response = client.request(method, url, **kwargs)
             if response.status_code < 500:
@@ -157,8 +161,8 @@ def request_with_retry(
                 "http_status": None,
                 "exception_message_recorded": False,
             })
-        if attempt < 3:
-            time.sleep(2 ** (attempt - 1))
+        if attempt < REQUEST_RETRY_ATTEMPTS:
+            time.sleep(REQUEST_RETRY_BACKOFF_SECONDS[min(attempt - 1, len(REQUEST_RETRY_BACKOFF_SECONDS) - 1)])
     raise ProbeRequestFailure(method, url, attempts)
 
 
