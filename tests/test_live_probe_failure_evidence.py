@@ -50,8 +50,8 @@ def test_exhausted_http_failure_retains_nonzero_receipt_and_bounded_hash(monkeyp
     failure = report["request_failure"]
     assert failure["state"] == "UNAVAILABLE"
     assert failure["url"] == "https://fixed.example/api/verticals/sentra/connectors/cisa-kev/fetch"
-    assert len(requests) == 3 and sleeps == [1, 2]
-    assert [a["http_status"] for a in failure["attempts"]] == [503] * 3
+    assert len(requests) == 5 and sleeps == [5, 15, 45, 45]
+    assert [a["http_status"] for a in failure["attempts"]] == [503] * 5
     for attempt in failure["attempts"]:
         assert attempt["body_prefix_bytes"] == 4096
         assert attempt["body_prefix_truncated"] is True
@@ -74,7 +74,7 @@ def test_transport_failure_redacts_exception_and_url_credentials(monkeypatch, tm
     failure = report["request_failure"]
     assert failure["url"].startswith("https://fixed.example/")
     assert all(a["error_type"] == "ConnectTimeout" and a["http_status"] is None for a in failure["attempts"])
-    assert len(requests) == 3 and sleeps == [1, 2]
+    assert len(requests) == 5 and sleeps == [5, 15, 45, 45]
     for secret in ("PRIVATE_PASSWORD_FIXTURE", "private-user", "PRIVATE_TRANSPORT_FIXTURE", "PRIVATE_SESSION_FIXTURE"):
         assert secret not in text
 
@@ -98,7 +98,7 @@ def test_later_failure_preserves_already_observed_connector(monkeypatch, tmp_pat
     assert len(report["probes"]) == 1
     assert report["probes"][0]["state"] == "OBSERVED"
     assert report["request_failure"]["url"].endswith("/lyte/connectors/github-actions/fetch")
-    assert len(requests) == 4 and sleeps == [1, 2]
+    assert len(requests) == 6 and sleeps == [5, 15, 45, 45]
 
 
 def test_client_error_still_returns_without_retry(monkeypatch):
@@ -127,7 +127,7 @@ def test_later_readiness_failure_retains_earlier_readiness(monkeypatch, tmp_path
     assert len(report["probes"]) == 11
     assert report["vertical_readiness"] == {"sentra": {"http_status": 200, "ready": True, "status": None, "live_data": {"observed_in_scope": True}, "build": None, "lambda_advisory": None}}
     assert report["request_failure"]["url"].endswith("/api/verticals/lyte/readyz")
-    assert report["complete"] is False and sleeps == [1, 2]
+    assert report["complete"] is False and sleeps == [5, 15, 45, 45]
     assert report["experiences"] == [] and "root_readiness" not in report
 
 
@@ -141,7 +141,7 @@ def test_recovered_request_still_returns_original_success(monkeypatch):
         return httpx.Response(502 if len(requests) == 1 else 200, json={"ready": True})
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         assert probe.request_with_retry(client, "GET", "https://fixed.example/readyz").json() == {"ready": True}
-    assert len(requests) == 2 and sleeps == [1]
+    assert len(requests) == 2 and sleeps == [5]
 
 
 def successful_handler():
@@ -178,7 +178,7 @@ def test_build_failure_retains_successful_root_readiness(monkeypatch, tmp_path):
     assert len(report["vertical_readiness"]) == 6 and len(report["experiences"]) == 6
     assert report["request_failure"]["url"].endswith("/api/build-info")
     assert "build_info" not in report and report["complete"] is False
-    assert sleeps == [1, 2]
+    assert sleeps == [5, 15, 45, 45]
 
 
 def test_complete_success_remains_pass(monkeypatch, tmp_path):
