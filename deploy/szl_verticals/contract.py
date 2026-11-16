@@ -95,12 +95,47 @@ def anatomy_for(vertical: str) -> dict[str, Any]:
         "canonical_repository": profile["canonical_repository"],
         "public_space": profile["public_space"],
         "consolidation": profile.get("consolidation"),
+        "telemetry": telemetry_contract_for(canonical),
         "truth_label": "MEASURED",
+    }
+
+
+TELEMETRY_PROJECTION_FIELDS = (
+    "trace_id", "span_id", "source_revision", "dataset_id", "model_id",
+    "provider", "observed_at", "freshness_seconds", "sampling_rate",
+    "freshness_state", "age_seconds", "rights", "license", "outcome", "latency_ms",
+    "deployment_revision", "cohort", "action", "approval_id", "approval_required",
+    "source_state", "effective_state", "source_provenance", "counts_as_connector_evidence",
+    "receipt_id", "receipt_url",
+)
+
+
+def telemetry_contract_for(vertical: str) -> dict[str, Any]:
+    """Describe the read-only telemetry projection available to a vertical."""
+    canonical = canonical_vertical(vertical)
+    enabled = canonical == "lyte"
+    return {
+        "schema": "szl.lyte-telemetry/v1",
+        "enabled": enabled,
+        "supported_verticals": ["lyte"],
+        "state": "SESSION_ISOLATED_PROCESS_MEMORY" if enabled else "NOT_ATTEMPTED",
+        "receipt_backed": enabled,
+        "source_provenance": "CALLER_REPORTED_NOT_AUTHENTICATED" if enabled else "UNAVAILABLE",
+        "observation_truth_label": "REPORTED" if enabled else "UNAVAILABLE",
+        "counts_as_connector_evidence": False,
+        "fields": list(TELEMETRY_PROJECTION_FIELDS),
+        "ingest_route": "/lyte/v1/telemetry" if enabled else None,
+        "projection_route": f"/api/verticals/{canonical}/telemetry" if enabled else None,
+        "search_route": "/lyte/v1/telemetry/search" if enabled else None,
+        "raw_payload_retained": False,
+        "effectors_enabled": False,
+        "human_approval_required": True,
+        "truth_label": "MEASURED" if enabled else "UNAVAILABLE",
     }
 
 __all__ = [
     "ALIASES", "ANATOMY_ORGANS", "CANONICAL_VERTICALS", "CONNECTORS",
     "ConnectorFetchRequest", "ConnectorSpec", "FORMULAS", "VERTICALS",
     "advisory_lambda", "anatomy_for", "canonical_vertical",
-    "connector_state", "connectors_for", "formulas_for",
+    "connector_state", "connectors_for", "formulas_for", "telemetry_contract_for",
 ]

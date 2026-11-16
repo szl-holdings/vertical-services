@@ -288,6 +288,7 @@ def catalog() -> dict:
         "puriq_canonical_runtime": "finance",
         "operational_fabric": {
             "catalog": "/api/verticals",
+            "search": "/api/verticals/search",
             "frontier": "/api/verticals/{vertical}/frontier",
             "experience": "/experience/{vertical}",
             "intelligence_room": "/intelligence/{vertical}",
@@ -298,6 +299,8 @@ def catalog() -> dict:
             "formulas": "/api/verticals/{vertical}/formulas",
             "connectors": "/api/verticals/{vertical}/connectors",
             "second_brain": "/api/verticals/{vertical}/second-brain",
+            "telemetry": "/api/verticals/{vertical}/telemetry",
+            "telemetry_search": "/api/verticals/{vertical}/telemetry/search",
             "hatun_review": "/api/verticals/{vertical}/hatun/evaluate",
             "readiness": "/api/verticals/{vertical}/readyz",
             "fetch": "/api/verticals/{vertical}/connectors/{connector_id}/fetch",

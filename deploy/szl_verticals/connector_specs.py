@@ -15,6 +15,9 @@ SAFE_TOKEN = re.compile(r"^[A-Za-z0-9._:/ -]{1,128}$")
 SAFE_REPO = re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$")
 BBL = re.compile(r"^\d{10}$")
 CURRENCY = re.compile(r"^[A-Z0-9]{2,10}$")
+HF_DATASET_OWNER = "SZLHOLDINGS"
+HF_DATASET_API_URL = "https://huggingface.co/api/datasets"
+HF_DATASET_PAGE_LIMIT = 500
 BOROUGHS = {
     "MN",
     "BX",
@@ -104,6 +107,23 @@ CONNECTORS: dict[str, ConnectorSpec] = {
             "repository."
         ),
         builder="github",
+    ),
+    "hf-datasets": ConnectorSpec(
+        id="hf-datasets",
+        vertical="lyte",
+        authority="Hugging Face public dataset catalog",
+        authority_url="https://huggingface.co/datasets?author=SZLHOLDINGS",
+        method="GET",
+        response_format="json",
+        freshness_seconds=3600,
+        max_bytes=4_000_000,
+        required=False,
+        auth_env=None,
+        description=(
+            "Fixed-owner SZLHOLDINGS public dataset metadata inventory. "
+            "One bounded catalog page; no private-estate, quality, or training-admission claim."
+        ),
+        builder="hf-datasets",
     ),
     "noaa-ais-2025": ConnectorSpec(
         id="noaa-ais-2025",

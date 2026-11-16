@@ -6,7 +6,7 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from fastapi import HTTPException
 
-from .connector_specs import GITHUB_REPOSITORIES
+from .connector_specs import GITHUB_REPOSITORIES, HF_DATASET_API_URL
 
 
 def _scalar(parameters: Mapping[str, Any], key: str, default: Any = None) -> Any:
@@ -84,6 +84,8 @@ def _assert_allowed_destination(url: str) -> None:
         and not parts.query
         and not parts.fragment
     )
+    # Dataset discovery is one fixed API destination, not a general Hub fetcher.
+    public_dataset_page = url == HF_DATASET_API_URL
     allowed_hosts = {
         "www.cisa.gov",
         "services.nvd.nist.gov",
@@ -99,7 +101,7 @@ def _assert_allowed_destination(url: str) -> None:
     }
     if (
         parts.scheme != "https"
-        or (parts.hostname not in allowed_hosts and not public_actions_page)
+        or (parts.hostname not in allowed_hosts and not public_actions_page and not public_dataset_page)
         or parts.username
         or parts.password
         or (parts.hostname == "github.com" and parts.port not in (None, 443))

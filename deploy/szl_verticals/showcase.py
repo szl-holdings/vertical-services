@@ -158,6 +158,263 @@ def _public_market_brief(vertical: str) -> str:
 </script>'''
 
 
+CATALOG_SEARCH_JS = r"""
+(() => {
+  const form = document.getElementById('catalog-search-form');
+  const input = document.getElementById('catalog-query');
+  const results = document.getElementById('catalog-results');
+  const status = document.getElementById('catalog-status');
+  if (!form || !input || !results || !status) return;
+  let activeRequest = null;
+  let version = 0;
+  const cancel = () => {
+    version += 1;
+    if (activeRequest) activeRequest.abort();
+  };
+  input.addEventListener('input', () => {
+    cancel();
+    results.replaceChildren();
+    status.textContent = 'Choose Search to inspect matching catalog objects.';
+  });
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    cancel();
+    const query = input.value.trim();
+    results.replaceChildren();
+    if (query.length < 2 || query.length > 128) {
+      status.textContent = 'Enter between 2 and 128 characters.';
+      return;
+    }
+    const currentVersion = version;
+    const controller = new AbortController();
+    activeRequest = controller;
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    status.textContent = 'Searching catalog metadata…';
+    try {
+      const response = await fetch('/api/verticals/search?q=' + encodeURIComponent(query) + '&limit=12', {
+        headers: {'Accept': 'application/json'}, credentials: 'same-origin',
+        cache: 'no-store', signal: controller.signal,
+      });
+      if (!response.ok) throw new Error('Catalog unavailable');
+      const body = await response.json();
+      if (currentVersion !== version) return;
+      if (body.schema !== 'szl.operational-search/v1' || body.live_binding !== 'CATALOG_METADATA' || !Array.isArray(body.items)) {
+        throw new Error('Catalog contract unavailable');
+      }
+      const fragment = document.createDocumentFragment();
+      for (const item of body.items.slice(0, 12)) {
+        if (!item || typeof item !== 'object') continue;
+        const row = document.createElement('li');
+        row.className = 'asset';
+        const title = document.createElement('strong');
+        title.textContent = String(item.name || item.canonical_id || item.id || 'Catalog object');
+        const detail = document.createElement('p');
+        detail.textContent = [item.kind, item.provider, item.state].filter(Boolean).join(' · ');
+        row.append(title, detail);
+        if (typeof item.href === 'string' && item.href.startsWith('/api/')) {
+          const source = document.createElement('a');
+          source.className = 'catalog-source';
+          source.href = item.href;
+          source.textContent = 'Inspect ' + String(item.canonical_id || item.id || 'catalog contract');
+          row.append(source);
+        }
+        fragment.append(row);
+      }
+      const count = fragment.childElementCount;
+      results.replaceChildren(fragment);
+      status.textContent = count
+        ? count + ' catalog result' + (count === 1 ? '' : 's') + ' · configuration metadata'
+        : 'No catalog matches. Try a vertical, connector, model, or kernel.';
+    } catch (_error) {
+      if (currentVersion !== version) return;
+      results.replaceChildren();
+      status.textContent = 'Catalog search is unavailable. Try again or inspect the catalog contract.';
+    } finally {
+      clearTimeout(timeout);
+      if (activeRequest === controller) activeRequest = null;
+    }
+  });
+})();
+"""
+
+
+def _catalog_search() -> str:
+    return '''<section aria-labelledby="catalog-title" data-catalog-search>
+<div class="section-head"><div><p class="eyebrow">CATALOG METADATA</p><h2 id="catalog-title">Find the configured object.</h2></div>
+<p>Search configured verticals, connectors, models, and kernels, then inspect their source contracts. These results describe configuration. Lyte provides session telemetry and can observe the public dataset inventory.</p></div>
+<form id="catalog-search-form" class="catalog-search" role="search" action="/api/verticals/search" method="get">
+<label for="catalog-query">Search the configured catalog</label>
+<div class="catalog-controls"><input id="catalog-query" name="q" type="search" minlength="2" maxlength="128" required placeholder="vertical, connector, model, kernel…" autocomplete="off"><button class="button primary" type="submit">Search</button></div>
+<input type="hidden" name="limit" value="12"></form>
+<p id="catalog-status" role="status" aria-live="polite">Choose Search to inspect matching catalog objects.</p>
+<ul id="catalog-results" class="grid catalog-results" aria-label="Catalog results"></ul>
+<p><a href="/api/verticals">Inspect the catalog contract</a></p>
+</section><script>''' + CATALOG_SEARCH_JS + '</script>'
+
+
+DATASET_INVENTORY_JS = r"""
+(() => {
+  const token = document.getElementById('dataset-session');
+  const newSession = document.getElementById('dataset-new-session');
+  const observe = document.getElementById('dataset-observe');
+  const brain = document.getElementById('dataset-brain');
+  const review = document.getElementById('dataset-review');
+  const query = document.getElementById('dataset-query');
+  const status = document.getElementById('dataset-status');
+  const summary = document.getElementById('dataset-summary');
+  const results = document.getElementById('dataset-results');
+  const proof = document.getElementById('dataset-proof');
+  if (!token || !newSession || !observe || !brain || !review || !query || !status || !summary || !results || !proof) return;
+  let snapshot = null;
+  let receipt = null;
+  let version = 0;
+  let activeRequest = null;
+  const buttons = [observe, brain, review];
+  const busy = (value) => buttons.forEach(button => { button.disabled = value || (button === review && !receipt); });
+  const reset = () => {
+    version += 1;
+    if (activeRequest) activeRequest.abort();
+    snapshot = null; receipt = null;
+    results.replaceChildren(); summary.textContent = ''; proof.textContent = '';
+    busy(false);
+    status.textContent = 'Session changed. Observe the public inventory or open its Second Brain memory.';
+  };
+  token.addEventListener('input', reset);
+  newSession.addEventListener('click', () => {
+    token.value = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
+    reset();
+  });
+  const render = () => {
+    results.replaceChildren();
+    if (!snapshot) return;
+    const needle = query.value.trim().toLocaleLowerCase();
+    const matches = snapshot.items.filter(item => [item.id, item.revision, ...(item.license_tags || [])]
+      .some(value => String(value || '').toLocaleLowerCase().includes(needle)));
+    const shown = matches.slice(0, 50);
+    const fragment = document.createDocumentFragment();
+    for (const item of shown) {
+      const row = document.createElement('li'); row.className = 'asset';
+      const title = document.createElement('strong'); title.textContent = item.id;
+      const revision = document.createElement('p'); revision.className = 'mono';
+      revision.textContent = 'Reported revision: ' + (item.revision || 'UNAVAILABLE');
+      const rights = document.createElement('p');
+      rights.textContent = 'License tags: ' + ((item.license_tags || []).join(', ') || 'UNAVAILABLE') + ' · rights require review';
+      row.append(title, revision, rights);
+      if (/^SZLHOLDINGS\/[A-Za-z0-9._-]+$/.test(item.id)) {
+        const source = document.createElement('a'); source.className = 'catalog-source';
+        source.href = 'https://huggingface.co/datasets/' + item.id;
+        source.textContent = 'Open dataset source'; row.append(source);
+      }
+      fragment.append(row);
+    }
+    results.replaceChildren(fragment);
+    summary.textContent = snapshot.items.length + ' dataset records in one public catalog observation. ' +
+      matches.length + ' search matches; showing ' + shown.length + '. Full and private estate coverage is unknown. Training is not admitted.';
+  };
+  query.addEventListener('input', render);
+  const admit = (value, sourceReceipt) => {
+    if (!value || value.schema !== 'szl.public-dataset-inventory/v1' || value.owner !== 'SZLHOLDINGS' ||
+        !Array.isArray(value.items) || value.items.length > 500 || !sourceReceipt ||
+        !/^[a-f0-9]{64}$/.test(sourceReceipt.payload_sha256 || '')) throw new Error('Inventory contract unavailable');
+    for (const item of value.items) {
+      if (!item || typeof item.id !== 'string' || !/^SZLHOLDINGS\/[A-Za-z0-9._-]+$/.test(item.id) ||
+          (item.license_tags !== null && (!Array.isArray(item.license_tags) || item.license_tags.some(tag => typeof tag !== 'string')))) {
+        throw new Error('Inventory contract unavailable');
+      }
+    }
+    snapshot = value; receipt = sourceReceipt;
+    proof.textContent = 'Source payload digest: ' + receipt.payload_sha256 + '\n' +
+      'Receipt: ' + (receipt.receipt_id || 'UNAVAILABLE') + '\n' +
+      'One source observation; dataset records are not independent sources. Revision and license metadata do not verify contents or training rights.';
+    render();
+  };
+  const run = async (kind) => {
+    const session = token.value.trim();
+    if (!/^[A-Za-z0-9._~-]{32,128}$/.test(session)) {
+      status.textContent = 'Create a session or enter your existing 32–128 character session token.'; return;
+    }
+    const currentVersion = ++version;
+    if (activeRequest) activeRequest.abort();
+    const controller = new AbortController(); activeRequest = controller;
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    busy(true);
+    const request = async (path, body) => {
+      const response = await fetch(path, {method: body === undefined ? 'GET' : 'POST',
+        headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-SZL-Session': session},
+        credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
+        ...(body === undefined ? {} : {body: JSON.stringify(body)})});
+      if (!response.ok) throw new Error('Request unavailable');
+      return response.json();
+    };
+    try {
+      if (kind === 'observe') {
+        status.textContent = 'Observing the public dataset catalog and storing its metadata receipt…';
+        const value = await request('/api/verticals/lyte/connectors/hf-datasets/fetch', {parameters: {}, force_refresh: true});
+        if (currentVersion !== version) return;
+        admit(value.observation, value.receipt);
+        status.textContent = 'Public catalog metadata observed. Open Second Brain to verify the same stored source observation.';
+      } else if (kind === 'brain') {
+        status.textContent = 'Reading this session’s Second Brain memory…';
+        const value = await request('/api/verticals/lyte/second-brain?limit=100');
+        if (currentVersion !== version) return;
+        const records = value.memory && Array.isArray(value.memory.observations) ? value.memory.observations : [];
+        const record = records.find(item => item.connector_id === 'hf-datasets' && item.withdrawn !== true &&
+          (!receipt || item.payload_sha256 === receipt.payload_sha256));
+        if (!record) throw new Error('Stored inventory unavailable');
+        admit(record.summary, record);
+        status.textContent = 'Second Brain contains this source observation in the same session. Stored history may be stale; Hatun checks freshness during review.';
+      } else if (kind === 'review' && receipt) {
+        status.textContent = 'Requesting a bounded Hatun review of this metadata observation…';
+        const value = await request('/api/verticals/lyte/hatun/evaluate', {
+          intent: 'Inspect public dataset inventory metadata and remaining evidence gaps.',
+          requested_action: 'review-dataset-metadata',
+          axes: {source_presence: 1, content_quality: 0, training_rights: 0},
+          evidence_sha256: [receipt.payload_sha256],
+        });
+        if (currentVersion !== version) return;
+        if (!['REVIEW', 'ABSTAIN'].includes(value.decision) || value.can_authorize !== false || value.can_execute !== false) {
+          throw new Error('Review contract unavailable');
+        }
+        status.textContent = 'Hatun: ' + value.decision + '. ' +
+          (Array.isArray(value.blockers) ? value.blockers.join(', ') : '') + '. No action or training authorized.';
+        proof.textContent += '\nHatun review digest: ' + (value.receipt && value.receipt.basis_sha256 || 'UNAVAILABLE');
+      }
+    } catch (_error) {
+      if (currentVersion !== version) return;
+      status.textContent = 'Inventory operation unavailable. No new successful observation or review is claimed. Check the session and try again.';
+    } finally {
+      clearTimeout(timeout);
+      if (currentVersion === version) busy(false);
+      if (activeRequest === controller) activeRequest = null;
+    }
+  };
+  observe.addEventListener('click', () => run('observe'));
+  brain.addEventListener('click', () => run('brain'));
+  review.addEventListener('click', () => run('review'));
+  busy(false);
+})();
+"""
+
+
+def _dataset_inventory(vertical: str) -> str:
+    if vertical != "lyte":
+        return ""
+    return '''<section aria-labelledby="dataset-title" data-dataset-inventory>
+<div class="section-head"><div><p class="eyebrow">PUBLIC DATASET INVENTORY</p><h2 id="dataset-title">Observe. Remember. Review.</h2></div>
+<p>Observe SZLHOLDINGS public dataset metadata from Hugging Face, retain the source receipt in this session’s Second Brain, and request Hatun review. Living Anatomy describes the connector. Dataset contents and training are separate steps.</p></div>
+<div class="boundary"><label for="dataset-session">Session token</label>
+<div class="catalog-controls"><input id="dataset-session" type="password" minlength="32" maxlength="128" autocomplete="off" spellcheck="false" aria-describedby="dataset-session-note"><button id="dataset-new-session" type="button" class="button">New page session</button></div>
+<p id="dataset-session-note">Use an existing session token to reopen memory, or create a token held only in this page. The token is sent only to this application and is not saved in browser storage.</p>
+<div class="actions"><button id="dataset-observe" type="button" class="button primary">Observe public inventory</button><button id="dataset-brain" type="button" class="button">Open Second Brain</button><button id="dataset-review" type="button" class="button" disabled>Request Hatun review</button><a class="button" href="/api/verticals/lyte/anatomy">Living Anatomy contract</a></div>
+<p id="dataset-status" role="status" aria-live="polite">No inventory observed in this page.</p>
+<p>Unknown content quality and training rights enter the Hatun review as zero advisory axes. Metadata alone cannot authorize training.</p></div>
+<div class="catalog-search"><label for="dataset-query">Search this session’s inventory</label><div class="catalog-controls"><input id="dataset-query" type="search" maxlength="128" placeholder="dataset, revision, license tag…" autocomplete="off"></div></div>
+<p id="dataset-summary" role="status" aria-live="polite"></p>
+<ul id="dataset-results" class="grid catalog-results" aria-label="Observed dataset metadata"></ul>
+<details><summary>Inspect observation and review receipts</summary><pre id="dataset-proof"></pre></details>
+</section><script>''' + DATASET_INVENTORY_JS + '</script>'
+
+
 def _page(vertical: str) -> str:
     canonical = canonical_vertical(vertical)
     product = VERTICALS[canonical]
@@ -198,6 +455,7 @@ a{{color:inherit}}:where(a,button,summary,[tabindex]):focus-visible{{outline:3px
 section{{padding-block:clamp(62px,8vw,112px);border-bottom:1px solid var(--line)}}.section-head{{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.72fr);gap:30px;align-items:end;margin-bottom:30px}}.section-head h2{{max-width:13ch;margin:12px 0 0;font-size:clamp(38px,6vw,76px);font-weight:520;line-height:.92}}.section-head p{{margin:0;color:var(--muted);font-size:17px}}.grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}}.asset,.task,.idea{{position:relative;display:flex;flex-direction:column;min-height:190px;padding:20px;border:1px solid var(--line);border-radius:17px;background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 6%,transparent),transparent 45%),color-mix(in srgb,var(--panel) 82%,transparent)}}.asset:hover,.task:hover,.idea:hover{{border-color:color-mix(in srgb,var(--accent) 50%,transparent)}}.asset-top{{display:flex;justify-content:space-between;gap:12px;align-items:start}}.asset h3,.task h3{{margin:15px 0 0;font-size:24px}}.asset p,.task p,.idea p{{color:var(--muted)}}.asset-foot,.idea small{{margin-top:auto;padding-top:14px;color:var(--faint);font-size:10px;overflow-wrap:anywhere}}.state{{border:1px solid currentColor;border-radius:999px;padding:5px 8px;color:var(--hold);font:700 8px/1.15 ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase}}.state[data-state="BOUND"],.state[data-state="LOCAL_CONTRACT_BOUND"]{{color:var(--good)}}.state[data-state="INVALID"],.state[data-state="BLOCKED"]{{color:var(--bad)}}
 .split{{display:grid;grid-template-columns:1fr 1fr;gap:13px}}.thesis{{min-height:300px;padding:clamp(24px,4vw,44px);border:1px solid var(--line);border-radius:22px;background:color-mix(in srgb,var(--panel) 78%,transparent)}}.thesis h3{{margin:12px 0;font-size:clamp(30px,4vw,54px);line-height:.96}}.thesis p{{color:var(--muted);font-size:17px}}
 pre{{margin:0;max-height:500px;overflow:auto;padding:22px;border:1px solid var(--line);border-radius:18px;background:#020306;color:#d9e3ec;font:12px/1.6 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}}.boundary{{margin-top:20px;padding:20px;border:1px solid var(--line);border-radius:16px;color:var(--muted);background:color-mix(in srgb,var(--panel) 74%,transparent)}}footer{{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;padding-block:30px;color:var(--faint);font:700 10px/1.4 ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase}}
+.catalog-search label{{display:block;margin-bottom:10px;font-weight:650}}.catalog-controls{{display:flex;flex-wrap:wrap;gap:12px}}.catalog-controls input{{flex:1 1 260px;min-height:48px;padding:12px 15px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:inherit}}.catalog-controls input:focus-visible{{outline:3px solid var(--accent);outline-offset:3px}}.catalog-controls button,[data-dataset-inventory] button{{color:var(--ink);cursor:pointer}}.catalog-results{{padding:0;list-style:none}}.catalog-results .asset{{min-height:150px}}.catalog-source{{display:flex;align-items:center;min-height:44px;margin-top:auto;overflow-wrap:anywhere}}
 @media(max-width:920px){{.hero,.section-head{{grid-template-columns:1fr}}.hero{{min-height:0}}.instrument{{min-height:360px}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}.stats{{grid-template-columns:repeat(2,minmax(0,1fr))}}.stat:nth-child(2){{border-right:0}}.stat:nth-child(-n+2){{border-bottom:1px solid var(--line)}}}}
 @media(max-width:620px){{.rail-inner{{grid-template-columns:1fr;gap:0}}.family{{justify-content:flex-start}}h1{{font-size:clamp(54px,18vw,82px)}}.grid,.split{{grid-template-columns:1fr}}.instrument-copy{{grid-template-columns:1fr}}.reading{{border-right:0;border-bottom:1px solid var(--line)}}.reading:last-child{{border-bottom:0}}}}
 /* Size against the available content width, including browser and CSS zoom. */
@@ -217,6 +475,8 @@ h1{{font-size:clamp(40px,10cqi,112px);line-height:.96;max-width:12ch}}
 <div class="shell"><section class="hero"><div><p class="eyebrow">{_esc(product['domain'])} · GOVERNED INTELLIGENCE</p><h1>{_esc(experience['title'])}</h1><p class="lede">{_esc(intel['primary_job'])}</p><div class="actions"><a class="button primary" href="/experience/{_esc(canonical)}">Open command surface</a><a class="button" href="/api/verticals/{_esc(canonical)}/intelligence">Inspect contract</a><a class="button" href="/api/verticals/{_esc(canonical)}/second-brain">Second Brain API</a></div></div><aside class="instrument" aria-label="Vertical intelligence instrument"><div class="instrument-copy"><div class="reading"><small>Model bindings</small><strong>{bound_models}/{len(models)} BOUND</strong></div><div class="reading"><small>Kernel contracts</small><strong>{len(intel['kernels'])} ACTIVE</strong></div><div class="reading"><small>Authority</small><strong>HUMAN BIND</strong></div></div></aside></section></div>
 <div class="band"><div class="shell stats"><div class="stat"><strong>{len(tasks)}</strong><small>bounded model tasks</small></div><div class="stat"><strong>{len(models)}</strong><small>approved model assets</small></div><div class="stat"><strong>{len(intel['kernels'])}</strong><small>kernel contracts</small></div><div class="stat"><strong>{intel['policy']['lambda_floor']:.2f}</strong><small>advisory inference floor</small></div></div></div>
 <div class="shell"><section><div class="section-head"><div><p class="eyebrow">PRODUCT WEDGE</p><h2>The job others leave fragmented.</h2></div><p>{_esc(intel['unserved_job'])}</p></div><div class="split"><article class="thesis"><span class="micro">PRIMARY JOB</span><h3>{_esc(intel['primary_job'])}</h3><p>One bounded workflow, one source identity, one session scope, and one review receipt.</p></article><article class="thesis"><span class="micro">SIGNATURE VIEW</span><h3>{_esc(experience['signature_view'])}</h3><p>{_esc(experience['benchmark'])}. This view combines product clarity with evidence-native operating controls.</p></article></div></section>
+{_catalog_search()}
+{_dataset_inventory(canonical)}
 <section><div class="section-head"><div><p class="eyebrow">MODEL ROUTING</p><h2>Use the right model, not every model.</h2></div><p>Operator model routes require a fixed endpoint, credential and exact revision. The separate public Khipu GGUF route accepts only a consented numeric market brief. The public interface cannot supply an endpoint.</p></div><div class="grid">{_cards(models, kind='model')}</div></section>
 {_public_market_brief(canonical)}
 <section><div class="section-head"><div><p class="eyebrow">KERNEL FABRIC</p><h2>Evidence before language.</h2></div><p>The model never owns authority. Invariants, context limits, advisory Lambda, blocking rules, receipt attention, and deterministic hashes constrain the request and preserve reviewability.</p></div><div class="grid">{_cards(intel['kernels'], kind='kernel')}</div></section>
