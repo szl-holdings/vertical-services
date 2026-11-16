@@ -6,6 +6,7 @@ from typing import Any, Mapping
 
 from fastapi import HTTPException
 
+from .connector_parsers_datasets import _parse_hf_datasets
 from .connector_parsers_frontier import (
     _parse_coinbase,
     _parse_dob_violations,
@@ -29,6 +30,7 @@ JSON_PARSERS = {
     "cisa-kev": _parse_cisa,
     "nvd-cve": _parse_nvd,
     "github-actions": _parse_github,
+    "hf-datasets": _parse_hf_datasets,
     "sec-submissions": _parse_sec_submissions,
     "sec-companyfacts": _parse_sec_companyfacts,
     "polymarket-markets": _parse_polymarket,
@@ -61,6 +63,16 @@ def _normalize(
 
 
 def _signal(vertical: str, connector_id: str, summary: Mapping[str, Any]) -> dict[str, Any]:
+    if connector_id == "hf-datasets":
+        return {
+            "kind": "public-dataset-inventory",
+            "value": summary.get("unique_count"),
+            "coverage": summary.get("coverage"),
+            "completeness": summary.get("completeness"),
+            "severity": "INFO",
+            "training_admission": "NOT_ADMITTED",
+            "next_route": "/experience/lyte",
+        }
     if connector_id == "cisa-kev":
         count = int(summary.get("matched") or 0)
         return {

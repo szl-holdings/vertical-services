@@ -27,6 +27,9 @@ from .connector_specs import (
     CVE,
     DEFAULT_USER_AGENT,
     GITHUB_REPOSITORIES,
+    HF_DATASET_API_URL,
+    HF_DATASET_OWNER,
+    HF_DATASET_PAGE_LIMIT,
     SAFE_REPO,
     SEC_USER_AGENT,
     ConnectorSpec,
@@ -60,6 +63,15 @@ def _request_definition(
         "User-Agent": DEFAULT_USER_AGENT,
     }
     query: dict[str, str] = {}
+
+    if spec.builder == "hf-datasets":
+        _reject_unknown(parameters, set())
+        headers["Accept"] = "application/json"
+        return (
+            HF_DATASET_API_URL,
+            {"author": HF_DATASET_OWNER, "limit": str(HF_DATASET_PAGE_LIMIT), "full": "true"},
+            headers,
+        )
 
     if spec.builder == "cisa":
         allowed = {"cve", "vendor", "limit"}

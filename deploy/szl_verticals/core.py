@@ -5,11 +5,14 @@ import hashlib
 import os
 import re
 import threading
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, Response
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict
 
 VERSION = "2.2.0"
@@ -127,6 +130,21 @@ def build_info() -> dict[str, Any]:
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class RedactedValidationRoute(APIRoute):
+    """Keep rejected metadata, including invalid Unicode, out of API errors."""
+
+    def get_route_handler(self) -> Callable[[Request], Awaitable[Response]]:
+        handler = super().get_route_handler()
+
+        async def bounded_error(request: Request) -> Response:
+            try:
+                return await handler(request)
+            except RequestValidationError:
+                return JSONResponse({"detail": "invalid request"}, status_code=422)
+
+        return bounded_error
 
 
 SESSION_TOKEN = re.compile(r"^[A-Za-z0-9._~-]{32,128}$")
