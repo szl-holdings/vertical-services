@@ -81,8 +81,10 @@ def test_supersession_requires_a_proven_descendant_on_main(history):
 class FakeSpace:
     """Serve successive build revisions; the last one repeats."""
 
-    def __init__(self, *revisions: str, catalog: dict | None = None) -> None:
+    def __init__(self, *revisions: str, catalog: dict | None = None,
+                 task_overrides: dict[str, dict[str, str]] | None = None) -> None:
         self.revisions = list(revisions)
+        self.task_overrides = task_overrides or {}
         self.catalog = catalog or {
             "verticals": {name: {} for name in attester.VERTICALS},
             "caller_supplied_endpoints_allowed": False,
@@ -112,7 +114,9 @@ class FakeSpace:
         if match:
             profile = {
                 "vertical": match.group(1),
-                "tasks": {f"t{i}": {} for i in range(4)},
+                "tasks": self.task_overrides.get(
+                    match.group(1), dict(attester.EXPECTED_TASKS[match.group(1)])
+                ),
                 "novel_capabilities": [1, 2, 3],
                 "policy": {"effectors_enabled": False},
                 "models": [],
@@ -131,7 +135,9 @@ def _run(monkeypatch, tmp_path, repo, expected, space):
             "--expected-revision", expected,
             "--output", str(output),
             "--repo-root", str(repo),
-            "--timeout-seconds", "0.2",
+            # A 0.2s window flakes on slower Windows git ancestry checks.
+            # This is a simulated service; never shorten the production bound.
+            "--timeout-seconds", "3",
             "--interval-seconds", "0",
         ]
     )
@@ -219,3 +225,46 @@ def test_live_evidence_is_bound_to_the_published_commit_not_a_push():
     assert "needs.publish.result == 'success'" in caller
     assert "github.event_name != 'pull_request'" in caller
     assert "secrets" not in caller
+
+
+def test_release_scoped_task_contract_preserves_governed_lyte_binding():
+    assert set(attester.EXPECTED_TASKS) == set(attester.VERTICALS)
+    assert len(attester.EXPECTED_TASKS["lyte"]) == 5
+    assert attester.EXPECTED_TASKS["lyte"]["governed-evidence-review"] == (
+        "khipu-governed-public"
+    )
+    assert all(
+        len(tasks) == (5 if vertical == "lyte" else 4)
+        for vertical, tasks in attester.EXPECTED_TASKS.items()
+    )
+
+
+@pytest.mark.parametrize("mutation", [
+    "drop_governed_task", "wrong_governed_alias", "insert_unreviewed_task",
+    "replace_baseline_task", "wrong_other_vertical_alias",
+])
+def test_live_attester_refuses_task_contract_drift(
+    monkeypatch, tmp_path, history, mutation,
+):
+    vertical = "sentra" if mutation == "wrong_other_vertical_alias" else "lyte"
+    tasks = dict(attester.EXPECTED_TASKS[vertical])
+    if mutation == "drop_governed_task":
+        del tasks["governed-evidence-review"]
+    elif mutation == "wrong_governed_alias":
+        tasks["governed-evidence-review"] = "khipu-1.5b"
+    elif mutation == "insert_unreviewed_task":
+        tasks["unreviewed-execution"] = "receipt-agent"
+    elif mutation == "replace_baseline_task":
+        del tasks["slo-investigation"]
+        tasks["unreviewed-execution"] = "a11oy-mini"
+    elif mutation == "wrong_other_vertical_alias":
+        tasks["attack-path-review"] = "a11oy-mini"
+    a = history["a"]
+    code, report = _run(
+        monkeypatch, tmp_path, history["repo"], a,
+        FakeSpace(a, task_overrides={vertical: tasks}),
+    )
+    assert code == 1
+    assert report["state"] == "FAILED"
+    assert report["reason"] == f"AttestationFailure: {vertical} task contract drifted"
+    assert report["observed_source_revision"] == a
