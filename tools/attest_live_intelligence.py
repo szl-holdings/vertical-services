@@ -39,6 +39,48 @@ VERTICALS = {
     "terra": "parcel-grid",
     "counsel": "authority-chain",
 }
+# Independent, release-scoped live task contract. Never infer expected values
+# from the runtime under examination; exact bindings catch replacement,
+# omission, addition, and a wrong provider alias.
+EXPECTED_TASKS = {
+    "sentra": {
+        "attack-path-review": "receipt-agent",
+        "control-gap-analysis": "khipu-1.5b",
+        "incident-summary": "a11oy-mini",
+        "remediation-review": "receipt-agent",
+    },
+    "lyte": {
+        "root-cause-hypothesis": "khipu-1.5b",
+        "business-impact": "khipu-1.5b",
+        "slo-investigation": "a11oy-mini",
+        "change-risk": "receipt-agent",
+        "governed-evidence-review": "khipu-governed-public",
+    },
+    "killinchu": {
+        "track-anomaly-review": "a11oy-mini",
+        "route-risk": "khipu-1.5b",
+        "scenario-rehearsal": "khipu-1.5b",
+        "debrief": "receipt-agent",
+    },
+    "finance": {
+        "filing-research": "receipt-agent",
+        "scenario-analysis": "khipu-1.5b",
+        "thesis-review": "khipu-1.5b",
+        "risk-summary": "a11oy-mini",
+    },
+    "terra": {
+        "parcel-diligence": "receipt-agent",
+        "lease-obligation-review": "receipt-agent",
+        "underwriting-scenario": "khipu-1.5b",
+        "portfolio-risk": "a11oy-mini",
+    },
+    "counsel": {
+        "authority-research": "receipt-agent",
+        "deadline-review": "a11oy-mini",
+        "argument-map": "khipu-1.5b",
+        "document-issue-spotting": "receipt-agent",
+    },
+}
 ROOM_MARKERS = (
     "Skip to intelligence room",
     "Learn broadly. Copy nothing proprietary.",
@@ -193,7 +235,10 @@ def capture_rooms(
         profile = json.loads(j_raw)
         if profile.get("vertical") != vertical:
             raise AttestationFailure(f"{vertical} profile identity mismatch")
-        if len(profile.get("tasks", {})) != 4:
+        # Review the complete published task/model bindings, not a convenient
+        # fixed count. Lyte has a fifth, separately governed public Khipu task;
+        # its presence is not evidence that any unbound local model can execute.
+        if profile.get("tasks") != EXPECTED_TASKS[vertical]:
             raise AttestationFailure(f"{vertical} task contract drifted")
         if len(profile.get("novel_capabilities", [])) != 3:
             raise AttestationFailure(f"{vertical} frontier delta drifted")
