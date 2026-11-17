@@ -1,0 +1,88 @@
+{
+  "authority": {
+    "a11oy": "NOT_INVOKED_BY_PUBLIC_ENDPOINT",
+    "anatomy": "LOCAL_SANITIZED_OBSERVER_ONLY",
+    "model": "PROPOSAL_ONLY",
+    "public_endpoint_tool_execution": "DISABLED"
+  },
+  "controller": {
+    "repository": "szl-holdings/szl-forge",
+    "revision": "9f227f6a10dac178b29130c742c98451b6ed8391",
+    "version": "0.2.0"
+  },
+  "endpoint": {
+    "authentication": "PUBLIC_PROJECTION_FIXED_SCOPE",
+    "max_completion_tokens": 32,
+    "max_input_chars": 1200,
+    "max_retrieval_handles": 4,
+    "method": "POST",
+    "path": "/api/v3/governed-infer",
+    "response_schema": "szl.forge.public-governed-inference/v3",
+    "tools": false
+  },
+  "formula_authority": {
+    "f_id_to_callable_mapping": "UNKNOWN_NOT_ASSERTED",
+    "lambda": {
+      "can_authorize": false,
+      "can_be_sole_allow_basis": false,
+      "formula_id": "F23",
+      "status": "CONJECTURE_1_ADVISORY"
+    },
+    "locked_proven_count": 8,
+    "locked_proven_ids": [
+      "F1",
+      "F4",
+      "F7",
+      "F11",
+      "F12",
+      "F18",
+      "F19",
+      "F22"
+    ]
+  },
+  "model": {
+    "gguf_sha256": "13c1a1993063e1dff92f7413ccf48eaca6d48efc8801ae9af35961ae3396623a",
+    "id": "SZLHOLDINGS/SZL-Khipu-1.5B-GGUF@67d60ec577730747055491640cfb91fc4a4b5d25",
+    "revision": "67d60ec577730747055491640cfb91fc4a4b5d25"
+  },
+  "nemo": {
+    "revision": "810231a531188bb569e3faa17396386eb0a5e260",
+    "structured_witness": "doctrine-v11/E1-E10",
+    "text_witness": "doctrine-v11/R1-R5",
+    "version": "0.4.0"
+  },
+  "privacy": {
+    "hydrated_content_persisted": false,
+    "platform_logging_outside_source": "NOT_ASSERTED",
+    "private_reasoning_persisted": false,
+    "raw_prompt_persisted": false
+  },
+  "public_read_only_endpoints": {
+    "formula_atlas": "/api/v2/formula-atlas",
+    "source": "/api/source",
+    "well_known_source": "/.well-known/szl-source.json"
+  },
+  "retired_public_post": {
+    "continuation_available": false,
+    "path": "/api/v2/governed-infer",
+    "status_code": 410
+  },
+  "runtime_selection": {
+    "policy": "MEASURED_WORKLOAD_BAKEOFF_REQUIRED",
+    "qualified_lanes": [
+      "local-cpu-gguf",
+      "single-node-gpu",
+      "distributed-gpu"
+    ],
+    "winner": "UNSELECTED"
+  },
+  "schema": "szl.model-inference-lab.governed-contract/v3",
+  "second_brain": {
+    "authorized_hydration": "IN_PROCESS_CONTROLLER_ONLY",
+    "content_access": "HANDLES_ONLY_PUBLIC",
+    "private_graph_present": false,
+    "revision": "1d3960c69235f117b7ec2b5ea97472f81fb588f5",
+    "version": "1.3.0"
+  },
+  "status": "OPERATIONAL_WHEN_GOVERNED_HEALTH_IS_READY"
+}

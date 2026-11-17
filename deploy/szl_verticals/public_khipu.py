@@ -53,11 +53,15 @@ def digest(value: Any) -> str:
 
 
 def binding() -> dict[str, Any]:
-    return {**SPEC, "alias": ALIAS, "state": "BOUND", "endpoint": ENDPOINT,
+    # The provider retired this exact-echo protocol with HTTP 410. Preserve the
+    # historical compiler/verifier; never silently substitute a RAG proposal.
+    return {**SPEC, "alias": ALIAS, "state": "RETIRED", "endpoint": ENDPOINT,
             "endpoint_host": urlsplit(ENDPOINT).hostname, "revision": REVISION,
             "revision_evidence": "SOURCE_PINNED_RESPONSE_HASH_CHECK_REQUIRED",
             "credential_present": False, "credential_value_exposed": False,
-            "blockers": []}
+            "successor_alias": "khipu-governed-public",
+            "successor_scope": "SEPARATE_LYTE_GOVERNANCE_PROPOSAL_NOT_MARKET_ECHO",
+            "blockers": ["PUBLIC_EXACT_ECHO_PROTOCOL_RETIRED"]}
 
 
 def _number(value: Any) -> int | float:
