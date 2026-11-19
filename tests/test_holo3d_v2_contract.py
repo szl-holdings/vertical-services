@@ -122,6 +122,10 @@ class Holo3dV2Contract(unittest.TestCase):
             self.assertNotIn(forbidden, js)
         self.assertIn("failing closed", js)
         self.assertIn("FRONTIER UNREACHABLE", js)
+        # A rejected payload or a renderer fault must not be reported as an unreachable feed.
+        for message in ("FRONTIER PAYLOAD REJECTED", "CATALOG EMPTY", "WEBGL UNAVAILABLE", "RENDER FAILED"):
+            self.assertIn(message, js)
+        self.assertIn("}, function () {", js, "feed errors must be handled before render errors")
         self.assertTrue(5_000 < len(js) < 45_000)
 
     def test_text_alternative_and_focus_order_exist(self) -> None:
@@ -130,6 +134,8 @@ class Holo3dV2Contract(unittest.TestCase):
         self.assertIn("<details", holo.HOLO3D_PANEL_HTML)
         self.assertIn('var VIEWS_ID = "holo-views"', holo.HOLO3D_JS)
         self.assertIn('VIEWS_ID + " button"', holo.HOLO3D_JS)
+        # The text readout is the accessible alternative: its summary must be in the Tab cycle.
+        self.assertIn('document.querySelector("#holo-details summary")', holo.HOLO3D_JS)
         self.assertIn("min-height:44px", holo.HOLO3D_CSS)
         self.assertNotIn("url(", holo.HOLO3D_CSS)
 
@@ -243,6 +249,24 @@ class Holo3dV2Contract(unittest.TestCase):
         self.assertEqual(organ_nodes[idx]["kind"], 4)
         self.assertIn("requirement formula_registry_bound not met", organ_nodes[idx]["text"])
 
+    def test_a_missing_last_organ_requirement_still_frays_visibly(self) -> None:
+        scene = run_model([{"payload": self._with_unmet("finance", "persistent_signing_key"), "key": "finance"}])[0]
+        organs = self.payloads["finance"]["anatomy"]["organs"]
+        self.assertEqual(organs[-1]["id"], "receipt")
+        self.assertEqual(scene["frayFrom"], len(organs) - 1)
+        fray = [l["kind"] for l in scene["lines"] if l["kind"] == 12]
+        self.assertEqual(len(fray), 1, "a frayed tail must hang off the last organ")
+        self.assertEqual([l["kind"] for l in scene["lines"][: len(organs) - 1]], [11] * (len(organs) - 1))
+
+    def test_unavailable_or_non_hex_revisions_do_not_seed_the_layout(self) -> None:
+        for bad in ("UNAVAILABLE", "unknown", "", None, "7ce6f9", "ZZZZZZZZ", "7ce6f9e<script>"):
+            payload = copy.deepcopy(self.payloads["finance"])
+            payload["source"]["source_revision"] = bad
+            scene = run_model([{"payload": payload, "key": "finance"}])[0]
+            self.assertTrue(any("REVISION UNKNOWN" in c for c in scene["chips"]), bad)
+        good = run_model([{"payload": self.payloads["finance"], "key": "finance"}])[0]
+        self.assertTrue(any(c.startswith("REVISION ") and "UNKNOWN" not in c for c in good["chips"]))
+
     def _with_unmet(self, vertical: str, requirement: str) -> dict:
         payload = copy.deepcopy(self.payloads[vertical])
         payload["readiness"]["requirements"][requirement] = False
@@ -279,6 +303,15 @@ class Holo3dV2Contract(unittest.TestCase):
         self.assertLessEqual(len(node["text"]), 220)
         self.assertNotIn("\u0000", node["text"])
         self.assertNotIn("\u202e", node["text"])
+
+    def test_printable_non_ascii_survives_but_bidi_and_control_characters_do_not(self) -> None:
+        payload = copy.deepcopy(self.payloads["lyte"])
+        payload["product"] = "Killinchu \u00b7 Defend \u202e\u2066x\u200b\u0085"
+        scene = run_model([{"payload": payload, "key": "lyte"}])[0]
+        core = next(n for n in scene["nodes"] if n["group"] == "core")
+        self.assertIn("\u00b7", core["label"])
+        for bad in ("\u202e", "\u2066", "\u200b", "\u0085"):
+            self.assertNotIn(bad, core["label"])
 
     def test_session_scoped_connector_reading_is_not_attributed_or_solid(self) -> None:
         payload = copy.deepcopy(self.payloads["finance"])

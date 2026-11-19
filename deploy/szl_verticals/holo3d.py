@@ -176,9 +176,21 @@ HOLO3D_JS = """
     var s = String(v == null ? "" : v), out = "";
     for (var i = 0; i < s.length && out.length < (n || 64); i++) {
       var c = s.charCodeAt(i);
-      out += (c >= 32 && c <= 126) ? s.charAt(i) : (c > 126 ? "?" : " ");
+      var hidden = c < 32 || c === 127 || (c >= 128 && c <= 159) || (c >= 0x200b && c <= 0x200f) ||
+                   (c >= 0x2028 && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069) || c === 0xfeff || (c >= 0xd800 && c <= 0xdfff);
+      out += hidden ? " " : s.charAt(i);
     }
     return out;
+  }
+
+  function validRevision(v) {
+    var s = clean(v, 64);
+    if (s.length < 7) { return ""; }
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      if (!((c >= 48 && c <= 57) || (c >= 97 && c <= 102))) { return ""; }
+    }
+    return s;
   }
 
   function isArr(a) { return Object.prototype.toString.call(a) === "[object Array]"; }
@@ -244,7 +256,7 @@ HOLO3D_JS = """
     var formulas = isArr(payload.formulas) ? payload.formulas.slice(0, 24) : [];
     var connectors = isArr(payload.connectors) ? payload.connectors.slice(0, 24) : [];
     var ready = payload.readiness && typeof payload.readiness === "object" ? payload.readiness : null;
-    var rev = payload.source && typeof payload.source === "object" ? clean(payload.source.source_revision, 64) : "";
+    var rev = payload.source && typeof payload.source === "object" ? validRevision(payload.source.source_revision) : "";
     var seedBase = (rev || "NOREV") + "|" + vname;
     var nodes = [], lines = [], readout = [], chips = [], gaps = 0, TAU = Math.PI * 2, i;
 
@@ -279,7 +291,11 @@ HOLO3D_JS = """
     }
     for (i = 0; i + 1 < organIdx.length; i++) {
       lines.push({ a: nodes[organIdx[i]].pos, b: nodes[organIdx[i + 1]].pos,
-                   kind: (frayFrom >= 0 && i + 1 > frayFrom) ? K.FRAYED : K.CORD, seed: nodes[organIdx[i + 1]].seed });
+                   kind: (frayFrom >= 0 && i >= frayFrom) ? K.FRAYED : K.CORD, seed: nodes[organIdx[i + 1]].seed });
+    }
+    if (frayFrom >= 0 && frayFrom === organIdx.length - 1) {
+      var lastNode = nodes[organIdx[frayFrom]];
+      lines.push({ a: lastNode.pos, b: [lastNode.pos[0], lastNode.pos[1] - 0.2, lastNode.pos[2]], kind: K.FRAYED, seed: lastNode.seed });
     }
 
     for (i = 0; i < formulas.length; i++) {
@@ -329,7 +345,7 @@ HOLO3D_JS = """
     }
 
     chips.push(["VERTICAL " + vname + " | " + product, "ok"]);
-    chips.push(["REVISION " + (rev ? rev.slice(0, 12) : "UNKNOWN (layout unseeded)"), rev ? "ok" : "off"]);
+    chips.push(["REVISION " + (rev ? rev.slice(0, 12) : "UNKNOWN (server reported no usable revision; layout unseeded)"), rev ? "ok" : "off"]);
     if (ready) {
       chips.push(["READINESS " + clean(ready.status, 24) + " | label " + clean(ready.truth_label, 16), ready.ready === true ? "ok" : "off"]);
       if (live) {
@@ -649,7 +665,7 @@ HOLO3D_JS = """
       var scene, extra = null;
       if (isEngines) {
         var labels = collectNodes(payload);
-        if (!labels.length) { throw new Error("no catalog nodes"); }
+        if (!labels.length) { throw new Error("rejected: no catalog nodes"); }
         scene = sceneFromLabels(labels);
         st.fetchedAt = 0;
         uploadScene(scene);
@@ -660,7 +676,7 @@ HOLO3D_JS = """
       } else {
         st.fetchedAt = Date.now();
         extra = buildVerticalScene(payload, view, st.fetchedAt);
-        if (!extra || !extra.nodes.length) { throw new Error("frontier payload rejected"); }
+        if (!extra || !extra.nodes.length) { throw new Error("rejected: frontier payload"); }
         uploadScene(extra);
         sizeRenderer();
         setReadout(extra.readout);
@@ -669,9 +685,19 @@ HOLO3D_JS = """
       }
       render(0);
       if (st.open && !REDUCED && !st.raf) { st.raf = requestAnimationFrame(frame); }
-    }).catch(function () {
+    }, function () {
       if (seq !== st.seq) { return; }
       failClosed(isEngines ? "CATALOG UNREACHABLE - failing closed" : "FRONTIER UNREACHABLE - failing closed");
+    }).catch(function (err) {
+      if (seq !== st.seq) { return; }
+      var m = err && err.message ? String(err.message) : "";
+      if (m.indexOf("rejected") === 0) {
+        failClosed(isEngines ? "CATALOG EMPTY - failing closed" : "FRONTIER PAYLOAD REJECTED (schema or vertical mismatch) - failing closed");
+      } else if (m === "webgl unavailable" || m === "shader" || m === "link" || m === "canvas missing") {
+        failClosed("WEBGL UNAVAILABLE - failing closed");
+      } else {
+        failClosed("RENDER FAILED - failing closed");
+      }
     });
   }
 
@@ -720,7 +746,7 @@ HOLO3D_JS = """
     panel.addEventListener("keydown", function (e) {
       if (e.key === "Escape") { closePanel(); return; }
       if (e.key === "Tab") {
-        var focusables = [$("holo-close")].concat(Array.prototype.slice.call(document.querySelectorAll("#" + VIEWS_ID + " button")), [$(CANVAS_ID)]).filter(Boolean);
+        var focusables = [$("holo-close")].concat(Array.prototype.slice.call(document.querySelectorAll("#" + VIEWS_ID + " button")), [$(CANVAS_ID), document.querySelector("#holo-details summary")]).filter(Boolean);
         var idx = focusables.indexOf(document.activeElement);
         e.preventDefault();
         var next = e.shiftKey ? focusables[(idx - 1 + focusables.length) % focusables.length] : focusables[(idx + 1) % focusables.length];
