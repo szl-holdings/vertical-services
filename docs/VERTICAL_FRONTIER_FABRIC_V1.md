@@ -200,6 +200,15 @@ must return:
 The model cannot produce an approval object, alter the policy kernel set, or
 write an authorization receipt.
 
+The blocking core kernel `szl-core/proposal-contract` enforces part of this on
+every evaluation, including caller-supplied proposals: a proposal whose truth
+state is `LIVE` or `MEASURED` without both model identity and exact revision is
+denied, and so is a confidence that is not `None` or a finite value in
+`[0, 1]`. A human binding with decision `ALLOW` is complete only when
+`approved_at` is an ISO-8601 date-time with an explicit UTC offset; otherwise
+`szl-core/human-bind` fails and the effect is denied. The engine does not compare the binding's `scope`
+text with `requested_effect`.
+
 ## Kernel adapter contract
 
 Each declared kernel is independently registered by exact repository identity.

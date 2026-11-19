@@ -5,6 +5,7 @@ import math
 import os
 import threading
 from collections.abc import Callable, Mapping
+from datetime import datetime
 from typing import Any
 
 from .catalog import get_vertical, public_catalog
@@ -34,6 +35,18 @@ def _payload_size(payload: Mapping[str, Any]) -> int:
     return len(canonical_json(payload).encode("utf-8"))
 
 
+def _offset_qualified_timestamp(value: Any) -> bool:
+    if not isinstance(value, str) or "T" not in value:
+        return False
+    text = value.strip()
+    if text[-1:] in {"Z", "z"}:
+        text = text[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(text).utcoffset() is not None
+    except ValueError:
+        return False
+
+
 def _valid_human_bind(bind: Mapping[str, Any] | None) -> tuple[bool, str]:
     if bind is None:
         return False, "human binding is absent"
@@ -45,6 +58,11 @@ def _valid_human_bind(bind: Mapping[str, Any] | None) -> tuple[bool, str]:
         return False, "human binding decision must be ALLOW or DENY"
     if not all(str(bind.get(key, "")).strip() for key in required):
         return False, "human binding fields must be non-empty"
+    # A refusal never needs to be authorized, so only an ALLOW is held to the timestamp.
+    if str(bind.get("decision")).upper() == "ALLOW" and not _offset_qualified_timestamp(
+        bind.get("approved_at")
+    ):
+        return False, "human binding approved_at must be an ISO-8601 timestamp with a UTC offset"
     return True, "human binding structure is complete"
 
 
@@ -107,6 +125,42 @@ def _core_kernel_results(
                 else f"proposal cites undeclared connectors: {', '.join(citation_gaps)}"
             ),
             evidence={"proposal_connector_ids": sorted(citation_ids)},
+        )
+    )
+
+    contract_gaps: list[str] = []
+    if proposal.state in {ClaimState.LIVE, ClaimState.MEASURED} and not (
+        (proposal.model_id or "").strip() and (proposal.model_revision or "").strip()
+    ):
+        contract_gaps.append(
+            f"a {proposal.state.value} proposal must carry model identity and exact revision"
+        )
+    confidence = proposal.confidence
+    confidence_ok = confidence is None or (
+        isinstance(confidence, (int, float))
+        and not isinstance(confidence, bool)
+        and math.isfinite(confidence)
+        and 0.0 <= confidence <= 1.0
+    )
+    if not confidence_ok:
+        contract_gaps.append("proposal confidence must be None or within [0, 1]")
+    results.append(
+        KernelResult(
+            kernel_id="szl-core/proposal-contract",
+            passed=not contract_gaps,
+            blocking=True,
+            state=ClaimState.MEASURED,
+            reason=(
+                "proposal identity and confidence satisfy the proposal contract"
+                if not contract_gaps
+                else "; ".join(contract_gaps)
+            ),
+            evidence={
+                "proposal_state": proposal.state.value,
+                "model_identity_present": bool((proposal.model_id or "").strip()),
+                "model_revision_present": bool((proposal.model_revision or "").strip()),
+                "confidence_in_range": confidence_ok,
+            },
         )
     )
 

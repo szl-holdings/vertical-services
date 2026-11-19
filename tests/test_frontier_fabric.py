@@ -360,3 +360,146 @@ def test_mapping_parser_preserves_explicit_truth_state() -> None:
     assert request.proposal is not None
     assert request.proposal.state is ClaimState.ADVISORY
     assert request.sources[0].connector_id == "sec-submissions"
+
+
+def _bound_fabric(vertical_id: str) -> VerticalFabric:
+    fabric = VerticalFabric()
+    for binding in get_vertical(vertical_id).kernels:
+        fabric.register_kernel(binding.repo_id, _pass_kernel(binding.repo_id))
+    return fabric
+
+
+def _effect_request(**overrides) -> EvaluationRequest:  # noqa: ANN003
+    fields = {
+        "vertical_id": "a11oy",
+        "signal_id": "decision-contract",
+        "session_id": "session-contract",
+        "actor_id": "actor-contract",
+        "payload": {"lambda_axes": [0.95, 0.92, 0.90]},
+        "proposal": _reviewed_proposal("a11oy"),
+        "requested_effect": "publish-report",
+        "human_bind": _human_bind(),
+    }
+    fields.update(overrides)
+    return EvaluationRequest(**fields)
+
+
+def _contract_result(result):  # noqa: ANN001, ANN202
+    return next(
+        item for item in result.kernel_results if item.kernel_id == "szl-core/proposal-contract"
+    )
+
+
+def test_well_formed_proposal_and_bind_still_allow() -> None:
+    result = _bound_fabric("a11oy").evaluate(_effect_request())
+    assert result.decision is Decision.ALLOW
+    contract = _contract_result(result)
+    assert contract.passed is True
+    assert contract.blocking is True
+
+
+def test_unbound_model_proposal_satisfies_the_proposal_contract() -> None:
+    result = VerticalFabric().evaluate(_effect_request(proposal=None, requested_effect=None))
+    assert result.proposal.state is ClaimState.UNAVAILABLE
+    assert _contract_result(result).passed is True
+    assert result.decision is Decision.HOLD
+
+
+@pytest.mark.parametrize("claimed", [ClaimState.LIVE, ClaimState.MEASURED])
+@pytest.mark.parametrize(
+    ("model_id", "model_revision"),
+    [(None, None), ("SZLHOLDINGS/szl-nemo", None), (None, "a" * 40), ("  ", "a" * 40)],
+)
+def test_live_or_measured_proposal_without_model_identity_is_denied(
+    claimed: ClaimState,
+    model_id: str | None,
+    model_revision: str | None,
+) -> None:
+    proposal = Proposal(
+        summary="Unattributed claim.",
+        model_id=model_id,
+        model_revision=model_revision,
+        confidence=0.5,
+        citations=(),
+        state=claimed,
+        payload={},
+    )
+    result = _bound_fabric("a11oy").evaluate(_effect_request(proposal=proposal))
+    assert result.decision is Decision.DENY
+    assert result.state is ClaimState.BLOCKED
+    assert "model identity and exact revision" in result.reason
+    assert _contract_result(result).passed is False
+
+
+@pytest.mark.parametrize("confidence", [7.5, 1.0001, -0.1])
+def test_out_of_range_confidence_is_denied(confidence: float) -> None:
+    proposal = Proposal(
+        summary="Reviewed proposal.",
+        model_id="SZLHOLDINGS/szl-nemo",
+        model_revision="a" * 40,
+        confidence=confidence,
+        citations=(),
+        state=ClaimState.ADVISORY,
+        payload={},
+    )
+    result = _bound_fabric("a11oy").evaluate(_effect_request(proposal=proposal))
+    assert result.decision is Decision.DENY
+    assert result.state is ClaimState.BLOCKED
+    assert "confidence must be None or within [0, 1]" in result.reason
+
+
+def test_mapping_proposal_with_inflated_state_and_confidence_is_denied() -> None:
+    request = request_from_mapping(
+        {
+            "vertical_id": "lyte",
+            "signal_id": "sig-1",
+            "session_id": "session-1",
+            "actor_id": "actor-1",
+            "payload": {},
+            "proposal": {"summary": "x", "state": "LIVE", "confidence": 7.5},
+            "requested_effect": "export-report",
+            "human_bind": _human_bind(),
+        }
+    )
+    result = VerticalFabric(require_bound_kernels_for_effects=False).evaluate(request)
+    assert result.decision is Decision.DENY
+    assert result.state is ClaimState.BLOCKED
+
+
+@pytest.mark.parametrize(
+    "approved_at",
+    ["whenever", "2026-09-04T00:00:00", "2026-09-04", "2026-13-40T00:00:00Z", 1788480000],
+)
+def test_allow_bind_without_offset_qualified_timestamp_never_allows(approved_at) -> None:  # noqa: ANN001
+    bind = dict(_human_bind())
+    bind["approved_at"] = approved_at
+    result = _bound_fabric("a11oy").evaluate(_effect_request(human_bind=bind))
+    assert result.decision is Decision.DENY
+    assert result.state is ClaimState.BLOCKED
+    assert "approved_at must be an ISO-8601 timestamp with a UTC offset" in result.reason
+    bind_kernel = next(
+        item for item in result.kernel_results if item.kernel_id == "szl-core/human-bind"
+    )
+    assert bind_kernel.passed is False
+    assert bind_kernel.state is ClaimState.UNAVAILABLE
+
+
+def test_denial_is_still_honored_when_its_timestamp_is_malformed() -> None:
+    bind = dict(_human_bind("DENY"))
+    bind["approved_at"] = "whenever"
+    result = _bound_fabric("a11oy").evaluate(_effect_request(human_bind=bind))
+    assert result.decision is Decision.DENY
+    assert result.state is ClaimState.BLOCKED
+    assert result.reason == "human binding denied the requested scope"
+
+
+@pytest.mark.parametrize(
+    "approved_at",
+    ["2026-09-04T00:00:00Z", "2026-09-04T00:00:00+00:00", "2026-09-03T19:00:00-05:00"],
+)
+def test_bind_with_offset_qualified_timestamp_is_accepted(approved_at: str) -> None:
+    bind = dict(_human_bind())
+    bind["approved_at"] = approved_at
+    result = _bound_fabric("a11oy").evaluate(_effect_request(human_bind=bind))
+    assert result.decision is Decision.ALLOW
+    assert result.state is ClaimState.MEASURED
