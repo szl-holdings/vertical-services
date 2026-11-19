@@ -55,3 +55,29 @@ jobs:
           python tools/verify_runtime_identity.py \
             --base-url "$BASE" \
             --expected-revision "$EXPECTED_REVISION"
+
+  downstream-chain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Poll downstream vertical Spaces health and readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          FAILED=0
+          spaces=(killinchu finance terra counsel lyte sentra)
+          for space in "${spaces[@]}"; do
+            for path in /healthz /readyz; do
+              url="https://szlholdings-${space}.hf.space${path}"
+              if curl -fsS --max-time 30 --retry 2 --retry-delay 10 "$url" > /dev/null; then
+                echo "LIVE  $url"
+              else
+                echo "DOWN  $url"
+                FAILED=1
+              fi
+            done
+          done
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::One or more downstream vertical Spaces are down or not ready"
+            exit 1
+          fi
