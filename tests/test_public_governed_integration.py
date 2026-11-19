@@ -39,7 +39,7 @@ def request(runtime, **overrides):
     return runtime.IntelligenceInvokeRequest(**values)
 
 
-def install_provider(runtime, monkeypatch, *, hook=None, status=200):
+def install_provider(runtime, monkeypatch, *, hook=None, status=200, contract_status=200):
     k = runtime.public_governed_khipu
     contract, health = identity(k)
     real_client = httpx.AsyncClient
@@ -54,6 +54,12 @@ def install_provider(runtime, monkeypatch, *, hook=None, status=200):
         if hook:
             hook(req)
         if str(req.url) == k.CONTRACT_URL:
+            if contract_status != 200:
+                return httpx.Response(
+                    contract_status,
+                    content=b"<!DOCTYPE html><h1>404</h1>",
+                    headers={"content-type": "text/html; charset=utf-8"},
+                )
             return httpx.Response(200, json=contract)
         if str(req.url) == k.HEALTH_URL:
             return httpx.Response(200, json=health)
@@ -133,7 +139,18 @@ def test_withdrawal_during_network_withholds_output(governed_runtime, ledger, mo
     assert "Synthetic public proposal" not in str(error.value.detail)
 
 
-@pytest.mark.parametrize("status", [409, 422, 503])
+def test_private_provider_marketing_404_withholds_before_inference(governed_runtime, monkeypatch):
+    """The live witness failed here: contract GET was Hub marketing HTTP 404."""
+    r = governed_runtime
+    seen, _ = install_provider(r, monkeypatch, contract_status=404)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(r.vertical_intelligence_invoke("lyte", request(r), SCOPE))
+    assert error.value.status_code == 502
+    assert error.value.detail == "model provider returned HTTP 404"
+    assert seen == [("GET", r.public_governed_khipu.CONTRACT_URL)]
+
+
+@pytest.mark.parametrize("status", [404, 409, 422, 503])
 def test_provider_refusal_is_unavailable_without_output_or_receipt(governed_runtime, monkeypatch, status):
     r = governed_runtime
     install_provider(r, monkeypatch, status=status)
