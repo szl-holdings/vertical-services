@@ -74,3 +74,39 @@ def test_workflow_invokes_ensure_public_before_publish():
     assert workflow.index("Ensure public Space visibility for public smoke") < workflow.index(
         "reusable-hf-deploy.yml"
     )
+
+
+def _step(workflow: str, name: str) -> str:
+    marker = f"- name: {name}\n"
+    start = workflow.index(marker)
+    rest = workflow[start + len(marker):]
+    nxt = rest.find("\n      - name:")
+    return rest[:nxt] if nxt != -1 else rest
+
+
+def test_publisher_exposes_pinned_governed_provider_before_witness():
+    """Anonymous reads of a private Space are the Hub marketing HTTP 404.
+
+    The Lyte witness then records invoke HTTP 502 and never reaches a protocol
+    hash check. The publisher must force the pinned provider Space public and
+    probe its contract URL before that witness, without softening the witness.
+    """
+    root = Path(__file__).resolve().parents[1]
+    pin = (root / "deploy" / "szl_verticals" / "public_governed_khipu.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'ORIGIN = "https://szlholdings-szl-model-inference-lab.hf.space"' in pin
+    assert 'CONTRACT_URL = ORIGIN + "/.well-known/szl-governed-inference-contract.json"' in pin
+    workflow = (root / ".github" / "workflows" / "hf-space.yml").read_text(encoding="utf-8")
+    provider = _step(workflow, "Ensure pinned governed provider Space is public")
+    witness = _step(workflow, "Witness the pinned public governed proposal protocol")
+    assert "tools/ensure_public_space_visibility.py" in provider
+    assert "--repo-id SZLHOLDINGS/szl-model-inference-lab" in provider
+    assert "--probe-path /.well-known/szl-governed-inference-contract.json" in provider
+    assert "continue-on-error" not in provider
+    assert "tools/probe_public_governed_khipu.py" in witness
+    assert "--expected-revision" in witness
+    assert "continue-on-error" not in witness
+    assert workflow.index("Ensure pinned governed provider Space is public") < workflow.index(
+        "Witness the pinned public governed proposal protocol"
+    )
