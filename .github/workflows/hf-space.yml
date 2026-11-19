@@ -214,6 +214,27 @@ jobs:
           path: artifacts/public-visibility.json
           if-no-files-found: warn
           retention-days: 90
+      - name: Ensure pinned governed provider Space is public
+        if: steps.route.outputs.mode == 'local'
+        shell: bash
+        env:
+          HF_TOKEN: ${{ secrets.HF_ORG_TOKEN || secrets.HF_ORG_TOKEN1 || secrets.HF_TOKEN || secrets.HF_WRITE_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python tools/ensure_public_space_visibility.py \
+            --repo-id SZLHOLDINGS/szl-model-inference-lab \
+            --probe-path /.well-known/szl-governed-inference-contract.json \
+            --output artifacts/governed-provider-visibility.json \
+            --source-revision "${GITHUB_SHA}"
+      - name: Upload governed provider visibility receipt
+        if: steps.route.outputs.mode == 'local' && always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: governed-provider-visibility-${{ github.run_id }}
+          path: artifacts/governed-provider-visibility.json
+          if-no-files-found: error
+          retention-days: 90
       - name: Preserve or create the write-only signing secret
         if: steps.route.outputs.mode == 'local'
         shell: bash
