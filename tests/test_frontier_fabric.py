@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from email.message import Message
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
 from frontier_fabric.catalog import CATALOG_ERRORS, VERTICALS, get_vertical, public_catalog
 from frontier_fabric.connectors import (
+    ConnectorError,
     ConnectorPolicyError,
     ConnectorRegistry,
     ConnectorUnavailable,
@@ -503,3 +506,159 @@ def test_bind_with_offset_qualified_timestamp_is_accepted(approved_at: str) -> N
     result = _bound_fabric("a11oy").evaluate(_effect_request(human_bind=bind))
     assert result.decision is Decision.ALLOW
     assert result.state is ClaimState.MEASURED
+
+
+@pytest.mark.parametrize(
+    ("connector_id", "path_params"),
+    [
+        ("github-org", {"org": ".."}),
+        ("github-org", {"org": "."}),
+        ("github-actions", {"owner": "..", "repo": ".."}),
+        ("github-actions", {"owner": ".", "repo": "a11oy"}),
+        ("github-actions", {"owner": "szl-holdings", "repo": ".."}),
+    ],
+)
+def test_connector_registry_rejects_dot_segment_path_parameters(
+    connector_id: str,
+    path_params: dict[str, str],
+) -> None:
+    with pytest.raises(ConnectorPolicyError):
+        ConnectorRegistry().build_url(connector_id, path_params=path_params)
+
+
+def test_connector_registry_keeps_dotted_names_that_are_not_dot_segments() -> None:
+    url = ConnectorRegistry().build_url(
+        "github-actions",
+        path_params={"owner": "szl-holdings", "repo": ".github"},
+    )
+    assert urlsplit(url).path == "/repos/szl-holdings/.github/actions/runs"
+
+
+class _StubResponse:
+    def __init__(self, *, status: int = 200, content_type: str = "application/json",
+                 body: bytes = b"{}", content_length: str | None = None) -> None:
+        self.status = status
+        self.headers = Message()
+        self.headers["Content-Type"] = content_type
+        if content_length is not None:
+            self.headers["Content-Length"] = content_length
+        self._body = body
+
+    def read(self, amount: int = -1) -> bytes:
+        return self._body if amount < 0 else self._body[:amount]
+
+    def __enter__(self):  # noqa: ANN204
+        return self
+
+    def __exit__(self, *exc_info) -> None:  # noqa: ANN002
+        return None
+
+
+class _StubOpener:
+    def __init__(self, outcome) -> None:  # noqa: ANN001
+        self.outcome = outcome
+        self.requests: list = []
+
+    def open(self, request, timeout=None):  # noqa: ANN001, ANN201
+        self.requests.append((request, timeout))
+        if isinstance(self.outcome, BaseException):
+            raise self.outcome
+        return self.outcome
+
+
+def _stubbed_registry(outcome) -> tuple[ConnectorRegistry, _StubOpener]:  # noqa: ANN001
+    registry = ConnectorRegistry()
+    opener = _StubOpener(outcome)
+    registry._opener = opener
+    return registry, opener
+
+
+def test_fetch_returns_bounded_body_and_sends_only_declared_headers() -> None:
+    registry, opener = _stubbed_registry(_StubResponse(body=b'{"ok": true}'))
+    result = registry.fetch("cisa-kev", extra_headers={"Authorization": "Bearer test-token"})
+    assert result.status == 200
+    assert result.json() == {"ok": True}
+    request, timeout = opener.requests[0]
+    assert request.full_url == registry.build_url("cisa-kev")
+    assert request.get_method() == "GET"
+    assert timeout == 10.0
+    assert request.get_header("Authorization") == "Bearer test-token"
+    assert request.get_header("Accept-encoding") == "identity"
+
+
+@pytest.mark.parametrize("code", [301, 302, 307, 308])
+def test_fetch_refuses_redirects(code: int) -> None:
+    error = HTTPError("https://www.cisa.gov/", code, "redirect", Message(), None)
+    registry, _ = _stubbed_registry(error)
+    with pytest.raises(ConnectorPolicyError, match="redirects are forbidden"):
+        registry.fetch("cisa-kev")
+
+
+def test_fetch_reports_provider_http_errors_without_policy_or_unavailable_labels() -> None:
+    error = HTTPError("https://www.cisa.gov/", 503, "unavailable", Message(), None)
+    registry, _ = _stubbed_registry(error)
+    with pytest.raises(ConnectorError) as excinfo:
+        registry.fetch("cisa-kev")
+    assert type(excinfo.value) is ConnectorError
+
+
+def test_fetch_rejects_undeclared_content_type() -> None:
+    registry, _ = _stubbed_registry(_StubResponse(content_type="text/html"))
+    with pytest.raises(ConnectorPolicyError, match="content type"):
+        registry.fetch("cisa-kev")
+
+
+def test_fetch_rejects_oversize_declared_and_actual_bodies() -> None:
+    limit = ConnectorRegistry().get("cisa-kev").max_bytes
+    registry, _ = _stubbed_registry(_StubResponse(content_length=str(limit + 1)))
+    with pytest.raises(ConnectorPolicyError, match="declared response exceeds"):
+        registry.fetch("cisa-kev")
+
+    registry, _ = _stubbed_registry(_StubResponse(body=b"x" * (limit + 1)))
+    with pytest.raises(ConnectorPolicyError, match="response exceeds"):
+        registry.fetch("cisa-kev")
+
+    registry, _ = _stubbed_registry(_StubResponse(content_length="not-a-number"))
+    with pytest.raises(ConnectorPolicyError, match="invalid Content-Length"):
+        registry.fetch("cisa-kev")
+
+
+@pytest.mark.parametrize(
+    "extra_headers",
+    [{"Host": "example.invalid"}, {"X-Forwarded-For": "127.0.0.1"}, {"Authorization": "a\r\nb"}, {"Authorization": ""}],
+)
+def test_fetch_rejects_non_credential_or_malformed_runtime_headers(
+    extra_headers: dict[str, str],
+) -> None:
+    registry, opener = _stubbed_registry(_StubResponse())
+    with pytest.raises(ConnectorPolicyError):
+        registry.fetch("cisa-kev", extra_headers=extra_headers)
+    assert opener.requests == []
+
+
+@pytest.mark.parametrize("timeout", [0.0, 30.5])
+def test_fetch_rejects_out_of_bounds_timeouts(timeout: float) -> None:
+    registry, opener = _stubbed_registry(_StubResponse())
+    with pytest.raises(ConnectorPolicyError, match="timeout"):
+        registry.fetch("cisa-kev", timeout=timeout)
+    assert opener.requests == []
+
+
+def test_fetch_maps_transport_failure_to_unavailable() -> None:
+    registry, _ = _stubbed_registry(URLError("offline"))
+    with pytest.raises(ConnectorUnavailable):
+        registry.fetch("cisa-kev")
+
+
+def test_fetch_of_operator_bound_connector_fails_before_any_network_call() -> None:
+    registry, opener = _stubbed_registry(_StubResponse())
+    with pytest.raises(ConnectorUnavailable):
+        registry.fetch("operator-evidence")
+    assert opener.requests == []
+
+
+def test_fetch_of_dot_segment_path_fails_before_any_network_call() -> None:
+    registry, opener = _stubbed_registry(_StubResponse())
+    with pytest.raises(ConnectorPolicyError):
+        registry.fetch("github-actions", path_params={"owner": "..", "repo": ".."})
+    assert opener.requests == []

@@ -123,6 +123,9 @@ class ConnectorRegistry:
             raise ConnectorPolicyError(f"{connector_id}: userinfo and non-standard ports are forbidden")
         if not any(parts.path.startswith(prefix) for prefix in spec.allowed_path_prefixes):
             raise ConnectorPolicyError(f"{connector_id}: path is outside the fixed allowlist")
+        # Servers resolve "." and ".." segments, which would move the request off the prefix.
+        if any(segment in {".", ".."} for segment in parts.path.split("/")):
+            raise ConnectorPolicyError(f"{connector_id}: dot segments are forbidden in the path")
         if parts.fragment:
             raise ConnectorPolicyError(f"{connector_id}: URL fragments are forbidden")
 
