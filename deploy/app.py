@@ -17,8 +17,8 @@ import html
 import json
 from pathlib import Path
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from szl_verticals.core import (
     ENGINES,
@@ -45,6 +45,7 @@ from szl_verticals.presentation import NATIVE_ICON_HTML, NATIVE_INTERFACE_CSS, N
 from szl_verticals.sentra import SENTRA_KEY_SOURCE, sentra
 from szl_verticals.showcase import showcase
 from szl_verticals.holo3d import HOLO3D_CSS, HOLO3D_JS, HOLO3D_PANEL_HTML
+from szl_verticals.holo_engine import ENGINE_ROUTE, ENGINE_SHA256, load_pinned_engine
 from szl_verticals.terra import terra
 from szl_verticals.vessels import vessels
 
@@ -79,9 +80,24 @@ async def response_hardening(request: Request, call_next):
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     response.headers["Cross-Origin-Resource-Policy"] = "same-site"
-    if request.url.path != "/":
+    if request.url.path not in {"/", ENGINE_ROUTE}:
         response.headers["Cache-Control"] = "no-store"
     return response
+
+
+_HOLO_ENGINE = load_pinned_engine()
+
+
+@app.get(ENGINE_ROUTE, include_in_schema=False)
+def holo_engine() -> Response:
+    """Serve the pinned shared 3D engine; withhold it if the bytes do not match the pin."""
+    if _HOLO_ENGINE is None:
+        raise HTTPException(status_code=404, detail="engine unavailable")
+    return Response(
+        content=_HOLO_ENGINE,
+        media_type="text/javascript",
+        headers={"Cache-Control": "public, max-age=31536000, immutable", "ETag": f'"sha256-{ENGINE_SHA256}"'},
+    )
 
 
 @app.middleware("http")

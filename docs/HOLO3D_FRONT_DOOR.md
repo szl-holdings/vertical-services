@@ -2,7 +2,7 @@
 
 The vertical-services front door (/) mounts a fully 3D holographic
 constellation of the governed engine catalog, rendered client-side with
-self-contained WebGL (no external assets or libraries of any kind).
+the shared three.js r170 WebGPU engine (WebGL2 backend where WebGPU is missing, raw-WebGL fallback if the engine cannot be verified). The one allowed external file is that pinned engine, see Engine below.
 
 Doctrine:
 
@@ -13,7 +13,7 @@ Doctrine:
 - Honest labelling: node positions are procedural (Fibonacci sphere) and
   labelled ILLUSTRATIVE LAYOUT; they are never a measured topology. Only
   catalog labels are displayed; no candidate text crosses this surface.
-- No persistence APIs, no tracking, no external URLs, no eval.
+- No persistence APIs, no tracking, no external URLs, no eval. The single exception to the no-external-asset rule is the pinned engine file below.
 - Accessibility: dialog semantics with focus trap and Escape, reduced-motion
   static rendering, forced-colors support, 44px minimum targets.
 
@@ -70,3 +70,26 @@ Receipt schema: szl.holo3d/v2. Contract tests: tests/test_holo3d_contract.py
 (unchanged) and tests/test_holo3d_v2_contract.py (runs the client model under
 node against the real in-process /frontier payloads). Design and verification
 notes: docs/2026-11-19-vertical-holo-v2-design.md.
+
+
+## Engine (2026-11-19)
+
+`deploy/szl_verticals/vendor/three.webgpu.min.js` is the unmodified upstream
+`three@0.170.0/build/three.webgpu.min.js` (MIT, license header embedded), copied
+byte-for-byte from szl-holdings/a11oy `static/3d/vendor/three/three.webgpu.min.js`.
+
+- size 822115 bytes, sha256 `9d01bb1bae1badb5071d341f76c3569f6118bad126effd425a06611a9d993035`
+  (the pin in a11oy `static/3d/vendor/VENDOR_MANIFEST.md`).
+- Self-contained: no import statements, so no second file is ever loaded.
+- Served same-origin at `/assets/holo/three.webgpu.min.js`; the server refuses to serve it
+  if size or sha256 differ from the pin (`holo_engine.py`).
+- The browser fetches it anonymously, re-hashes it with SubtleCrypto, and imports it
+  from a blob URL only when size and hash match.
+- Fallbacks, always disclosed in the HUD (`ENGINE ...` chip): three's own WebGL2 backend when
+  WebGPU is absent; the original raw-WebGL renderer when the file is missing, tampered or
+  cannot start.
+- All honesty rules are unchanged: labels are never upgraded, absent data is a labelled gap,
+  layout is ILLUSTRATIVE, feeds fail closed, the text readout lists every node.
+- The 45,000-character cap on the inline script still applies to the glue code; the engine file
+  is not counted and is the only file exempt from the no-external-asset rule
+  (`tests/test_holo_engine_vendor.py`).
