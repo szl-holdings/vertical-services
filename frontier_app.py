@@ -10,6 +10,7 @@ silently simulated as production capability.
 from __future__ import annotations
 
 import json
+import math
 import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -145,6 +146,19 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return out
 
 
+def _reject_nonfinite_json_constant(token: str) -> None:
+    """Reject Python's non-standard NaN/Infinity JSON extensions."""
+    raise ValueError(f"non-finite JSON constant: {token}")
+
+
+def _finite_json_float(token: str) -> float:
+    """Reject overflow-to-infinity before a value reaches an evidence gate."""
+    value = float(token)
+    if not math.isfinite(value):
+        raise ValueError("non-finite JSON number")
+    return value
+
+
 def resolve_post(path: str, body: bytes) -> tuple[int, str, bytes]:
     normalized = unquote(path).rstrip("/") or "/"
     if len(body) > MAX_BODY_BYTES:
@@ -152,7 +166,12 @@ def resolve_post(path: str, body: bytes) -> tuple[int, str, bytes]:
             {"ok": False, "error": "request body exceeds the public boundary"}
         )
     try:
-        payload = json.loads(body.decode("utf-8"), object_pairs_hook=_unique_object)
+        payload = json.loads(
+            body.decode("utf-8"),
+            object_pairs_hook=_unique_object,
+            parse_constant=_reject_nonfinite_json_constant,
+            parse_float=_finite_json_float,
+        )
     except UnicodeDecodeError:
         return 400, "application/json; charset=utf-8", _json_bytes(
             {"ok": False, "error": "body must be valid UTF-8 JSON"}
