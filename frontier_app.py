@@ -172,9 +172,18 @@ def resolve_post(path: str, body: bytes) -> tuple[int, str, bytes]:
             parse_constant=_reject_nonfinite_json_constant,
             parse_float=_finite_json_float,
         )
+        # JSON escape sequences can carry lone UTF-16 surrogates. They parse in
+        # Python but cannot be emitted as canonical UTF-8 evidence or responses.
+        # Validate the full tree (including object member names) before any
+        # evaluation, hash generation, or receipt mutation occurs.
+        json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
     except UnicodeDecodeError:
         return 400, "application/json; charset=utf-8", _json_bytes(
             {"ok": False, "error": "body must be valid UTF-8 JSON"}
+        )
+    except UnicodeEncodeError:
+        return 400, "application/json; charset=utf-8", _json_bytes(
+            {"ok": False, "error": "body contains an invalid Unicode surrogate"}
         )
     except (json.JSONDecodeError, ValueError):
         return 400, "application/json; charset=utf-8", _json_bytes(
