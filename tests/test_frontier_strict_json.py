@@ -36,6 +36,39 @@ def test_nonfinite_request_never_reaches_evaluation(
     assert json.loads(body)["ok"] is False
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b'{"vertical_id":"lyte","payload":{"text":"\\ud800"}}',
+        b'{"vertical_id":"lyte","payload":{"text":"\\udfff"}}',
+        b'{"vertical_id":"lyte","payload":{"\\ud800":"value"}}',
+        b'{"vertical_id":"lyte","payload":[{"text":"\\udead"}]}',
+    ],
+)
+def test_unpaired_unicode_escape_refused_before_evaluation(
+    monkeypatch: pytest.MonkeyPatch, raw: bytes
+) -> None:
+    def _unexpected_evaluation(*args: object, **kwargs: object) -> None:
+        raise AssertionError("invalid Unicode evidence reached the fabric")
+
+    monkeypatch.setattr(frontier_app.FABRIC, "evaluate", _unexpected_evaluation)
+    status, content_type, body = frontier_app.resolve_post(
+        "/api/vertical-fabric/v1/evaluate", raw
+    )
+    assert status == 400
+    assert content_type.startswith("application/json")
+    assert json.loads(body)["ok"] is False
+
+
+def test_valid_unicode_surrogate_pair_preserved() -> None:
+    status, _, body = frontier_app.resolve_post(
+        "/api/does-not-exist",
+        b'{"nested":{"valid_emoji":"\\ud83d\\ude03"}}',
+    )
+    assert status == 404
+    assert json.loads(body)["error"] == "route not found"
+
+
 def test_valid_finite_number_parses_before_route_selection() -> None:
     status, _, body = frontier_app.resolve_post(
         "/api/does-not-exist",
