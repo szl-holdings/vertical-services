@@ -20,6 +20,7 @@ from engine import (
     canonical_digest,
     max_drawdown,
     portfolio_report,
+    returns_series,
     rsi,
     sharpe,
     signal_suite,
@@ -148,3 +149,21 @@ def test_volatility_and_sharpe_finite_on_fixture():
     s = fixture_series("QQQ")
     assert volatility(s) > 0.0
     assert abs(sharpe(s)) < 100.0
+
+
+
+def test_finite_prices_with_overflowing_ratio_block():
+    # Both prices are finite; their quotient is not representable as a float.
+    with pytest.raises(EngineBlocked, match="returns: non-finite price ratio"):
+        returns_series([1e-300, 1e300])
+
+
+@pytest.mark.parametrize("metric", [volatility, sharpe])
+def test_finite_price_ratio_overflow_blocks_risk_metrics(metric):
+    with pytest.raises(EngineBlocked, match="returns: non-finite price ratio"):
+        metric([1e-300, 1e300, 1e-300])
+
+
+def test_overflowing_ratio_cannot_publish_measured_portfolio():
+    with pytest.raises(EngineBlocked, match="returns: non-finite price ratio"):
+        portfolio_report({"TEST": [1e-300, 1e300, 1e-300]})
