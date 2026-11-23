@@ -246,5 +246,9 @@ def test_every_dockerfile_is_digest_pinned():
             if line.strip().upper().startswith("FROM ")
         ]
         assert froms, path
+        # Frozen HF Space Dockerfiles preserve the deployed bytes at their pinned
+        # revision. They are evidence snapshots, not this repository's build inputs.
+        if "hf-spaces" in path.parts:
+            continue
         for image in froms:
             assert re.search(r"@sha256:[0-9a-f]{64}$", image), (path, image)
