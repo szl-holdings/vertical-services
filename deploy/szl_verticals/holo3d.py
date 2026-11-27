@@ -1,10 +1,15 @@
 """SZL holo3d v2 - fully 3D holographic engine constellation and vertical frontier scene.
 
-Self-contained, server-rendered WebGL for the vertical-services front door.
+Server-rendered holographic scene for the vertical-services front door. The
+renderer is the shared three.js r170 WebGPU engine (MIT, vendored byte-for-byte
+from a11oy, pinned by size and sha256, served same-origin, re-hashed in the
+browser before it is imported) whose own WebGL2 backend covers browsers without
+WebGPU; if the engine is missing or fails its integrity check the original
+raw-WebGL renderer takes over and the HUD says so.
 v1 (the engine constellation) is unchanged in doctrine: same-origin catalog
 feed (/api/catalog), fails closed when the feed is unreachable, procedural
 layout labelled ILLUSTRATIVE, no persistence APIs, no tracking, no external
-assets of any kind.
+assets of any kind except that one pinned, hash-verified engine file.
 
 v2 adds one more same-origin read-only feed, /api/verticals/{vertical}/frontier,
 and renders the real server payload for each of the six verticals:
@@ -42,6 +47,7 @@ HOLO3D_CSS = """
 #holo-hud{position:absolute;left:10px;top:10px;bottom:auto;display:flex;flex-direction:column;align-items:flex-start;gap:5px;max-width:min(46%,520px);max-height:calc(100% - 20px);overflow:auto;padding:0;pointer-events:none}
 .holo-chip{white-space:normal;font:700 10.5px/1.45 ui-monospace,monospace;color:var(--muted,#a9b4d0);background:rgba(13,18,33,.72);border:1px solid var(--line,#2a3350);border-radius:10px;padding:3px 10px}
 .holo-chip.ok{color:#9ef0c0}.holo-chip.off{color:#ffb36b}.holo-chip.note{color:#ffd166}
+#holo-canvas3d{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
 #holo-tip{position:absolute;opacity:0;pointer-events:none;background:#041018;color:#9ef0c0;border-radius:6px;padding:3px 8px;font:700 11px/1.4 ui-monospace,monospace;transform:translate(-50%,-160%)}
 .holo-note{margin:0;padding:10px 16px;border-top:1px solid var(--line,#2a3350);color:var(--muted,#a9b4d0);font:12px/1.5 system-ui,sans-serif}
 #holo-views{display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px;border-bottom:1px solid var(--line,#2a3350)}
@@ -75,7 +81,7 @@ HOLO3D_JS = """
              posBuf: null, lineBuf: null, nodes: [], lineCount: 0, proj: [],
              view: "engines", seq: 0, fetchedAt: 0, glow: 1,
              rotX: 0.18, rotY: 0, zoom: 2.1, drag: false, lx: 0, ly: 0,
-             lastFocus: null, raf: 0, ro: null, tick: 0 };
+             lastFocus: null, raf: 0, ro: null, tick: 0, mode: "", rp: null, why: "", want: "" };
 
   function $(id) { return document.getElementById(id); }
 
@@ -474,6 +480,187 @@ HOLO3D_JS = """
     "  gl_FragColor = vec4(col, alpha);" +
     "}";
 
+  /* ENGINE-BEGIN pinned shared three.js r170 WebGPU engine (same bytes as a11oy). */
+  var ENGINE = { url: "/assets/holo/three.webgpu.min.js", bytes: 822115,
+                 sha: "9d01bb1bae1badb5071d341f76c3569f6118bad126effd425a06611a9d993035" };
+  var eng = null;
+  var SPEC = [["sph", 0x59d1ff, 0, 0.032], ["ico", 0xbd8fff, 1, 0.05], ["dot", 0xfad173, 0, 0.011],
+              ["tor", 0xcce0ff, 0, 0.05], ["gap", 0xffad66, 0, 0.05], ["tor", 0x9ef0c0, 0, 0.05],
+              ["sph", 0xfad173, 0, 0.07]];
+  var LINE_RGB = { 4: [0xffad66, 0.95], 10: [0x59d1ff, 0.26], 11: [0xfad173, 0.8], 12: [0xff6b57, 0.6] };
+
+  function hex(buf) {
+    return Array.prototype.map.call(new Uint8Array(buf), function (b) { return (b < 16 ? "0" : "") + b.toString(16); }).join("");
+  }
+
+  function loadEngine() {
+    if (!window.crypto || !window.crypto.subtle) { return Promise.reject(new Error("integrity")); }
+    return fetch(ENGINE.url, { credentials: "omit", cache: "force-cache" }).then(function (res) {
+      if (!res.ok) { throw new Error("engine"); }
+      return res.arrayBuffer();
+    }).then(function (buf) {
+      if (buf.byteLength !== ENGINE.bytes) { throw new Error("integrity"); }
+      return window.crypto.subtle.digest("SHA-256", buf).then(function (d) {
+        if (hex(d) !== ENGINE.sha) { throw new Error("integrity"); }
+        return import(URL.createObjectURL(new Blob([buf], { type: "text/javascript" })));
+      });
+    });
+  }
+
+  function dropThree() {
+    var c3 = document.getElementById("holo-canvas3d");
+    if (c3 && c3.parentNode) { c3.parentNode.removeChild(c3); }
+    if (!eng) { return; }
+    clearThree();
+    try { if (eng.r && eng.r.dispose) { eng.r.dispose(); } } catch (err) { /* already torn down */ }
+    eng = null;
+  }
+
+  function initThree(T) {
+    if (st.want !== "three") { return Promise.reject(new Error("abandoned")); }
+    var base = $(CANVAS_ID), c3 = document.createElement("canvas");
+    c3.id = "holo-canvas3d";
+    c3.setAttribute("aria-hidden", "true");
+    base.parentNode.insertBefore(c3, base);
+    var r = new T.WebGPURenderer({ canvas: c3, antialias: true, alpha: true });
+    return r.init().then(function () {
+      if (st.want !== "three") {
+        if (c3.parentNode) { c3.parentNode.removeChild(c3); }
+        try { if (r.dispose) { r.dispose(); } } catch (err) { /* abandoned */ }
+        throw new Error("abandoned");
+      }
+      r.setClearColor(0x000000, 0);
+      var scene = new T.Scene(), cam = new T.OrthographicCamera(-1, 1, 1, -1, -20, 20), grp = new T.Group();
+      cam.position.z = 10;
+      scene.add(grp);
+      eng = { T: T, r: r, scene: scene, cam: cam, grp: grp, live: [], glowMats: [], fray: null,
+              backend: r.backend && r.backend.isWebGPUBackend ? "WebGPU" : "WebGL2" };
+    }, function (e) {
+      if (c3.parentNode) { c3.parentNode.removeChild(c3); }
+      throw e;
+    });
+  }
+
+  function engineLabel() {
+    if (st.mode === "three") { return "ENGINE three.js r170 " + eng.backend + " | same-origin | sha256 verified in this browser"; }
+    return "ENGINE raw WebGL fallback" + (st.why ? " | " + st.why : "");
+  }
+
+  function ensureRenderer() {
+    if (st.rp) { return st.rp; }
+    st.want = "three";
+    var timer = new Promise(function (_, no) { setTimeout(function () { no(new Error("timeout")); }, 12000); });
+    var load = loadEngine().then(function (T) {
+      if (st.want !== "three") { throw new Error("abandoned"); }
+      return initThree(T);
+    });
+    load.catch(function () { if (st.want !== "three") { dropThree(); } });
+    st.rp = Promise.race([load, timer]).then(function () {
+      if (st.want !== "three") { return; }
+      st.mode = "three";
+      if (st.gl) { try { st.gl.clear(st.gl.COLOR_BUFFER_BIT); } catch (err) { /* overlay must not hide three */ } }
+    }, function (e) {
+      st.want = "raw";
+      dropThree();
+      var m = e && e.message ? String(e.message) : "";
+      if (m === "abandoned") { return; }
+      st.why = m === "integrity" ? "engine integrity check failed or unavailable" : (m === "engine" || m === "timeout" ? "engine file unavailable" : "engine could not start");
+      try { initGL(); st.mode = "raw"; } catch (err) { st.mode = "none"; }
+    });
+    return st.rp;
+  }
+
+  function clearThree() {
+    if (!eng) { return; }
+    for (var i = 0; i < eng.live.length; i++) {
+      var o = eng.live[i];
+      eng.grp.remove(o);
+      if (o.geometry) { o.geometry.dispose(); }
+      if (o.material) { o.material.dispose(); }
+      if (typeof o.dispose === "function") { o.dispose(); }
+    }
+    eng.live = []; eng.glowMats = []; eng.fray = null;
+  }
+
+  function uploadThree(scene) {
+    var T = eng.T, geos = { sph: new T.SphereGeometry(1, 14, 10), ico: new T.IcosahedronGeometry(1, 1),
+                            dot: new T.SphereGeometry(1, 6, 4), tor: new T.TorusGeometry(1, 0.1, 6, 28) };
+    var groups = {}, gaps = [], i, j;
+    clearThree();
+    st.nodes = scene.nodes; st.proj = [];
+    function put(kind, pos, s) {
+      var sp = SPEC[kind], key = kind + sp[0];
+      (groups[key] = groups[key] || { sp: sp, kind: kind, items: [] }).items.push([pos, s]);
+    }
+    for (i = 0; i < scene.nodes.length; i++) {
+      var nd = scene.nodes[i], r = SPEC[nd.kind][3] * (0.45 + 0.55 * nd.val) * 1.4;
+      st.proj.push([0, 0]);
+      if (nd.kind === K.GAP) {
+        for (j = 0; j < 12; j += 2) {
+          var g0 = j * 0.5236, g1 = (j + 1) * 0.5236;
+          gaps.push(nd.pos[0] + Math.cos(g0) * r, nd.pos[1] + Math.sin(g0) * r, nd.pos[2],
+                    nd.pos[0] + Math.cos(g1) * r, nd.pos[1] + Math.sin(g1) * r, nd.pos[2]);
+        }
+        gaps.push(nd.pos[0] - r * 0.5, nd.pos[1] - r * 0.5, nd.pos[2], nd.pos[0] + r * 0.5, nd.pos[1] + r * 0.5, nd.pos[2],
+                  nd.pos[0] - r * 0.5, nd.pos[1] + r * 0.5, nd.pos[2], nd.pos[0] + r * 0.5, nd.pos[1] - r * 0.5, nd.pos[2]);
+      } else if (nd.kind === K.POINTS) {
+        for (j = 0; j < 5; j++) {
+          var a = j * 1.2566 + nd.seed * 6.28;
+          put(nd.kind, [nd.pos[0] + Math.cos(a) * 0.035, nd.pos[1] + Math.sin(a) * 0.035, nd.pos[2]], r);
+        }
+      } else {
+        put(nd.kind, nd.pos, r);
+      }
+      if (nd.kind === K.REPORTED) { groups["5dot"] = groups["5dot"] || { sp: ["dot", 0x9ef0c0, 0], kind: 5, items: [] }; groups["5dot"].items.push([nd.pos, r * 0.4]); }
+    }
+    Object.keys(groups).forEach(function (key) {
+      var g = groups[key], m = new T.Matrix4(), mat = new T.MeshBasicMaterial({
+        color: g.sp[1], wireframe: !!g.sp[2], transparent: true, opacity: 0.9,
+        blending: T.AdditiveBlending, depthWrite: false });
+      var mesh = new T.InstancedMesh(geos[g.sp[0]], mat, g.items.length);
+      for (var n = 0; n < g.items.length; n++) {
+        var it = g.items[n];
+        m.compose(new T.Vector3(it[0][0], it[0][1], it[0][2]), new T.Quaternion(), new T.Vector3(it[1], it[1], it[1]));
+        mesh.setMatrixAt(n, m);
+      }
+      eng.grp.add(mesh); eng.live.push(mesh);
+      if (g.kind === K.SOLID || g.kind === K.CORE) { eng.glowMats.push(mat); }
+    });
+    [4, 10, 11, 12].forEach(function (lk) {
+      var pts = lk === 4 ? gaps : [];
+      for (var q = 0; q < scene.lines.length && lk !== 4; q++) {
+        var l = scene.lines[q];
+        if (l.kind === lk) { pts.push(l.a[0], l.a[1], l.a[2], l.b[0], l.b[1], l.b[2]); }
+      }
+      if (!pts.length) { return; }
+      var geo = new T.BufferGeometry();
+      geo.setAttribute("position", new T.Float32BufferAttribute(pts, 3));
+      var mat = new T.LineBasicMaterial({ color: LINE_RGB[lk][0], transparent: true, opacity: LINE_RGB[lk][1], depthWrite: false });
+      var seg = new T.LineSegments(geo, mat);
+      eng.grp.add(seg); eng.live.push(seg);
+      if (lk === 12) { eng.fray = mat; }
+    });
+    Object.keys(geos).forEach(function (k) { geos[k].dispose(); });
+    st.ready = true;
+  }
+
+  function renderThree(t) {
+    var stage = document.querySelector(".holo-stage");
+    if (!stage) { return; }
+    var w = Math.max(1, stage.clientWidth), h = Math.max(1, stage.clientHeight);
+    var ax = w > h ? h / w : 1, ay = w > h ? 1 : w / h;
+    eng.cam.left = -st.zoom / ax; eng.cam.right = st.zoom / ax;
+    eng.cam.top = st.zoom / ay; eng.cam.bottom = -st.zoom / ay;
+    eng.cam.updateProjectionMatrix();
+    eng.grp.rotation.set(st.rotX, st.rotY, 0, "YXZ");
+    st.glow = st.view === "engines" ? 1 : ageGlow();
+    for (var i = 0; i < eng.glowMats.length; i++) { eng.glowMats[i].opacity = 0.9 * st.glow; }
+    if (eng.fray) { eng.fray.opacity = REDUCED ? 0.6 : 0.35 + 0.35 * Math.abs(Math.sin(t * 3)); }
+    eng.r.render(eng.scene, eng.cam);
+    updateProjection();
+  }
+  /* ENGINE-END */
+
   function compile(gl, kind, src) {
     var sh = gl.createShader(kind);
     gl.shaderSource(sh, src);
@@ -509,6 +696,8 @@ HOLO3D_JS = """
   }
 
   function uploadScene(scene) {
+    if (st.mode !== "three" && st.mode !== "raw") { return; }
+    if (st.mode === "three") { uploadThree(scene); return; }
     initGL();
     var gl = st.gl;
     var nodes = scene.nodes, n = nodes.length, i;
@@ -537,9 +726,10 @@ HOLO3D_JS = """
 
   function sizeRenderer() {
     var stage = document.querySelector(".holo-stage"), canvas = $(CANVAS_ID);
-    if (!stage || !canvas || !st.gl) { return; }
+    if (!stage || !canvas || !(st.gl || st.mode === "three")) { return; }
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     var w = Math.max(1, stage.clientWidth), h = Math.max(1, stage.clientHeight);
+    if (st.mode === "three") { eng.r.setPixelRatio(dpr); eng.r.setSize(w, h, false); return; }
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     st.gl.viewport(0, 0, canvas.width, canvas.height);
@@ -563,6 +753,11 @@ HOLO3D_JS = """
   }
 
   function render(t) {
+    if (st.mode === "three") {
+      if (!st.ready) { return; }
+      try { renderThree(t); } catch (err) { failClosed("RENDER FAILED - failing closed"); }
+      return;
+    }
     if (!st.gl || !st.ready) { return; }
     var gl = st.gl;
     gl.useProgram(st.prog);
@@ -601,7 +796,7 @@ HOLO3D_JS = """
   }
 
   function frame(now) {
-    if (!st.open || !st.gl) { return; }
+    if (!st.open || !(st.gl || st.mode === "three")) { return; }
     var t = now / 1000;
     if (!REDUCED && !st.drag) { st.rotY += 0.0022; }
     render(t);
@@ -645,7 +840,8 @@ HOLO3D_JS = """
 
   function failClosed(msg) {
     st.ready = false; st.nodes = []; st.proj = []; st.lineCount = 0;
-    if (st.gl) { st.gl.clear(st.gl.COLOR_BUFFER_BIT); }
+    if (st.mode === "three") { clearThree(); try { eng.r.render(eng.scene, eng.cam); } catch (err) { /* nothing left to draw */ } }
+    else if (st.gl) { st.gl.clear(st.gl.COLOR_BUFFER_BIT); }
     setReadout([]);
     clearHud();
     setOffline(msg);
@@ -673,6 +869,7 @@ HOLO3D_JS = """
         setReadout(labels);
         chip("catalog nodes " + labels.length, "ok");
         chip("ILLUSTRATIVE LAYOUT - procedural, not measured", "note");
+        chip(engineLabel(), st.mode === "three" ? "ok" : "note");
       } else {
         st.fetchedAt = Date.now();
         extra = buildVerticalScene(payload, view, st.fetchedAt);
@@ -681,6 +878,7 @@ HOLO3D_JS = """
         sizeRenderer();
         setReadout(extra.readout);
         for (var i = 0; i < extra.chips.length; i++) { chip(extra.chips[i][0], extra.chips[i][1]); }
+        chip(engineLabel(), st.mode === "three" ? "ok" : "note");
         ageEl = chip("READING AGE 0s since this page fetched it", "note");
       }
       render(0);
@@ -709,8 +907,11 @@ HOLO3D_JS = """
     panel.classList.add("open");
     panel.setAttribute("aria-hidden", "false");
     if (!st.ready) {
-      try { initGL(); } catch (err) { failClosed("WEBGL UNAVAILABLE - failing closed"); }
-      if (st.gl) { sizeRenderer(); show(st.view); }
+      ensureRenderer().then(function () {
+        if (st.mode === "none") { failClosed("WEBGL UNAVAILABLE - failing closed"); return; }
+        sizeRenderer();
+        show(st.view);
+      });
     } else {
       sizeRenderer(); render(0);
       if (!REDUCED && !st.raf) { st.raf = requestAnimationFrame(frame); }
@@ -740,7 +941,12 @@ HOLO3D_JS = """
         var b = e.target && e.target.closest ? e.target.closest("button[data-view]") : null;
         if (!b) { return; }
         var v = b.getAttribute("data-view");
-        if (v === "engines" || VERTICALS.indexOf(v) >= 0) { show(v); }
+        if (v === "engines" || VERTICALS.indexOf(v) >= 0) {
+          ensureRenderer().then(function () {
+            if (st.mode === "none") { failClosed("WEBGL UNAVAILABLE - failing closed"); return; }
+            show(v);
+          });
+        }
       });
     }
     panel.addEventListener("keydown", function (e) {
