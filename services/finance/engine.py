@@ -117,7 +117,10 @@ def returns_series(closes):
     for i in range(1, len(s)):
         if s[i - 1] == 0.0:
             raise EngineBlocked("returns: zero price")
-        out.append(s[i] / s[i - 1] - 1.0)
+        ratio = s[i] / s[i - 1]
+        if not math.isfinite(ratio):
+            raise EngineBlocked("returns: non-finite price ratio")
+        out.append(ratio - 1.0)
     return out
 
 
