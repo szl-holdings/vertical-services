@@ -138,6 +138,21 @@ class HoloEngineVendor(unittest.TestCase):
         self.assertIn("nd.kind === K.GAP", js)
         self.assertIn("gaps.push(", js)
 
+    def test_view_switch_and_timeout_cannot_orphan_or_overlay_the_engine(self) -> None:
+        js = self.holo.HOLO3D_JS
+        # View buttons wait for ensureRenderer, and uploadScene does not init raw GL until mode is decided.
+        self.assertIn("views.addEventListener(\"click\"", js)
+        click = js[js.index("views.addEventListener(\"click\""):]
+        self.assertIn("ensureRenderer().then", click)
+        self.assertIn("if (st.mode !== \"three\" && st.mode !== \"raw\") { return; }", js)
+        # A 12s timeout (or any other fallback) abandons the in-flight load so initThree cannot insert later.
+        self.assertIn('st.want = "three"', js)
+        self.assertIn('if (st.want !== "three")', js)
+        self.assertIn("function dropThree()", js)
+        self.assertIn("r.dispose", js)
+        # InstancedMesh instance buffers are released on every view switch.
+        self.assertIn('typeof o.dispose === "function"', js)
+
     def test_engine_glue_is_valid_javascript_and_bounded(self) -> None:
         import shutil
         import subprocess

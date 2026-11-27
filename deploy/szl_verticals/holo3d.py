@@ -81,7 +81,7 @@ HOLO3D_JS = """
              posBuf: null, lineBuf: null, nodes: [], lineCount: 0, proj: [],
              view: "engines", seq: 0, fetchedAt: 0, glow: 1,
              rotX: 0.18, rotY: 0, zoom: 2.1, drag: false, lx: 0, ly: 0,
-             lastFocus: null, raf: 0, ro: null, tick: 0, mode: "", rp: null, why: "" };
+             lastFocus: null, raf: 0, ro: null, tick: 0, mode: "", rp: null, why: "", want: "" };
 
   function $(id) { return document.getElementById(id); }
 
@@ -507,13 +507,28 @@ HOLO3D_JS = """
     });
   }
 
+  function dropThree() {
+    var c3 = document.getElementById("holo-canvas3d");
+    if (c3 && c3.parentNode) { c3.parentNode.removeChild(c3); }
+    if (!eng) { return; }
+    clearThree();
+    try { if (eng.r && eng.r.dispose) { eng.r.dispose(); } } catch (err) { /* already torn down */ }
+    eng = null;
+  }
+
   function initThree(T) {
+    if (st.want !== "three") { return Promise.reject(new Error("abandoned")); }
     var base = $(CANVAS_ID), c3 = document.createElement("canvas");
     c3.id = "holo-canvas3d";
     c3.setAttribute("aria-hidden", "true");
     base.parentNode.insertBefore(c3, base);
     var r = new T.WebGPURenderer({ canvas: c3, antialias: true, alpha: true });
     return r.init().then(function () {
+      if (st.want !== "three") {
+        if (c3.parentNode) { c3.parentNode.removeChild(c3); }
+        try { if (r.dispose) { r.dispose(); } } catch (err) { /* abandoned */ }
+        throw new Error("abandoned");
+      }
       r.setClearColor(0x000000, 0);
       var scene = new T.Scene(), cam = new T.OrthographicCamera(-1, 1, 1, -1, -20, 20), grp = new T.Group();
       cam.position.z = 10;
@@ -533,11 +548,22 @@ HOLO3D_JS = """
 
   function ensureRenderer() {
     if (st.rp) { return st.rp; }
+    st.want = "three";
     var timer = new Promise(function (_, no) { setTimeout(function () { no(new Error("timeout")); }, 12000); });
-    st.rp = Promise.race([loadEngine().then(initThree), timer]).then(function () {
+    var load = loadEngine().then(function (T) {
+      if (st.want !== "three") { throw new Error("abandoned"); }
+      return initThree(T);
+    });
+    load.catch(function () { if (st.want !== "three") { dropThree(); } });
+    st.rp = Promise.race([load, timer]).then(function () {
+      if (st.want !== "three") { return; }
       st.mode = "three";
+      if (st.gl) { try { st.gl.clear(st.gl.COLOR_BUFFER_BIT); } catch (err) { /* overlay must not hide three */ } }
     }, function (e) {
+      st.want = "raw";
+      dropThree();
       var m = e && e.message ? String(e.message) : "";
+      if (m === "abandoned") { return; }
       st.why = m === "integrity" ? "engine integrity check failed or unavailable" : (m === "engine" || m === "timeout" ? "engine file unavailable" : "engine could not start");
       try { initGL(); st.mode = "raw"; } catch (err) { st.mode = "none"; }
     });
@@ -551,6 +577,7 @@ HOLO3D_JS = """
       eng.grp.remove(o);
       if (o.geometry) { o.geometry.dispose(); }
       if (o.material) { o.material.dispose(); }
+      if (typeof o.dispose === "function") { o.dispose(); }
     }
     eng.live = []; eng.glowMats = []; eng.fray = null;
   }
@@ -669,6 +696,7 @@ HOLO3D_JS = """
   }
 
   function uploadScene(scene) {
+    if (st.mode !== "three" && st.mode !== "raw") { return; }
     if (st.mode === "three") { uploadThree(scene); return; }
     initGL();
     var gl = st.gl;
@@ -913,7 +941,12 @@ HOLO3D_JS = """
         var b = e.target && e.target.closest ? e.target.closest("button[data-view]") : null;
         if (!b) { return; }
         var v = b.getAttribute("data-view");
-        if (v === "engines" || VERTICALS.indexOf(v) >= 0) { show(v); }
+        if (v === "engines" || VERTICALS.indexOf(v) >= 0) {
+          ensureRenderer().then(function () {
+            if (st.mode === "none") { failClosed("WEBGL UNAVAILABLE - failing closed"); return; }
+            show(v);
+          });
+        }
       });
     }
     panel.addEventListener("keydown", function (e) {
